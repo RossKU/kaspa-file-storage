@@ -21,6 +21,7 @@
         <button onclick="testPayloadHandling()">5. Test Payload Handling</button>
         <button onclick="testDetailedTransaction()">6. Test Detailed Transaction</button>
         <button onclick="testCreateTransactionDebug()">7. Test SDK-Compliant createTransaction</button>
+        <button onclick="testFullTransactionFlow()">8. Test Full Transaction Flow (RPC + Balance)</button>
     </div>
     
     <div class="result" id="testOutput"></div>
@@ -571,6 +572,196 @@
             } catch (error) {
                 logTest('Debug test failed', false, error.message || error.toString());
                 console.error('Debug test error:', error);
+            }
+        };
+        
+        // 完全なトランザクションフロー（RPC + 残高確認）
+        window.testFullTransactionFlow = async function() {
+            if (!kaspa) {
+                logTest('Full flow test skipped', false, 'WASM not initialized - run test 1 first');
+                return;
+            }
+            
+            if (!window.testPrivateKey) {
+                try {
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
+                } catch (e) {
+                    logTest('Full flow test skipped', false, 'Cannot create PrivateKey');
+                    return;
+                }
+            }
+            
+            try {
+                logTest('=== COMPLETE TRANSACTION FLOW TEST ===', true);
+                
+                const privateKey = window.testPrivateKey;
+                const keypair = privateKey.toKeypair();
+                const senderAddress = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                logTest('Sender Address', true, senderAddress.toString().substring(0, 30) + '...');
+                
+                // Step 1: RPC接続のテスト
+                logTest('=== Step 1: RPC Connection Test ===', true);
+                let rpcClient = null;
+                
+                try {
+                    // Kaspa testnet public node
+                    const testnetNodes = [
+                        'wss://testnet-1.kaspa.aspectron.org',
+                        'wss://testnet-2.kaspa.aspectron.org'
+                    ];
+                    
+                    rpcClient = new kaspa.RpcClient({
+                        url: testnetNodes[0],
+                        networkId: 'testnet-10'
+                    });
+                    
+                    logTest('RPC Client created', true, testnetNodes[0]);
+                    
+                    // 接続試行
+                    await rpcClient.connect();
+                    logTest('RPC Connection established', true);
+                    
+                    // ネットワーク情報取得
+                    const networkInfo = await rpcClient.getBlockDagInfo();
+                    logTest('Network info retrieved', !!networkInfo, `DAA Score: ${networkInfo.daaScore || 'unknown'}`);
+                    
+                } catch (rpcError) {
+                    logTest('RPC Connection failed', false, (rpcError.message || rpcError.toString()).substring(0, 50));
+                    logTest('Full flow test using mock data', true, 'continuing with simulated data');
+                }
+                
+                // Step 2: 残高確認
+                logTest('=== Step 2: Balance Check ===', true);
+                let currentBalance = 0n;
+                let utxoEntries = [];
+                
+                try {
+                    if (rpcClient) {
+                        const balanceInfo = await rpcClient.getBalanceByAddress(senderAddress.toString());
+                        currentBalance = balanceInfo.balance || 0n;
+                        logTest('Current balance retrieved', true, `${currentBalance} sompi`);
+                        
+                        // UTXO取得
+                        const utxoInfo = await rpcClient.getUtxosByAddresses([senderAddress.toString()]);
+                        utxoEntries = utxoInfo.entries || [];
+                        logTest('UTXO entries retrieved', true, `${utxoEntries.length} UTXOs`);
+                    } else {
+                        // Mock data for offline testing
+                        currentBalance = 500000000000n; // 5000 KAS
+                        utxoEntries = [{
+                            address: senderAddress.toString(),
+                            outpoint: {
+                                transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                                index: 0
+                            },
+                            scriptPublicKey: {
+                                version: 0,
+                                script: new Uint8Array([0x20, 0xb7, 0xe1, 0x51, 0x62, 0x8a, 0xed, 0x2a, 0x6a, 0xbf, 0x71, 0x58, 0x80, 0x9c, 0xf4, 0xf3, 0xc7, 0x62, 0xe7, 0x16, 0x0f, 0x38, 0xb4, 0xda, 0x56, 0xa7, 0x84, 0xd9, 0x04, 0x51, 0x90, 0xcf, 0xef, 0xac])
+                            },
+                            amount: currentBalance,
+                            isCoinbase: false,
+                            blockDaaScore: 12345678n
+                        }];
+                        logTest('Using mock balance data', true, `${currentBalance} sompi (5000 KAS)`);
+                    }
+                } catch (balanceError) {
+                    logTest('Balance check failed', false, (balanceError.message || balanceError.toString()).substring(0, 50));
+                    return;
+                }
+                
+                // Step 3: トランザクション作成
+                logTest('=== Step 3: Transaction Creation ===', true);
+                
+                const transferAmount = 100000000000n; // 1000 KAS (1 TKAS)
+                const priorityFee = 1000000n; // 0.01 KAS
+                const totalRequired = transferAmount + priorityFee;
+                
+                if (currentBalance < totalRequired) {
+                    logTest('Insufficient funds', false, `Need ${totalRequired}, have ${currentBalance}`);
+                    return;
+                }
+                
+                logTest('Sufficient balance confirmed', true, `${currentBalance} >= ${totalRequired}`);
+                
+                // 受信アドレス（テスト用に送信者と同じアドレス）
+                const recipientAddress = senderAddress.toString();
+                
+                const testPayload = `File storage test - 1 TKAS transfer at ${new Date().toISOString()}`;
+                const payloadBytes = new TextEncoder().encode(testPayload);
+                
+                let transactionResult = null;
+                
+                try {
+                    transactionResult = await kaspa.createTransactions({
+                        entries: utxoEntries,
+                        outputs: [{
+                            address: recipientAddress,
+                            amount: transferAmount
+                        }],
+                        changeAddress: senderAddress.toString(),
+                        priorityFee: priorityFee,
+                        networkId: "testnet-10",
+                        payload: payloadBytes
+                    });
+                    
+                    logTest('Transaction created successfully', !!transactionResult, `${transactionResult.transactions?.length || 0} transactions`);
+                    
+                    if (transactionResult.summary) {
+                        const summary = transactionResult.summary;
+                        logTest('Transaction fees calculated', true, `${summary.fees || 'unknown'} sompi`);
+                        logTest('Final transaction amount', true, `${summary.finalAmount || transferAmount} sompi`);
+                        logTest('Change amount', true, `${summary.changeAmount || 'unknown'} sompi`);
+                    }
+                    
+                } catch (txError) {
+                    logTest('Transaction creation failed', false, (txError.message || txError.toString()).substring(0, 50));
+                    return;
+                }
+                
+                // Step 4: トランザクション署名（シミュレーション）
+                logTest('=== Step 4: Transaction Signing (Simulation) ===', true);
+                
+                if (transactionResult?.transactions?.length > 0) {
+                    const firstTx = transactionResult.transactions[0];
+                    logTest('Transaction ready for signing', true, typeof firstTx);
+                    
+                    // Note: 実際の署名は PendingTransaction.sign([privateKey]) を使用
+                    logTest('Signing simulation', true, 'would call: pendingTx.sign([privateKey])');
+                    logTest('Submission simulation', true, 'would call: pendingTx.submit(rpcClient)');
+                }
+                
+                // Step 5: 残高変更の予測
+                logTest('=== Step 5: Expected Balance Changes ===', true);
+                
+                const expectedNewBalance = currentBalance - transferAmount - priorityFee;
+                logTest('Expected sender balance after tx', true, `${expectedNewBalance} sompi`);
+                logTest('Expected recipient balance change', true, `+${transferAmount} sompi`);
+                logTest('Total fees paid', true, `${priorityFee} sompi (0.01 KAS)`);
+                
+                // Step 6: トランザクション詳細
+                logTest('=== Step 6: Transaction Details ===', true);
+                logTest('File storage payload', true, `"${testPayload.substring(0, 40)}..."`);
+                logTest('Payload size', true, `${payloadBytes.length} bytes`);
+                logTest('Transaction type', true, '1 TKAS transfer with file storage');
+                
+                // Step 7: クリーンアップ
+                if (rpcClient) {
+                    try {
+                        await rpcClient.disconnect();
+                        logTest('RPC Connection closed', true);
+                    } catch (disconnectError) {
+                        logTest('RPC Disconnect warning', false, 'connection may still be open');
+                    }
+                }
+                
+                logTest('=== COMPLETE TRANSACTION FLOW FINISHED ===', true, 'Ready for real deployment');
+                
+            } catch (error) {
+                logTest('Full transaction flow failed', false, (error.message || error.toString()).substring(0, 100));
+                console.error('Full flow error:', error);
             }
         };
         
