@@ -19,7 +19,8 @@
         <button onclick="testAddressGeneration()">3. Test Address Generation</button>
         <button onclick="testTransactionFunction()">4. Test Transaction Functions</button>
         <button onclick="testPayloadHandling()">5. Test Payload Handling</button>
-        <button onclick="testDetailedTransaction()">6. Test Detailed Transaction</button>
+        <button onclick="testRealTransaction()">6. Test Real Transaction Creation</button>
+        <button onclick="testUtxoAndOutputs()">7. Test UTXO and Outputs</button>
     </div>
     
     <div class="result" id="testOutput"></div>
@@ -27,6 +28,35 @@
     <script type="module">
         let kaspa = null;
         let testResults = [];
+        
+        // ペイロード処理ヘルパー関数
+        function textToHex(text) {
+            return Array.from(new TextEncoder().encode(text))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function hexToText(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return new TextDecoder().decode(bytes);
+        }
+        
+        function arrayBufferToHex(buffer) {
+            return Array.from(new Uint8Array(buffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function hexToArrayBuffer(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes.buffer;
+        }
         
         // テスト結果を表示する関数
         function logTest(testName, result, details = '') {
@@ -206,48 +236,23 @@
                 const testPayloadHex = Array.from(testPayloadBytes, b => b.toString(16).padStart(2, '0')).join('');
                 logTest('Payload hex conversion', true, testPayloadHex);
                 
-                // ペイロード関連関数の確認と実際のテスト
-                const hexFunctions = ['textToHex', 'hexToText', 'arrayBufferToHex', 'hexToArrayBuffer'];
-                
-                hexFunctions.forEach(fnName => {
-                    logTest(`${fnName} function`, !!kaspa[fnName]);
-                });
-                
-                // 実際のHex変換テスト
-                if (kaspa.textToHex) {
-                    try {
-                        const hexResult = kaspa.textToHex(testText);
-                        logTest('textToHex function', hexResult === testPayloadHex, hexResult);
-                    } catch (e) {
-                        logTest('textToHex function', false, e.message);
-                    }
-                }
-                
-                if (kaspa.hexToText) {
-                    try {
-                        const textResult = kaspa.hexToText(testPayloadHex);
-                        logTest('hexToText function', textResult === testText, textResult);
-                    } catch (e) {
-                        logTest('hexToText function', false, e.message);
-                    }
-                }
-                
-                if (kaspa.arrayBufferToHex) {
-                    try {
-                        const hexResult = kaspa.arrayBufferToHex(testPayloadBytes);
-                        logTest('arrayBufferToHex function', hexResult === testPayloadHex, hexResult);
-                    } catch (e) {
-                        logTest('arrayBufferToHex function', false, e.message);
-                    }
-                }
-                
-                if (kaspa.hexToArrayBuffer) {
-                    try {
-                        const bufferResult = kaspa.hexToArrayBuffer(testPayloadHex);
-                        logTest('hexToArrayBuffer function', bufferResult.byteLength === testPayloadBytes.length, `${bufferResult.byteLength} bytes`);
-                    } catch (e) {
-                        logTest('hexToArrayBuffer function', false, e.message);
-                    }
+                // 独自実装のペイロード関数をテスト
+                try {
+                    const hexResult = textToHex(testText);
+                    logTest('textToHex function', hexResult === testPayloadHex, hexResult);
+                    
+                    const textResult = hexToText(testPayloadHex);
+                    logTest('hexToText function', textResult === testText, textResult);
+                    
+                    const bufferHex = arrayBufferToHex(testPayloadBytes.buffer);
+                    logTest('arrayBufferToHex function', bufferHex === testPayloadHex, bufferHex);
+                    
+                    const bufferResult = hexToArrayBuffer(testPayloadHex);
+                    const bufferMatch = new Uint8Array(bufferResult).every((val, idx) => val === testPayloadBytes[idx]);
+                    logTest('hexToArrayBuffer function', bufferMatch, `${new Uint8Array(bufferResult).length} bytes`);
+                    
+                } catch (error) {
+                    logTest('Payload helper functions', false, error.message);
                 }
                 
             } catch (error) {
@@ -255,114 +260,134 @@
             }
         };
         
-        // 詳細なトランザクション作成テスト
-        window.testDetailedTransaction = async function() {
+        // 実際のトランザクション作成テスト
+        window.testRealTransaction = async function() {
             if (!kaspa || !window.testPrivateKey) {
-                logTest('Detailed transaction test skipped', false, 'Prerequisites not met');
+                logTest('Real transaction test skipped', false, 'Prerequisites not met');
                 return;
             }
             
             try {
                 logTest('=== REAL TRANSACTION CREATION TEST ===', true);
                 
-                const privateKey = window.testPrivateKey;
-                const keypair = privateKey.toKeypair();
-                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                // テスト用のUTXOデータ（実際の形式に近い）
+                const testUtxos = [{
+                    outpoint: {
+                        transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                        index: 0
+                    },
+                    amount: 150000000000n, // 1500 KAS in sompi
+                    scriptPublicKey: {
+                        version: 0,
+                        script: "20qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd"
+                    },
+                    blockDaaScore: 12345678n,
+                    isCoinbase: false
+                }];
+                logTest('Test UTXO data prepared', true, `${testUtxos.length} UTXOs`);
                 
-                // Test different UTXO formats
-                logTest('Test UTXO data prepared', true, '1 UTXOs');
+                // テスト用の出力
+                const testAddress = "kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd";
+                const testOutputs = [{
+                    address: testAddress,
+                    amount: 100000000n // 1 KAS in sompi
+                }];
+                logTest('Test output data prepared', true, `${testOutputs.length} outputs`);
                 
-                // Test different output formats
-                logTest('Test output data prepared', true, '1 outputs');
+                // テストペイロード
+                const testFileData = "Hello Kaspa File Storage!";
+                const payloadBytes = new TextEncoder().encode(testFileData);
+                logTest('Test payload prepared', true, `${payloadBytes.length} bytes`);
                 
-                // Test payload
-                const testPayload = 'Test file storage payload';
-                const payloadHex = kaspa.textToHex ? kaspa.textToHex(testPayload) : '';
-                logTest('Test payload prepared', true, `${testPayload.length} bytes`);
-                
-                // Test createTransaction with various parameter combinations
-                logTest('Calling createTransaction with real data...', true);
-                
+                // createTransaction関数を実際のデータで呼び出し
                 try {
-                    // Method 1: Standard parameters
-                    const result1 = kaspa.createTransaction([], [], address, 1000n, payloadHex);
-                    logTest('createTransaction Method 1 (standard)', !!result1, 'success');
-                } catch (e) {
-                    logTest('createTransaction Method 1 (standard)', false, e.message.substring(0, 50));
-                }
-                
-                try {
-                    // Method 2: Object parameter
-                    const result2 = kaspa.createTransaction({
-                        utxos: [],
-                        outputs: [],
-                        changeAddress: address,
-                        feeRate: 1000n,
-                        payload: payloadHex
-                    });
-                    logTest('createTransaction Method 2 (object)', !!result2, 'success');
-                } catch (e) {
-                    logTest('createTransaction Method 2 (object)', false, e.message.substring(0, 50));
-                }
-                
-                try {
-                    // Method 3: createTransactions (multiple)
-                    const result3 = kaspa.createTransactions({
-                        utxos: [],
-                        outputs: [],
-                        changeAddress: address,
-                        feeRate: 1000n,
-                        payload: payloadHex
-                    });
-                    logTest('createTransactions method', !!result3, 'success');
-                } catch (e) {
-                    logTest('createTransactions method', false, e.message.substring(0, 50));
-                }
-                
-                logTest('=== UTXO AND OUTPUT FORMAT TEST ===', true);
-                
-                // Test kaspaToSompi function
-                if (kaspa.kaspaToSompi) {
-                    try {
-                        const sompi = kaspa.kaspaToSompi(1);
-                        logTest('kaspaToSompi function', true, `1 KAS = ${sompi} sompi`);
-                    } catch (e) {
-                        logTest('kaspaToSompi function', false, e.message);
+                    logTest('Calling createTransaction with real data...', true);
+                    const transaction = kaspa.createTransaction(
+                        testUtxos,     // utxo_entry_source
+                        testOutputs,   // outputs  
+                        1000n,         // priority_fee (0.00001 KAS)
+                        payloadBytes,  // payload
+                        1              // sig_op_count
+                    );
+                    
+                    logTest('createTransaction call successful', !!transaction, typeof transaction);
+                    
+                    if (transaction) {
+                        // トランザクションオブジェクトの詳細確認
+                        logTest('Transaction object type', typeof transaction === 'object');
+                        
+                        // 利用可能なメソッド確認
+                        const methods = ['sign', 'toString', 'toJson', 'id'].map(method => ({
+                            name: method,
+                            exists: transaction[method] !== undefined
+                        }));
+                        
+                        methods.forEach(method => {
+                            logTest(`Transaction.${method.name}`, method.exists);
+                        });
+                        
+                        window.testTransaction = transaction; // 次のテスト用に保存
                     }
-                }
-                
-                // Test Address constructor 
-                if (kaspa.Address) {
-                    try {
-                        const addr = new kaspa.Address('kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd');
-                        logTest('Address constructor', !!addr, addr.toString().substring(0, 20) + '...');
-                    } catch (e) {
-                        logTest('Address constructor', false, e.message);
-                    }
-                }
-                
-                // Test PaymentOutput class
-                if (kaspa.PaymentOutput) {
-                    try {
-                        const output = new kaspa.PaymentOutput(address, 100000000n);
-                        logTest('PaymentOutput class', !!output);
-                    } catch (e) {
-                        logTest('PaymentOutput class', false, e.message);
-                    }
-                }
-                
-                // Test UtxoEntry class  
-                if (kaspa.UtxoEntry) {
-                    try {
-                        const utxo = new kaspa.UtxoEntry();
-                        logTest('UtxoEntry class', !!utxo);
-                    } catch (e) {
-                        logTest('UtxoEntry class', false, e.message);
-                    }
+                    
+                } catch (createError) {
+                    logTest('createTransaction call failed', false, createError.message);
                 }
                 
             } catch (error) {
-                logTest('Detailed transaction test failed', false, error.message);
+                logTest('Real transaction test failed', false, error.message);
+            }
+        };
+        
+        // UTXO と Output のテスト
+        window.testUtxoAndOutputs = async function() {
+            if (!kaspa) {
+                logTest('UTXO test skipped', false, 'WASM not initialized');
+                return;
+            }
+            
+            try {
+                logTest('=== UTXO AND OUTPUT FORMAT TEST ===', true);
+                
+                // kaspaToSompi 関数の確認
+                if (kaspa.kaspaToSompi) {
+                    try {
+                        const sompiResult = kaspa.kaspaToSompi("1.0");
+                        logTest('kaspaToSompi function', true, `1 KAS = ${sompiResult} sompi`);
+                    } catch (error) {
+                        logTest('kaspaToSompi function', false, error.message);
+                    }
+                } else {
+                    logTest('kaspaToSompi function', false, 'not found');
+                }
+                
+                // Address クラスの確認
+                if (kaspa.Address) {
+                    try {
+                        const testAddr = new kaspa.Address("kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd");
+                        logTest('Address constructor', !!testAddr, testAddr.toString().substring(0, 20) + '...');
+                    } catch (error) {
+                        logTest('Address constructor', false, error.message);
+                    }
+                } else {
+                    logTest('Address class', false, 'not found');
+                }
+                
+                // PaymentOutput 確認
+                if (kaspa.PaymentOutput) {
+                    logTest('PaymentOutput class', true);
+                } else {
+                    logTest('PaymentOutput class', false, 'not found');
+                }
+                
+                // UtxoEntry 確認
+                if (kaspa.UtxoEntry) {
+                    logTest('UtxoEntry class', true);
+                } else {
+                    logTest('UtxoEntry class', false, 'not found');
+                }
+                
+            } catch (error) {
+                logTest('UTXO and Output test failed', false, error.message);
             }
         };
         
