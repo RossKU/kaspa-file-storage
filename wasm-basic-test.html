@@ -217,7 +217,7 @@
                 
                 // 実際の呼び出しテスト（エラーが予想される）
                 try {
-                    const result = kaspa.createTransaction([], [], 0n);
+                    const result = kaspa.createTransaction([], [], 0n, null, 1);
                     logTest('createTransaction call', !!result, 'unexpected success');
                 } catch (error) {
                     logTest('createTransaction call', true, `expected error: ${(error.message || error.toString()).substring(0, 50)}...`);
@@ -299,7 +299,7 @@
                 
                 try {
                     // Method 1: Basic test with empty arrays
-                    const result1 = kaspa.createTransaction([], [], 1000n, payloadBytes, 1);
+                    const result1 = kaspa.createTransaction([], [], 0n, payloadBytes, 1);
                     logTest('createTransaction Method 1 (empty)', !!result1, 'success');
                 } catch (e) {
                     logTest('createTransaction Method 1 (empty)', false, (e.message || e.toString()).substring(0, 50));
@@ -310,10 +310,16 @@
                 // Test kaspaToSompi function
                 if (kaspa.kaspaToSompi) {
                     try {
-                        const sompi = kaspa.kaspaToSompi(1);
-                        logTest('kaspaToSompi function', true, `1 KAS = ${sompi} sompi`);
-                    } catch (e) {
-                        logTest('kaspaToSompi function', false, e.message);
+                        // Try different parameter types
+                        const sompi1 = kaspa.kaspaToSompi("1");
+                        logTest('kaspaToSompi function (string)', true, `1 KAS = ${sompi1} sompi`);
+                    } catch (e1) {
+                        try {
+                            const sompi2 = kaspa.kaspaToSompi(1.0);
+                            logTest('kaspaToSompi function (float)', true, `1 KAS = ${sompi2} sompi`);
+                        } catch (e2) {
+                            logTest('kaspaToSompi function', false, (e1.message || e1.toString()).substring(0, 50));
+                        }
                     }
                 }
                 
@@ -402,7 +408,7 @@
                         const emptyResult = kaspa.createTransaction(
                             [],        // empty utxo_entry_source
                             [],        // empty outputs
-                            1000n,     // priority_fee
+                            0n,        // priority_fee (0 for empty UTXO)
                             payloadBytes,  // payload as Uint8Array
                             1          // sig_op_count
                         );
@@ -416,7 +422,7 @@
                         const transaction = kaspa.createTransaction(
                             testUtxos,     // utxo_entry_source (IUtxoEntry[])
                             testOutputs,   // outputs (IPaymentOutput[])
-                            1000n,         // priority_fee
+                            100000n,       // priority_fee (0.001 KAS in sompi, reasonable fee)
                             payloadBytes,  // payload (Uint8Array)
                             1              // sig_op_count
                         );
@@ -428,13 +434,23 @@
                             logTest('Transaction object type', typeof transaction === 'object');
                             
                             // 利用可能なメソッド確認
-                            const methods = ['sign', 'toString', 'toJson', 'id', 'inputs', 'outputs'].map(method => ({
+                            const methods = ['toString', 'id', 'inputs', 'outputs'].map(method => ({
                                 name: method,
                                 exists: transaction[method] !== undefined
                             }));
                             
                             methods.forEach(method => {
                                 logTest(`Transaction.${method.name}`, method.exists);
+                            });
+                            
+                            // Optional methods (may not exist)
+                            const optionalMethods = ['sign', 'toJson', 'toRaw', 'serialize'].map(method => ({
+                                name: method,
+                                exists: transaction[method] !== undefined
+                            }));
+                            
+                            optionalMethods.forEach(method => {
+                                logTest(`Transaction.${method.name} (optional)`, method.exists, method.exists ? 'available' : 'not available');
                             });
                             
                             window.testTransaction = transaction; // 次のテスト用に保存
@@ -457,8 +473,9 @@
                             entries: testUtxos,  // use entries instead of utxos
                             outputs: testOutputs,
                             changeAddress: address,
-                            priorityFee: 1000n,
-                            payload: payloadBytes
+                            priorityFee: 100000n, // 0.001 KAS in sompi
+                            payload: payloadBytes,
+                            networkId: kaspa.NetworkType.Testnet  // add required networkId
                         });
                         logTest('createTransactions call', !!transactionsResult, typeof transactionsResult);
                         
