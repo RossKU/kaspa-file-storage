@@ -84,9 +84,14 @@
                 
                 const module = await import('./kaspa-wasm.js');
                 kaspaWasm = await module.default('./kaspa-wasm_bg.wasm');
-                isWasmLoaded = true;
                 
-                document.getElementById('status').innerHTML = '<span class="success">✅ Kaspa WASM SDK loaded successfully!</span>';
+                // Verify WASM is properly initialized
+                if (kaspaWasm && kaspaWasm.PrivateKey && kaspaWasm.Transaction) {
+                    isWasmLoaded = true;
+                    document.getElementById('status').innerHTML = '<span class="success">✅ Kaspa WASM SDK loaded successfully!</span>';
+                } else {
+                    throw new Error('WASM SDK loaded but missing required functions');
+                }
                 
                 // Check balance after WASM loads
                 await checkBalance();
@@ -567,6 +572,13 @@ Ready for testnet transaction.`;
                 document.getElementById('status').innerHTML = 
                     '<span class="info">🔐 Signing transaction with WASM SDK...</span>';
 
+                // Check if WASM SDK is properly loaded
+                if (!kaspaWasm || !kaspaWasm.PrivateKey) {
+                    document.getElementById('status').innerHTML = 
+                        '<span class="error">❌ WASM SDK not properly loaded</span>';
+                    return;
+                }
+                
                 // Generate a test private key for demonstration
                 // WARNING: This is for testing only - in production, use proper key management
                 const privateKey = kaspaWasm.PrivateKey.fromHex("1111111111111111111111111111111111111111111111111111111111111111");
