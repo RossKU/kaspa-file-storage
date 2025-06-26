@@ -72,7 +72,7 @@
         <!-- Debug Section -->
         <div class="section">
             <h3>🐛 Debug Information</h3>
-            <div class="output" id="debugOutput" style="max-height: 500px; overflow-y: auto; font-size: 11px; line-height: 1.3;"></div>
+            <div class="output" id="debugOutput" style="height: 400px; overflow-y: scroll; font-size: 11px; line-height: 1.2; border: 1px solid #ccc; padding: 10px; background: #f9f9f9;"></div>
             <div style="margin: 10px 0;">
                 <button onclick="showDetailedDebug()">Show Detailed Status</button>
                 <button onclick="runSelfCheck()">🔍 Run Self-Check</button>
@@ -80,11 +80,6 @@
                 <button onclick="deepWasmAnalysis()">🔬 Deep WASM Analysis</button>
                 <button onclick="analyzeKaspaApps()">🌐 Analyze Kaspa Apps</button>
                 <button onclick="clearDebugLog()">🗑️ Clear Log</button>
-            </div>
-            <div style="margin: 10px 0;">
-                <button onclick="copyDebugLog()">📋 Copy All Logs</button>
-                <button onclick="downloadDebugLog()">💾 Download Logs</button>
-                <button onclick="toggleLogSize()">🔄 Toggle Size</button>
             </div>
         </div>
 
@@ -105,10 +100,12 @@
             debugLog.push(logEntry);
             console.log(logEntry);
             
-            // Update debug display
+            // Update debug display - show ALL logs, not just last 10
             const debugDiv = document.getElementById('debugOutput');
             if (debugDiv) {
-                debugDiv.innerHTML = debugLog.slice(-10).join('<br>');
+                debugDiv.innerHTML = debugLog.join('<br>');
+                // Auto-scroll to bottom
+                debugDiv.scrollTop = debugDiv.scrollHeight;
             }
         }
 
@@ -831,54 +828,6 @@ Ready for testnet transaction.`;
             debug('🗑️ Debug log cleared');
         };
 
-        // Copy debug log to clipboard
-        window.copyDebugLog = function copyDebugLog() {
-            const logText = debugLog.join('\n');
-            navigator.clipboard.writeText(logText).then(() => {
-                alert('📋 Debug log copied to clipboard!');
-            }).catch(err => {
-                // Fallback for older browsers
-                const textArea = document.createElement('textarea');
-                textArea.value = logText;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                alert('📋 Debug log copied to clipboard!');
-            });
-        };
-
-        // Download debug log as file
-        window.downloadDebugLog = function downloadDebugLog() {
-            const logText = debugLog.join('\n');
-            const blob = new Blob([logText], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `kaspa-debug-${new Date().toISOString().slice(0,19)}.txt`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            debug('💾 Debug log downloaded');
-        };
-
-        // Toggle log window size
-        let isLogExpanded = false;
-        window.toggleLogSize = function toggleLogSize() {
-            const debugOutput = document.getElementById('debugOutput');
-            if (isLogExpanded) {
-                debugOutput.style.maxHeight = '500px';
-                debugOutput.style.height = 'auto';
-                isLogExpanded = false;
-                debug('🔄 Log size: Normal');
-            } else {
-                debugOutput.style.maxHeight = '80vh';
-                debugOutput.style.height = '80vh';
-                isLogExpanded = true;
-                debug('🔄 Log size: Expanded');
-            }
-        };
 
         // Comprehensive self-check function
         window.runSelfCheck = async function runSelfCheck() {
