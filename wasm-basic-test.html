@@ -70,6 +70,9 @@
                 logTest('createTransaction function exists', !!kaspa.createTransaction);
                 logTest('createTransactions function exists', !!kaspa.createTransactions);
                 
+                // グローバル変数設定（他のテストで使用）
+                window.kaspaReady = true;
+                
             } catch (error) {
                 logTest('Initialization failed', false, error.message);
             }
@@ -77,8 +80,14 @@
         
         // PrivateKey作成テスト
         window.testPrivateKeyCreation = async function() {
-            if (!kaspa) {
-                logTest('PrivateKey test skipped', false, 'WASM not initialized');
+            if (!kaspa || !window.kaspaReady) {
+                logTest('PrivateKey test skipped', false, 'WASM not initialized - run test 1 first');
+                return;
+            }
+            
+            // WASM完全初期化を待機
+            if (!kaspa.PrivateKey) {
+                logTest('PrivateKey test skipped', false, 'PrivateKey class not available');
                 return;
             }
             
@@ -115,8 +124,8 @@
         
         // アドレス生成テスト
         window.testAddressGeneration = async function() {
-            if (!window.testPrivateKey) {
-                logTest('Address test skipped', false, 'PrivateKey not available');
+            if (!kaspa || !window.kaspaReady || !window.testPrivateKey) {
+                logTest('Address test skipped', false, 'Prerequisites not available - run tests 1-2 first');
                 return;
             }
             
