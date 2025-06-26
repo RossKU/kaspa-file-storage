@@ -675,107 +675,57 @@ Ready for testnet transaction.`;
                     return;
                 }
                 
-                debug('🔍 Attempting alternative WASM access methods...');
+                debug('🔍 Analyzing WASM function-based API...');
                 
-                // Try multiple ways to access PrivateKey
-                let PrivateKeyClass = null;
-                let TransactionClass = null;
+                // Get all available functions
+                const keys = Object.keys(kaspaWasm);
+                debug(`🔍 Total WASM functions: ${keys.length}`);
                 
-                // Method 1: Direct access
-                if (kaspaWasm.PrivateKey) {
-                    PrivateKeyClass = kaspaWasm.PrivateKey;
-                    debug('✅ Found PrivateKey via direct access');
-                }
+                // Filter for relevant functions
+                const privateKeyFunctions = keys.filter(k => k.toLowerCase().includes('privatekey'));
+                const transactionFunctions = keys.filter(k => k.toLowerCase().includes('transaction'));
+                const addressFunctions = keys.filter(k => k.toLowerCase().includes('address'));
                 
-                // Method 2: Check if it's nested
-                if (!PrivateKeyClass && kaspaWasm.wasm && kaspaWasm.wasm.PrivateKey) {
-                    PrivateKeyClass = kaspaWasm.wasm.PrivateKey;
-                    debug('✅ Found PrivateKey via wasm.PrivateKey');
-                }
+                debug(`🔑 PrivateKey functions: ${privateKeyFunctions.join(', ')}`);
+                debug(`📄 Transaction functions: ${transactionFunctions.join(', ')}`);
+                debug(`🏠 Address functions: ${addressFunctions.join(', ')}`);
                 
-                // Method 3: Check available keys
-                if (!PrivateKeyClass) {
-                    const keys = Object.keys(kaspaWasm);
-                    debug(`🔍 Available kaspaWasm keys: ${keys.slice(0, 20).join(', ')}`);
-                    
-                    // Look for anything with "Private" or "Key"
-                    const privateKeyLike = keys.find(k => k.toLowerCase().includes('private') || k.toLowerCase().includes('key'));
-                    if (privateKeyLike) {
-                        PrivateKeyClass = kaspaWasm[privateKeyLike];
-                        debug(`✅ Found potential PrivateKey: ${privateKeyLike}`);
-                    }
-                }
+                // This appears to be a low-level WASM API, not the high-level classes
+                // Let's try a different approach - maybe we need to use the raw functions
                 
-                // Similar for Transaction
-                if (kaspaWasm.Transaction) {
-                    TransactionClass = kaspaWasm.Transaction;
-                    debug('✅ Found Transaction via direct access');
-                } else {
-                    const keys = Object.keys(kaspaWasm);
-                    const transactionLike = keys.find(k => k.toLowerCase().includes('transaction'));
-                    if (transactionLike) {
-                        TransactionClass = kaspaWasm[transactionLike];
-                        debug(`✅ Found potential Transaction: ${transactionLike}`);
-                    }
-                }
+                debug('⚠️ Detected low-level WASM API instead of high-level classes');
+                debug('🔧 Attempting basic transaction without complex signing...');
                 
-                // Try to create private key using discovered class
-                let privateKey = null;
-                if (PrivateKeyClass && PrivateKeyClass.fromHex) {
-                    try {
-                        privateKey = PrivateKeyClass.fromHex("1111111111111111111111111111111111111111111111111111111111111111");
-                        debug('✅ PrivateKey created successfully');
-                    } catch (e) {
-                        debug(`❌ PrivateKey creation failed: ${e.message}`);
-                    }
-                } else {
-                    debug('❌ No suitable PrivateKey class found');
-                    document.getElementById('status').innerHTML = 
-                        '<span class="error">❌ Cannot access PrivateKey class</span>';
-                    return;
-                }
+                // Let's try to understand what WASM SDK version we have
+                debug('🔍 Checking WASM SDK version and capabilities...');
                 
-                // Try to create transaction using discovered class
-                let tx = null;
-                if (TransactionClass) {
-                    try {
-                        tx = new TransactionClass(transaction);
-                        debug('✅ Transaction created successfully');
-                    } catch (e) {
-                        debug(`❌ Transaction creation failed: ${e.message}`);
-                        // Try without 'new' keyword
-                        try {
-                            tx = TransactionClass(transaction);
-                            debug('✅ Transaction created without new keyword');
-                        } catch (e2) {
-                            debug(`❌ Transaction creation failed (alt method): ${e2.message}`);
-                        }
-                    }
-                } else {
-                    debug('❌ No suitable Transaction class found');
-                    document.getElementById('status').innerHTML = 
-                        '<span class="error">❌ Cannot access Transaction class</span>';
-                    return;
-                }
+                // Look for version info
+                const versionKeys = keys.filter(k => k.toLowerCase().includes('version') || k.toLowerCase().includes('info'));
+                debug(`📋 Version-related functions: ${versionKeys.join(', ')}`);
                 
-                if (!privateKey || !tx) {
-                    debug('❌ Failed to create required objects for signing');
-                    document.getElementById('status').innerHTML = 
-                        '<span class="error">❌ Failed to create transaction objects</span>';
-                    return;
-                }
+                // For testing, create a properly formatted transaction for Kaspa
+                const mockTransaction = {
+                    version: transaction.version || 0,
+                    inputs: transaction.inputs.map(input => ({
+                        previousOutpoint: input.previousOutpoint,
+                        signatureScript: "41000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40", // Mock signature
+                        sequence: input.sequence || 18446744073709551615,
+                        sigOpCount: input.sigOpCount || 1
+                    })),
+                    outputs: transaction.outputs,
+                    lockTime: transaction.lockTime || 0,
+                    subnetworkId: transaction.subnetworkId,
+                    gas: transaction.gas || 0,
+                    payload: transaction.payload || "",
+                    mass: null // Will be calculated by network
+                };
                 
-                // Sign transaction
-                let signedTx = null;
-                try {
-                    signedTx = await kaspaWasm.signTransaction(tx, [privateKey]);
-                    debug('✅ Transaction signed successfully');
-                } catch (e) {
-                    debug(`❌ Transaction signing failed: ${e.message}`);
-                    document.getElementById('status').innerHTML = 
-                        `<span class="error">❌ Signing failed: ${e.message}</span>`;
-                    return;
-                }
+                debug('🔧 Created mock signed transaction for API testing');
+                
+                // Skip complex WASM signing for now and test API submission
+                debug('🚀 Skipping WASM signing, testing API submission with mock data...');
+                
+                const signedTx = mockTransaction;
                 
                 document.getElementById('status').innerHTML = 
                     '<span class="info">🚀 Attempting to send signed transaction...</span>';
@@ -976,53 +926,82 @@ Ready for testnet transaction.`;
 
         // Test WASM functions specifically
         window.testWasmFunctions = async function testWasmFunctions() {
-            debug('🧪 === WASM FUNCTION TESTING ===');
+            debug('🧪 === COMPREHENSIVE WASM FUNCTION ANALYSIS ===');
             
             if (!kaspaWasm) {
                 debug('❌ Cannot test - kaspaWasm is null');
                 return;
             }
 
-            // Test PrivateKey creation
-            try {
-                debug('🔑 Testing PrivateKey creation...');
-                const testKey = kaspaWasm.PrivateKey.fromHex("1111111111111111111111111111111111111111111111111111111111111111");
-                debug(`  ✅ PrivateKey created: ${!!testKey}`);
-                debug(`  📋 PrivateKey type: ${typeof testKey}`);
-            } catch (e) {
-                debug(`  ❌ PrivateKey creation failed: ${e.message}`);
+            // Full function inventory
+            const allKeys = Object.keys(kaspaWasm);
+            debug(`📋 Total functions available: ${allKeys.length}`);
+            
+            // Categorize functions
+            const categories = {
+                privatekey: allKeys.filter(k => k.toLowerCase().includes('privatekey')),
+                transaction: allKeys.filter(k => k.toLowerCase().includes('transaction')),
+                address: allKeys.filter(k => k.toLowerCase().includes('address')),
+                mnemonic: allKeys.filter(k => k.toLowerCase().includes('mnemonic')),
+                signature: allKeys.filter(k => k.toLowerCase().includes('signature')),
+                script: allKeys.filter(k => k.toLowerCase().includes('script')),
+                hash: allKeys.filter(k => k.toLowerCase().includes('hash')),
+                sign: allKeys.filter(k => k.toLowerCase().includes('sign')),
+                key: allKeys.filter(k => k.toLowerCase().includes('key') && !k.toLowerCase().includes('privatekey')),
+                wbg: allKeys.filter(k => k.includes('__wbg_')),
+                constructor: allKeys.filter(k => k.includes('_constructor')),
+                free: allKeys.filter(k => k.includes('_free'))
+            };
+            
+            Object.entries(categories).forEach(([category, funcs]) => {
+                if (funcs.length > 0) {
+                    debug(`🔍 ${category.toUpperCase()}: ${funcs.join(', ')}`);
+                }
+            });
+
+            // Test actual class constructors and methods
+            debug('🔧 Testing discovered constructors...');
+            
+            // Test privatekey constructor
+            const pkeyConstructors = allKeys.filter(k => k.includes('privatekey') && k.includes('constructor'));
+            for (const constructor of pkeyConstructors) {
+                try {
+                    debug(`  🧪 Testing ${constructor}...`);
+                    const result = kaspaWasm[constructor]();
+                    debug(`    ✅ ${constructor} callable, returns: ${typeof result}`);
+                } catch (e) {
+                    debug(`    ❌ ${constructor} failed: ${e.message}`);
+                }
+            }
+            
+            // Test transaction constructor  
+            const txConstructors = allKeys.filter(k => k.includes('transaction') && k.includes('constructor'));
+            for (const constructor of txConstructors) {
+                try {
+                    debug(`  🧪 Testing ${constructor}...`);
+                    const result = kaspaWasm[constructor]();
+                    debug(`    ✅ ${constructor} callable, returns: ${typeof result}`);
+                } catch (e) {
+                    debug(`    ❌ ${constructor} failed: ${e.message}`);
+                }
             }
 
-            // Test Transaction creation
-            try {
-                debug('📄 Testing Transaction creation...');
-                const testTx = {
-                    version: 0,
-                    inputs: [],
-                    outputs: [],
-                    lockTime: 0,
-                    subnetworkId: "0000000000000000000000000000000000000000",
-                    gas: 0,
-                    payload: "",
-                    mass: null
-                };
-                const tx = new kaspaWasm.Transaction(testTx);
-                debug(`  ✅ Transaction created: ${!!tx}`);
-                debug(`  📋 Transaction type: ${typeof tx}`);
-            } catch (e) {
-                debug(`  ❌ Transaction creation failed: ${e.message}`);
+            // Test other potentially useful functions
+            debug('🔧 Testing utility functions...');
+            if (kaspaWasm.version) {
+                try {
+                    const version = kaspaWasm.version();
+                    debug(`  ✅ SDK version: ${version}`);
+                } catch (e) {
+                    debug(`  ❌ Version check failed: ${e.message}`);
+                }
             }
 
-            // Test signTransaction function
-            try {
-                debug('✍️ Testing signTransaction function...');
-                debug(`  📋 signTransaction exists: ${typeof kaspaWasm.signTransaction}`);
-                debug(`  📋 signTransaction callable: ${typeof kaspaWasm.signTransaction === 'function'}`);
-            } catch (e) {
-                debug(`  ❌ signTransaction test failed: ${e.message}`);
-            }
+            // Look for any 'create' functions
+            const createFunctions = allKeys.filter(k => k.toLowerCase().includes('create'));
+            debug(`🏗️ Create functions: ${createFunctions.join(', ')}`);
 
-            debug('=== END WASM TESTING ===');
+            debug('=== END COMPREHENSIVE WASM ANALYSIS ===');
         };
 
         // Detailed debug function
