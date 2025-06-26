@@ -94,10 +94,11 @@
         let isWasmLoaded = false;
         let debugLog = [];
         
-        // Debug function
+        // Debug function with version info
+        const APP_VERSION = 'v2.0.0-wasm-fix';
         function debug(message) {
             const timestamp = new Date().toISOString();
-            const logEntry = `[${timestamp}] ${message}`;
+            const logEntry = `[${timestamp}] [${APP_VERSION}] ${message}`;
             debugLog.push(logEntry);
             console.log(logEntry);
             
@@ -115,13 +116,15 @@
                 debug('🔄 Starting WASM SDK loading...');
                 document.getElementById('status').innerHTML = '<span class="info">Loading Kaspa WASM SDK...</span>';
                 
-                debug('📦 Importing kaspa-wasm.js module...');
-                const module = await import('./kaspa-wasm.js');
-                debug(`✅ Module imported: ${!!module}`);
-                debug(`📋 Module.default type: ${typeof module.default}`);
+                debug('📦 Importing kaspa-core.js module...');
+                const kaspa = await import('./kaspa-core.js');
+                debug(`✅ Module imported: ${!!kaspa}`);
+                debug(`📋 Module.default type: ${typeof kaspa.default}`);
                 
-                debug('🏗️ Initializing WASM with kaspa-wasm_bg.wasm...');
-                kaspaWasm = await module.default('./kaspa-wasm_bg.wasm');
+                debug('🏗️ Initializing WASM with kaspa-core_bg.wasm...');
+                await kaspa.default('./kaspa-core_bg.wasm');
+                window.kaspa = kaspa;
+                kaspaWasm = kaspa;
                 debug(`✅ WASM initialized: ${!!kaspaWasm}`);
                 debug(`📋 kaspaWasm type: ${typeof kaspaWasm}`);
                 
@@ -834,8 +837,8 @@ Ready for testnet transaction.`;
             debug('🔬 === TESTING WASM INITIALIZATION ALTERNATIVES ===');
             
             try {
-                debug('📦 Re-importing kaspa-wasm.js module...');
-                const module = await import('./kaspa-wasm.js');
+                debug('📦 Re-importing kaspa-core.js module...');
+                const module = await import('./kaspa-core.js');
                 debug(`  ✅ Module imported, type: ${typeof module}, keys: ${Object.keys(module).length}`);
                 
                 // Test 1: Without URL parameter
@@ -861,9 +864,9 @@ Ready for testnet transaction.`;
                 // Test 2: Different URL formats
                 debug('🧪 Test 2: Testing different URL patterns...');
                 const urlTests = [
-                    './kaspa-wasm_bg.wasm',
-                    '/kaspa-wasm_bg.wasm',
-                    'kaspa-wasm_bg.wasm',
+                    './kaspa-core_bg.wasm',
+                    '/kaspa-core_bg.wasm',
+                    'kaspa-core_bg.wasm',
                     null,
                     undefined
                 ];
@@ -1014,7 +1017,7 @@ Ready for testnet transaction.`;
                 const testUrls = [
                     'https://api-tn10.kaspa.org/info/ping',
                     'https://proxy.kaspa.ws/',
-                    './kaspa-wasm.js'
+                    './kaspa-core.js'
                 ];
                 
                 for (const url of testUrls) {
@@ -1187,8 +1190,8 @@ Ready for testnet transaction.`;
             debug('🔬 === TESTING WASM INITIALIZATION ALTERNATIVES ===');
             
             try {
-                debug('📦 Re-importing kaspa-wasm.js module...');
-                const module = await import('./kaspa-wasm.js');
+                debug('📦 Re-importing kaspa-core.js module...');
+                const module = await import('./kaspa-core.js');
                 
                 // Test 1: Without URL parameter
                 debug('🧪 Test 1: module.default() without parameters...');
@@ -1201,9 +1204,9 @@ Ready for testnet transaction.`;
                 
                 // Test 2: With different URL formats
                 const urlVariants = [
-                    './kaspa-wasm_bg.wasm',
-                    'kaspa-wasm_bg.wasm',
-                    '/kaspa-wasm_bg.wasm',
+                    './kaspa-core_bg.wasm',
+                    'kaspa-core_bg.wasm',
+                    '/kaspa-core_bg.wasm',
                     null,
                     undefined
                 ];
