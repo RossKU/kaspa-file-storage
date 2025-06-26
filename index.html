@@ -76,6 +76,8 @@
             <button onclick="showDetailedDebug()">Show Detailed Status</button>
             <button onclick="runSelfCheck()">🔍 Run Self-Check</button>
             <button onclick="testWasmFunctions()">🧪 Test WASM Functions</button>
+            <button onclick="deepWasmAnalysis()">🔬 Deep WASM Analysis</button>
+            <button onclick="analyzeKaspaApps()">🌐 Analyze Kaspa Apps</button>
             <button onclick="clearDebugLog()">🗑️ Clear Log</button>
         </div>
 
@@ -967,6 +969,130 @@ Ready for testnet transaction.`;
             debug('=== END SELF-CHECK ===');
             
             return { score, percentage, issues };
+        };
+
+        // Deep WASM API analysis function
+        window.deepWasmAnalysis = async function deepWasmAnalysis() {
+            debug('🔬 === DEEP WASM API ANALYSIS ===');
+            
+            if (!kaspaWasm) {
+                debug('❌ Cannot analyze - kaspaWasm is null');
+                return;
+            }
+
+            // Analyze createTransaction function specifically
+            debug('🔍 DEEP ANALYSIS: createTransaction function');
+            
+            if (kaspaWasm.createTransaction) {
+                // Test function signature
+                debug(`📋 createTransaction type: ${typeof kaspaWasm.createTransaction}`);
+                debug(`📋 createTransaction length: ${kaspaWasm.createTransaction.length}`);
+                debug(`📋 createTransaction toString: ${kaspaWasm.createTransaction.toString().substring(0, 200)}...`);
+                
+                // Test with different parameter patterns
+                const testCases = [
+                    { name: 'No parameters', args: [] },
+                    { name: 'Empty object', args: [{}] },
+                    { name: 'Simple object', args: [{ version: 0 }] },
+                    { name: 'Null parameter', args: [null] },
+                    { name: 'Undefined parameter', args: [undefined] },
+                    { name: 'Array parameter', args: [[]] },
+                    { name: 'String parameter', args: ['test'] },
+                    { name: 'Number parameter', args: [0] }
+                ];
+                
+                for (const testCase of testCases) {
+                    try {
+                        debug(`🧪 Testing createTransaction(${testCase.name})...`);
+                        const result = kaspaWasm.createTransaction(...testCase.args);
+                        debug(`  ✅ Result: ${typeof result}, value: ${result}`);
+                        
+                        if (result && typeof result === 'object') {
+                            debug(`  📋 Result keys: ${Object.keys(result).join(', ')}`);
+                        }
+                    } catch (e) {
+                        debug(`  ❌ Error: ${e.message}`);
+                    }
+                }
+            }
+            
+            // Analyze all transaction-related functions
+            debug('🔍 ANALYSIS: All transaction functions');
+            const allKeys = Object.keys(kaspaWasm);
+            const txFunctions = allKeys.filter(k => k.toLowerCase().includes('transaction'));
+            
+            for (const func of txFunctions.slice(0, 10)) { // Limit to first 10
+                try {
+                    debug(`🔧 Analyzing ${func}...`);
+                    const fn = kaspaWasm[func];
+                    debug(`  📋 Type: ${typeof fn}`);
+                    
+                    if (typeof fn === 'function') {
+                        debug(`  📋 Length: ${fn.length}`);
+                        debug(`  📋 Name: ${fn.name}`);
+                        
+                        // Try calling with minimal parameters
+                        try {
+                            const result = fn();
+                            debug(`  ✅ Call with no args: ${typeof result}`);
+                        } catch (e) {
+                            debug(`  ❌ Call failed: ${e.message.substring(0, 100)}`);
+                        }
+                    }
+                } catch (e) {
+                    debug(`  ❌ Analysis failed: ${e.message}`);
+                }
+            }
+            
+            debug('=== END DEEP WASM ANALYSIS ===');
+        };
+
+        // Analyze working Kaspa applications  
+        window.analyzeKaspaApps = async function analyzeKaspaApps() {
+            debug('🔍 === KASPA APPLICATION ANALYSIS ===');
+            
+            // Test connectivity to known Kaspa services
+            const kaspaEndpoints = [
+                'https://api.kaspa.org/info/ping',
+                'https://api-tn10.kaspa.org/info/ping', 
+                'https://proxy.kaspa.ws/',
+                'https://kaspa.aspectron.org/',
+                'https://kaspa-testnet.aspectron.org/',
+                'https://api.kaspa.org/addresses/kaspa:qz8up8vz63skxxkh4xf7pv8swxwgf9pyjhwmdxjqp2vmd6xksjvvr2zlhkh2j/balance',
+                'https://api-tn10.kaspa.org/addresses/kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd/balance'
+            ];
+            
+            for (const endpoint of kaspaEndpoints) {
+                try {
+                    debug(`🌐 Testing ${endpoint}...`);
+                    const response = await fetch(endpoint, { 
+                        method: 'GET',
+                        mode: 'cors'
+                    });
+                    debug(`  ✅ Status: ${response.status} ${response.statusText}`);
+                    
+                    if (response.ok) {
+                        const text = await response.text();
+                        debug(`  📄 Response preview: ${text.substring(0, 100)}...`);
+                    }
+                } catch (e) {
+                    debug(`  ❌ Failed: ${e.message}`);
+                }
+            }
+            
+            // Check for CORS issues specifically
+            debug('🔍 CORS Analysis:');
+            try {
+                const testResponse = await fetch('https://api-tn10.kaspa.org/info/ping', {
+                    method: 'OPTIONS'
+                });
+                debug(`✅ OPTIONS request successful: ${testResponse.status}`);
+            } catch (e) {
+                debug(`❌ OPTIONS request failed: ${e.message}`);
+                debug('💡 CORS restriction detected - need proxy or different approach');
+            }
+            
+            debug('=== END KASPA APP ANALYSIS ===');
         };
 
         // Test WASM functions specifically
