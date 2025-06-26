@@ -103,7 +103,7 @@
                 window.kaspaReady = true;
                 
             } catch (error) {
-                logTest('Initialization failed', false, error.message);
+                logTest('Initialization failed', false, error.message || error.toString());
             }
         };
         
@@ -220,11 +220,11 @@
                     const result = kaspa.createTransaction([], [], 0n);
                     logTest('createTransaction call', !!result, 'unexpected success');
                 } catch (error) {
-                    logTest('createTransaction call', true, `expected error: ${error.message.substring(0, 50)}...`);
+                    logTest('createTransaction call', true, `expected error: ${(error.message || error.toString()).substring(0, 50)}...`);
                 }
                 
             } catch (error) {
-                logTest('Transaction function test failed', false, error.message);
+                logTest('Transaction function test failed', false, error.message || error.toString());
             }
         };
         
@@ -302,7 +302,7 @@
                     const result1 = kaspa.createTransaction([], [], 1000n, payloadBytes, 1);
                     logTest('createTransaction Method 1 (empty)', !!result1, 'success');
                 } catch (e) {
-                    logTest('createTransaction Method 1 (empty)', false, e.message.substring(0, 50));
+                    logTest('createTransaction Method 1 (empty)', false, (e.message || e.toString()).substring(0, 50));
                 }
                 
                 logTest('=== UTXO AND OUTPUT FORMAT TEST ===', true);
@@ -348,7 +348,7 @@
                 }
                 
             } catch (error) {
-                logTest('Detailed transaction test failed', false, error.message);
+                logTest('Detailed transaction test failed', false, error.message || error.toString());
             }
         };
         
@@ -408,7 +408,7 @@
                         );
                         logTest('Empty arrays test', !!emptyResult, typeof emptyResult);
                     } catch (e) {
-                        logTest('Empty arrays test', false, e.message.substring(0, 50));
+                        logTest('Empty arrays test', false, (e.message || e.toString()).substring(0, 50));
                     }
                     
                     // Test Case 2: With proper UTXO and output data
@@ -441,7 +441,7 @@
                         }
                         
                     } catch (createError) {
-                        logTest('createTransaction with data', false, createError.message);
+                        logTest('createTransaction with data', false, (createError.message || createError.toString()).substring(0, 50));
                         console.group('🔍 createTransaction Error Details');
                         console.error('Full error:', createError);
                         console.log('Test UTXOs:', testUtxos);
@@ -466,11 +466,11 @@
                             logTest('createTransactions result has transactions', true, `${transactionsResult.transactions.length} transactions`);
                         }
                     } catch (e) {
-                        logTest('createTransactions call', false, e.message.substring(0, 50));
+                        logTest('createTransactions call', false, (e.message || e.toString()).substring(0, 50));
                     }
                     
                 } catch (generalError) {
-                    logTest('General createTransaction test failed', false, generalError.message);
+                    logTest('General createTransaction test failed', false, (generalError.message || generalError.toString()).substring(0, 50));
                     console.error('General error:', generalError);
                 }
                 
@@ -480,7 +480,7 @@
                 logTest('createTransaction toString', true, kaspa.createTransaction.toString().substring(0, 100) + '...');
                 
             } catch (error) {
-                logTest('Debug test failed', false, error.message);
+                logTest('Debug test failed', false, error.message || error.toString());
                 console.error('Debug test error:', error);
             }
         };
