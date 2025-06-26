@@ -74,6 +74,9 @@
             <h3>🐛 Debug Information</h3>
             <div class="output" id="debugOutput" style="max-height: 200px; overflow-y: auto;"></div>
             <button onclick="showDetailedDebug()">Show Detailed Status</button>
+            <button onclick="runSelfCheck()">🔍 Run Self-Check</button>
+            <button onclick="testWasmFunctions()">🧪 Test WASM Functions</button>
+            <button onclick="clearDebugLog()">🗑️ Clear Log</button>
         </div>
 
         <!-- Status -->
@@ -689,6 +692,211 @@ Ready for testnet transaction.`;
             }
         }
 
+        // Clear debug log
+        window.clearDebugLog = function clearDebugLog() {
+            debugLog = [];
+            document.getElementById('debugOutput').innerHTML = '';
+            debug('🗑️ Debug log cleared');
+        };
+
+        // Comprehensive self-check function
+        window.runSelfCheck = async function runSelfCheck() {
+            debug('🔍 === STARTING COMPREHENSIVE SELF-CHECK ===');
+            let issues = [];
+            let score = 0;
+            const maxScore = 10;
+
+            // Test 1: DOM Elements
+            debug('📋 Test 1: Checking DOM elements...');
+            const requiredElements = ['fileInput', 'secretKey', 'uploadOutput', 'transactionData', 'status'];
+            let domScore = 0;
+            for (const id of requiredElements) {
+                const element = document.getElementById(id);
+                if (element) {
+                    debug(`  ✅ ${id}: found`);
+                    domScore++;
+                } else {
+                    debug(`  ❌ ${id}: missing`);
+                    issues.push(`Missing DOM element: ${id}`);
+                }
+            }
+            score += domScore / requiredElements.length;
+            debug(`📊 DOM Score: ${domScore}/${requiredElements.length}`);
+
+            // Test 2: Global Variables
+            debug('📋 Test 2: Checking global variables...');
+            const checks = [
+                { name: 'kaspaWasm', value: kaspaWasm, expected: 'object' },
+                { name: 'isWasmLoaded', value: isWasmLoaded, expected: 'boolean' },
+                { name: 'currentFile', value: currentFile, expected: null },
+                { name: 'currentSecret', value: currentSecret, expected: null }
+            ];
+            
+            let varScore = 0;
+            for (const check of checks) {
+                if (check.expected === null ? check.value === null : typeof check.value === check.expected) {
+                    debug(`  ✅ ${check.name}: ${check.value} (${typeof check.value})`);
+                    varScore++;
+                } else {
+                    debug(`  ❌ ${check.name}: ${check.value} (expected ${check.expected})`);
+                    issues.push(`Invalid ${check.name}: ${check.value}`);
+                }
+            }
+            score += varScore / checks.length;
+            debug(`📊 Variables Score: ${varScore}/${checks.length}`);
+
+            // Test 3: WASM SDK Status
+            debug('📋 Test 3: WASM SDK comprehensive check...');
+            let wasmScore = 0;
+            if (kaspaWasm) {
+                debug(`  ✅ kaspaWasm object exists`);
+                wasmScore += 0.5;
+                
+                const requiredMethods = ['PrivateKey', 'Transaction', 'signTransaction'];
+                for (const method of requiredMethods) {
+                    if (kaspaWasm[method]) {
+                        debug(`  ✅ kaspaWasm.${method}: ${typeof kaspaWasm[method]}`);
+                        wasmScore += 0.5 / requiredMethods.length;
+                    } else {
+                        debug(`  ❌ kaspaWasm.${method}: undefined`);
+                        issues.push(`Missing WASM method: ${method}`);
+                    }
+                }
+                
+                // Try to get WASM object keys
+                try {
+                    const keys = Object.keys(kaspaWasm);
+                    debug(`  📋 WASM has ${keys.length} properties`);
+                    if (keys.length > 10) wasmScore += 0.5;
+                } catch (e) {
+                    debug(`  ❌ Cannot access WASM keys: ${e.message}`);
+                    issues.push(`WASM keys inaccessible: ${e.message}`);
+                }
+            } else {
+                debug(`  ❌ kaspaWasm object is null/undefined`);
+                issues.push('kaspaWasm object missing');
+            }
+            score += Math.min(wasmScore, 1);
+            debug(`📊 WASM Score: ${wasmScore.toFixed(2)}/1`);
+
+            // Test 4: Function Accessibility
+            debug('📋 Test 4: Checking function accessibility...');
+            const requiredFunctions = ['prepareUpload', 'sendTransaction', 'retrieveFiles', 'checkBalance'];
+            let funcScore = 0;
+            for (const funcName of requiredFunctions) {
+                if (typeof window[funcName] === 'function') {
+                    debug(`  ✅ window.${funcName}: accessible`);
+                    funcScore++;
+                } else {
+                    debug(`  ❌ window.${funcName}: not accessible`);
+                    issues.push(`Function not accessible: ${funcName}`);
+                }
+            }
+            score += funcScore / requiredFunctions.length;
+            debug(`📊 Functions Score: ${funcScore}/${requiredFunctions.length}`);
+
+            // Test 5: Network Connectivity
+            debug('📋 Test 5: Testing network connectivity...');
+            let networkScore = 0;
+            try {
+                const testUrls = [
+                    'https://api-tn10.kaspa.org/info/ping',
+                    'https://proxy.kaspa.ws/',
+                    './kaspa-wasm.js'
+                ];
+                
+                for (const url of testUrls) {
+                    try {
+                        const response = await fetch(url, { method: 'HEAD', timeout: 5000 });
+                        debug(`  ✅ ${url}: ${response.status}`);
+                        networkScore += 1/testUrls.length;
+                    } catch (e) {
+                        debug(`  ❌ ${url}: ${e.message}`);
+                        issues.push(`Network issue with ${url}: ${e.message}`);
+                    }
+                }
+            } catch (e) {
+                debug(`  ❌ Network test failed: ${e.message}`);
+                issues.push(`Network test failed: ${e.message}`);
+            }
+            score += networkScore;
+            debug(`📊 Network Score: ${networkScore.toFixed(2)}/1`);
+
+            // Final Analysis
+            const percentage = (score / maxScore * 100).toFixed(1);
+            debug('🎯 === SELF-CHECK RESULTS ===');
+            debug(`📊 Overall Score: ${score.toFixed(2)}/${maxScore} (${percentage}%)`);
+            
+            if (issues.length === 0) {
+                debug('✅ No issues detected - System appears healthy');
+            } else {
+                debug(`⚠️ Found ${issues.length} issue(s):`);
+                issues.forEach((issue, i) => debug(`  ${i+1}. ${issue}`));
+            }
+
+            debug(`🔧 Recommendations:`);
+            if (score < 2) debug('  - Critical: Multiple system failures detected');
+            else if (score < 4) debug('  - Major: WASM or core functionality issues');
+            else if (score < 6) debug('  - Minor: Some features may not work correctly');
+            else if (score < 8) debug('  - Good: System mostly functional with minor issues');
+            else debug('  - Excellent: System appears to be working correctly');
+
+            debug('=== END SELF-CHECK ===');
+            
+            return { score, percentage, issues };
+        };
+
+        // Test WASM functions specifically
+        window.testWasmFunctions = async function testWasmFunctions() {
+            debug('🧪 === WASM FUNCTION TESTING ===');
+            
+            if (!kaspaWasm) {
+                debug('❌ Cannot test - kaspaWasm is null');
+                return;
+            }
+
+            // Test PrivateKey creation
+            try {
+                debug('🔑 Testing PrivateKey creation...');
+                const testKey = kaspaWasm.PrivateKey.fromHex("1111111111111111111111111111111111111111111111111111111111111111");
+                debug(`  ✅ PrivateKey created: ${!!testKey}`);
+                debug(`  📋 PrivateKey type: ${typeof testKey}`);
+            } catch (e) {
+                debug(`  ❌ PrivateKey creation failed: ${e.message}`);
+            }
+
+            // Test Transaction creation
+            try {
+                debug('📄 Testing Transaction creation...');
+                const testTx = {
+                    version: 0,
+                    inputs: [],
+                    outputs: [],
+                    lockTime: 0,
+                    subnetworkId: "0000000000000000000000000000000000000000",
+                    gas: 0,
+                    payload: "",
+                    mass: null
+                };
+                const tx = new kaspaWasm.Transaction(testTx);
+                debug(`  ✅ Transaction created: ${!!tx}`);
+                debug(`  📋 Transaction type: ${typeof tx}`);
+            } catch (e) {
+                debug(`  ❌ Transaction creation failed: ${e.message}`);
+            }
+
+            // Test signTransaction function
+            try {
+                debug('✍️ Testing signTransaction function...');
+                debug(`  📋 signTransaction exists: ${typeof kaspaWasm.signTransaction}`);
+                debug(`  📋 signTransaction callable: ${typeof kaspaWasm.signTransaction === 'function'}`);
+            } catch (e) {
+                debug(`  ❌ signTransaction test failed: ${e.message}`);
+            }
+
+            debug('=== END WASM TESTING ===');
+        };
+
         // Detailed debug function
         window.showDetailedDebug = function showDetailedDebug() {
             debug('🔍 === DETAILED DEBUG REPORT ===');
@@ -725,8 +933,20 @@ Ready for testnet transaction.`;
             if (success) {
                 debug('✅ Application initialization complete');
                 document.getElementById('status').innerHTML = 'Ready - WASM SDK loaded, select file to upload';
+                
+                // Auto-run self-check after successful initialization
+                setTimeout(() => {
+                    debug('🤖 Running automatic post-initialization self-check...');
+                    runSelfCheck();
+                }, 2000);
             } else {
                 debug('❌ Application initialization failed');
+                
+                // Run self-check even on failure to identify issues
+                setTimeout(() => {
+                    debug('🤖 Running diagnostic self-check after initialization failure...');
+                    runSelfCheck();
+                }, 1000);
             }
         });
     </script>
