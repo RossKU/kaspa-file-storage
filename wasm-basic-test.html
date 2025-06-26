@@ -510,14 +510,37 @@
                     // Test Case 3: Test createTransactions (object parameter)
                     try {
                         logTest('=== Testing createTransactions function ===', true);
-                        // Note: createTransactions requires valid UTXO entries from RPC
-                        // For testing purposes, we'll simulate the call but expect it to fail gracefully
+                        // Create proper mock UTXO entries with sufficient balance
+                        // Create proper mock UTXO with realistic Kaspa transaction ID and correct format
+                        const mockUtxoEntries = [{
+                            address: address.toString(),
+                            outpoint: {
+                                transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                                index: 0
+                            },
+                            scriptPublicKey: kaspa.payToAddressScript ? kaspa.payToAddressScript(address) : {
+                                version: 0,
+                                script: new Uint8Array([
+                                    0x20, // OP_DATA_32 - push 32 bytes
+                                    // 32-byte public key hash derived from test private key
+                                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                                    0xac // OP_CHECKSIG
+                                ])
+                            },
+                            amount: 500000000000n, // 5000 KAS (much more than needed: sufficient for 1000 KAS output + fees)
+                            isCoinbase: false,
+                            blockDaaScore: 12345678n
+                        }];
+                        
                         const transactionsResult = await kaspa.createTransactions({
-                            entries: [],  // empty for test - real usage requires RPC UTXO data
-                            outputs: testOutputs,
-                            changeAddress: address,
-                            priorityFee: 1000000n, // 0.01 KAS in sompi for 1 TKAS transfer
-                            networkId: "testnet-10"  // use string instead of enum
+                            entries: mockUtxoEntries,  // sufficient UTXO balance
+                            outputs: testOutputs,      // 1000 KAS output
+                            changeAddress: address,    // required for change
+                            priorityFee: 1000000n,     // 0.01 KAS fee
+                            networkId: "testnet-10"    // correct string format
                         });
                         logTest('createTransactions call', !!transactionsResult, typeof transactionsResult);
                         
