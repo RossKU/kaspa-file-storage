@@ -79,6 +79,7 @@
                 <button onclick="testWasmFunctions()">🧪 Test WASM Functions</button>
                 <button onclick="deepWasmAnalysis()">🔬 Deep WASM Analysis</button>
                 <button onclick="analyzeKaspaApps()">🌐 Analyze Kaspa Apps</button>
+                <button onclick="testWasmInit()">🧪 Test WASM Init</button>
                 <button onclick="clearDebugLog()">🗑️ Clear Log</button>
             </div>
         </div>
@@ -828,6 +829,87 @@ Ready for testnet transaction.`;
             debug('🗑️ Debug log cleared');
         };
 
+        // Test WASM initialization alternatives
+        window.testWasmInit = async function testWasmInit() {
+            debug('🔬 === TESTING WASM INITIALIZATION ALTERNATIVES ===');
+            
+            try {
+                debug('📦 Re-importing kaspa-wasm.js module...');
+                const module = await import('./kaspa-wasm.js');
+                debug(`  ✅ Module imported, type: ${typeof module}, keys: ${Object.keys(module).length}`);
+                
+                // Test 1: Without URL parameter
+                debug('🧪 Test 1: module.default() without parameters...');
+                try {
+                    const wasmNoUrl = await module.default();
+                    debug(`  ✅ No URL result: ${typeof wasmNoUrl}, keys: ${Object.keys(wasmNoUrl || {}).length}`);
+                    if (wasmNoUrl && typeof wasmNoUrl === 'object') {
+                        const funcs = Object.keys(wasmNoUrl).filter(k => typeof wasmNoUrl[k] === 'function');
+                        debug(`  📊 Functions available: ${funcs.length}`);
+                        debug(`  📝 First 10 functions: ${funcs.slice(0, 10).join(', ')}`);
+                        
+                        // Test createTransaction specifically
+                        if (wasmNoUrl.createTransaction) {
+                            debug(`  🎯 createTransaction found: ${typeof wasmNoUrl.createTransaction}`);
+                            debug(`  📏 createTransaction.length: ${wasmNoUrl.createTransaction.length} (parameters expected)`);
+                        }
+                    }
+                } catch (e) {
+                    debug(`  ❌ No URL failed: ${e.message}`);
+                }
+                
+                // Test 2: Different URL formats
+                debug('🧪 Test 2: Testing different URL patterns...');
+                const urlTests = [
+                    './kaspa-wasm_bg.wasm',
+                    '/kaspa-wasm_bg.wasm',
+                    'kaspa-wasm_bg.wasm',
+                    null,
+                    undefined
+                ];
+                
+                for (const url of urlTests) {
+                    try {
+                        debug(`  🔗 Testing URL: ${url || 'null/undefined'}`);
+                        const wasmWithUrl = await module.default(url);
+                        debug(`    ✅ Success with ${url || 'null'}: ${typeof wasmWithUrl}, functions: ${Object.keys(wasmWithUrl || {}).filter(k => typeof wasmWithUrl[k] === 'function').length}`);
+                    } catch (e) {
+                        debug(`    ❌ Failed with ${url || 'null'}: ${e.message.substring(0, 100)}`);
+                    }
+                }
+                
+                // Test 3: Direct module property access
+                debug('🧪 Test 3: Direct module property access...');
+                for (const prop of Object.keys(module)) {
+                    const value = module[prop];
+                    debug(`  📋 module.${prop}: ${typeof value}`);
+                    if (typeof value === 'function') {
+                        debug(`    🔧 Function ${prop}.length: ${value.length}`);
+                    }
+                }
+                
+                // Test 4: Compare with current global kaspaWasm
+                debug('🧪 Test 4: Comparing with current global kaspaWasm...');
+                if (window.kaspaWasm) {
+                    const currentFuncs = Object.keys(kaspaWasm).filter(k => typeof kaspaWasm[k] === 'function');
+                    debug(`  📊 Current global kaspaWasm functions: ${currentFuncs.length}`);
+                    debug(`  🆚 Current isWasmLoaded: ${isWasmLoaded}`);
+                    
+                    if (kaspaWasm.createTransaction) {
+                        debug(`  🎯 Current createTransaction: ${typeof kaspaWasm.createTransaction}, length: ${kaspaWasm.createTransaction.length}`);
+                    }
+                } else {
+                    debug(`  ❌ No global kaspaWasm found`);
+                }
+                
+                debug('🏁 === WASM INITIALIZATION TEST COMPLETE ===');
+                
+            } catch (error) {
+                debug(`❌ testWasmInit failed: ${error.message}`);
+                debug(`📋 Error stack: ${error.stack}`);
+            }
+        };
+
 
         // Comprehensive self-check function
         window.runSelfCheck = async function runSelfCheck() {
@@ -1098,6 +1180,68 @@ Ready for testnet transaction.`;
             }
             
             debug('=== END KASPA APP ANALYSIS ===');
+        };
+
+        // Test WASM initialization alternatives
+        window.testWasmInit = async function testWasmInit() {
+            debug('🔬 === TESTING WASM INITIALIZATION ALTERNATIVES ===');
+            
+            try {
+                debug('📦 Re-importing kaspa-wasm.js module...');
+                const module = await import('./kaspa-wasm.js');
+                
+                // Test 1: Without URL parameter
+                debug('🧪 Test 1: module.default() without parameters...');
+                try {
+                    const wasmNoUrl = await module.default();
+                    debug(`  ✅ No URL result: ${typeof wasmNoUrl}, keys: ${Object.keys(wasmNoUrl || {}).length}`);
+                } catch (e) {
+                    debug(`  ❌ No URL failed: ${e.message}`);
+                }
+                
+                // Test 2: With different URL formats
+                const urlVariants = [
+                    './kaspa-wasm_bg.wasm',
+                    'kaspa-wasm_bg.wasm',
+                    '/kaspa-wasm_bg.wasm',
+                    null,
+                    undefined
+                ];
+                
+                for (const url of urlVariants) {
+                    debug(`🧪 Test with URL: ${url}...`);
+                    try {
+                        const wasmResult = await module.default(url);
+                        debug(`  ✅ URL "${url}" result: ${typeof wasmResult}, keys: ${Object.keys(wasmResult || {}).length}`);
+                        
+                        if (wasmResult && wasmResult.createTransaction) {
+                            debug(`  🎯 Found createTransaction in result for URL: ${url}`);
+                        }
+                    } catch (e) {
+                        debug(`  ❌ URL "${url}" failed: ${e.message}`);
+                    }
+                }
+                
+                // Test 3: Direct module properties
+                debug('🔍 Testing direct module properties...');
+                const moduleKeys = Object.keys(module);
+                debug(`📋 Module keys: ${moduleKeys.slice(0, 10).join(', ')}...`);
+                
+                if (module.createTransaction) {
+                    debug('🎯 Found createTransaction directly in module!');
+                    try {
+                        const directResult = module.createTransaction();
+                        debug(`  ✅ Direct createTransaction result: ${typeof directResult}`);
+                    } catch (e) {
+                        debug(`  ❌ Direct createTransaction failed: ${e.message}`);
+                    }
+                }
+                
+            } catch (e) {
+                debug(`❌ WASM init test failed: ${e.message}`);
+            }
+            
+            debug('=== END WASM INIT TESTING ===');
         };
 
         // Test WASM functions specifically
