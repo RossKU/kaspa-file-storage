@@ -675,88 +675,133 @@ Ready for testnet transaction.`;
                     return;
                 }
                 
-                debug('🔍 Analyzing WASM function-based API...');
+                debug('🔧 Using discovered WASM API functions...');
                 
-                // Get all available functions
-                const keys = Object.keys(kaspaWasm);
-                debug(`🔍 Total WASM functions: ${keys.length}`);
+                // Try to use the proper createTransaction function
+                debug('📄 Attempting to use createTransaction function...');
                 
-                // Filter for relevant functions
-                const privateKeyFunctions = keys.filter(k => k.toLowerCase().includes('privatekey'));
-                const transactionFunctions = keys.filter(k => k.toLowerCase().includes('transaction'));
-                const addressFunctions = keys.filter(k => k.toLowerCase().includes('address'));
+                let signedTx = null;
                 
-                debug(`🔑 PrivateKey functions: ${privateKeyFunctions.join(', ')}`);
-                debug(`📄 Transaction functions: ${transactionFunctions.join(', ')}`);
-                debug(`🏠 Address functions: ${addressFunctions.join(', ')}`);
+                if (kaspaWasm.createTransaction) {
+                    try {
+                        debug('✅ Found createTransaction function');
+                        
+                        // Prepare transaction data in the format expected by Kaspa
+                        const txData = {
+                            version: transaction.version || 0,
+                            inputs: transaction.inputs,
+                            outputs: transaction.outputs,
+                            lockTime: transaction.lockTime || 0,
+                            subnetworkId: transaction.subnetworkId || "0000000000000000000000000000000000000000",
+                            gas: transaction.gas || 0,
+                            payload: transaction.payload || ""
+                        };
+                        
+                        debug('🔧 Calling createTransaction with prepared data...');
+                        signedTx = kaspaWasm.createTransaction(txData);
+                        debug(`✅ createTransaction returned: ${typeof signedTx}`);
+                        
+                        if (signedTx) {
+                            debug('✅ Transaction created successfully via createTransaction');
+                        } else {
+                            debug('⚠️ createTransaction returned null/undefined');
+                        }
+                        
+                    } catch (e) {
+                        debug(`❌ createTransaction failed: ${e.message}`);
+                        signedTx = null;
+                    }
+                }
                 
-                // This appears to be a low-level WASM API, not the high-level classes
-                // Let's try a different approach - maybe we need to use the raw functions
+                // Fallback: try transaction_constructor
+                if (!signedTx && kaspaWasm.transaction_constructor) {
+                    try {
+                        debug('🔧 Trying transaction_constructor as fallback...');
+                        signedTx = kaspaWasm.transaction_constructor(transaction);
+                        debug(`✅ transaction_constructor returned: ${typeof signedTx}`);
+                    } catch (e) {
+                        debug(`❌ transaction_constructor failed: ${e.message}`);
+                    }
+                }
                 
-                debug('⚠️ Detected low-level WASM API instead of high-level classes');
-                debug('🔧 Attempting basic transaction without complex signing...');
-                
-                // Let's try to understand what WASM SDK version we have
-                debug('🔍 Checking WASM SDK version and capabilities...');
-                
-                // Look for version info
-                const versionKeys = keys.filter(k => k.toLowerCase().includes('version') || k.toLowerCase().includes('info'));
-                debug(`📋 Version-related functions: ${versionKeys.join(', ')}`);
-                
-                // For testing, create a properly formatted transaction for Kaspa
-                const mockTransaction = {
-                    version: transaction.version || 0,
-                    inputs: transaction.inputs.map(input => ({
-                        previousOutpoint: input.previousOutpoint,
-                        signatureScript: "41000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40", // Mock signature
-                        sequence: input.sequence || 18446744073709551615,
-                        sigOpCount: input.sigOpCount || 1
-                    })),
-                    outputs: transaction.outputs,
-                    lockTime: transaction.lockTime || 0,
-                    subnetworkId: transaction.subnetworkId,
-                    gas: transaction.gas || 0,
-                    payload: transaction.payload || "",
-                    mass: null // Will be calculated by network
-                };
-                
-                debug('🔧 Created mock signed transaction for API testing');
-                
-                // Skip complex WASM signing for now and test API submission
-                debug('🚀 Skipping WASM signing, testing API submission with mock data...');
-                
-                const signedTx = mockTransaction;
+                // Final fallback: create mock transaction for API testing
+                if (!signedTx) {
+                    debug('⚠️ All WASM methods failed, creating mock transaction for API testing...');
+                    signedTx = {
+                        version: transaction.version || 0,
+                        inputs: transaction.inputs.map(input => ({
+                            previousOutpoint: input.previousOutpoint,
+                            signatureScript: "41000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f40",
+                            sequence: input.sequence || 18446744073709551615,
+                            sigOpCount: input.sigOpCount || 1
+                        })),
+                        outputs: transaction.outputs,
+                        lockTime: transaction.lockTime || 0,
+                        subnetworkId: transaction.subnetworkId || "0000000000000000000000000000000000000000",
+                        gas: transaction.gas || 0,
+                        payload: transaction.payload || "",
+                        mass: null
+                    };
+                    debug('🔧 Using mock transaction for API submission test');
+                }
                 
                 document.getElementById('status').innerHTML = 
                     '<span class="info">🚀 Attempting to send signed transaction...</span>';
 
                 // Try to submit signed transaction
+                debug('🌐 Attempting to submit transaction to network...');
+                
                 const endpoints = [
-                    'https://api-tn10.kaspa.org/transactions',
-                    'https://proxy.kaspa.ws/submit_transaction'
+                    {
+                        url: 'https://api-tn10.kaspa.org/transactions',
+                        name: 'TN-10 Direct API'
+                    },
+                    {
+                        url: 'https://proxy.kaspa.ws/submit_transaction', 
+                        name: 'Proxy API'
+                    }
                 ];
 
                 for (const endpoint of endpoints) {
                     try {
-                        const response = await fetch(endpoint, {
+                        debug(`🌐 Trying ${endpoint.name}: ${endpoint.url}`);
+                        
+                        // Prepare transaction payload based on type
+                        let requestBody;
+                        if (signedTx && typeof signedTx.toJson === 'function') {
+                            // WASM transaction object
+                            requestBody = JSON.stringify({ transaction: signedTx.toJson() });
+                            debug('📄 Using WASM transaction.toJson() format');
+                        } else {
+                            // Plain object
+                            requestBody = JSON.stringify({ transaction: signedTx });
+                            debug('📄 Using plain object format');
+                        }
+                        
+                        debug(`📤 Request body preview: ${requestBody.substring(0, 200)}...`);
+                        
+                        const response = await fetch(endpoint.url, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                             },
-                            body: JSON.stringify({ transaction: signedTx.toJson() })
+                            body: requestBody
                         });
 
                         const result = await response.json();
+                        debug(`📥 ${endpoint.name} response status: ${response.status}`);
+                        debug(`📥 ${endpoint.name} response: ${JSON.stringify(result).substring(0, 200)}...`);
                         
                         if (response.ok) {
+                            debug(`✅ Transaction submitted successfully via ${endpoint.name}`);
                             document.getElementById('status').innerHTML = 
-                                `<span class="success">✅ Transaction sent! Result: ${JSON.stringify(result)}</span>`;
+                                `<span class="success">✅ Transaction sent via ${endpoint.name}! Result: ${JSON.stringify(result)}</span>`;
                             return;
                         } else {
-                            console.log(`Failed with ${endpoint}:`, result);
+                            debug(`❌ ${endpoint.name} rejected transaction: ${JSON.stringify(result)}`);
                         }
                     } catch (e) {
-                        console.log(`Error with ${endpoint}:`, e);
+                        debug(`❌ ${endpoint.name} connection error: ${e.message}`);
                     }
                 }
 
