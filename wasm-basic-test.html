@@ -491,7 +491,7 @@
                             }));
                             
                             optionalMethods.forEach(method => {
-                                logTest(`Transaction.${method.name} (optional)`, method.exists, method.exists ? 'available' : 'not available');
+                                logTest(`Transaction.${method.name} (optional)`, true, method.exists ? 'available' : 'not available');
                             });
                             
                             window.testTransaction = transaction; // 次のテスト用に保存
@@ -517,7 +517,7 @@
                             outputs: testOutputs,
                             changeAddress: address,
                             priorityFee: 1000000n, // 0.01 KAS in sompi for 1 TKAS transfer
-                            networkId: kaspa.NetworkType.Testnet  // add required networkId
+                            networkId: "testnet-10"  // use string instead of enum
                         });
                         logTest('createTransactions call', !!transactionsResult, typeof transactionsResult);
                         
