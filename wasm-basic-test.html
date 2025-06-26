@@ -20,7 +20,7 @@
         <button onclick="testTransactionFunction()">4. Test Transaction Functions</button>
         <button onclick="testPayloadHandling()">5. Test Payload Handling</button>
         <button onclick="testDetailedTransaction()">6. Test Detailed Transaction</button>
-        <button onclick="testCreateTransactionDebug()">7. Debug createTransaction</button>
+        <button onclick="testCreateTransactionDebug()">7. Test SDK-Compliant createTransaction</button>
     </div>
     
     <div class="result" id="testOutput"></div>
@@ -28,6 +28,35 @@
     <script type="module">
         let kaspa = null;
         let testResults = [];
+        
+        // ペイロード処理ヘルパー関数
+        function textToHex(text) {
+            return Array.from(new TextEncoder().encode(text))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function hexToText(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return new TextDecoder().decode(bytes);
+        }
+        
+        function arrayBufferToHex(buffer) {
+            return Array.from(new Uint8Array(buffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function hexToArrayBuffer(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes.buffer;
+        }
         
         // テスト結果を表示する関数
         function logTest(testName, result, details = '') {
@@ -216,48 +245,23 @@
                 const testPayloadHex = Array.from(testPayloadBytes, b => b.toString(16).padStart(2, '0')).join('');
                 logTest('Payload hex conversion', true, testPayloadHex);
                 
-                // ペイロード関連関数の確認と実際のテスト
-                const hexFunctions = ['textToHex', 'hexToText', 'arrayBufferToHex', 'hexToArrayBuffer'];
-                
-                hexFunctions.forEach(fnName => {
-                    logTest(`${fnName} function`, !!kaspa[fnName]);
-                });
-                
-                // 実際のHex変換テスト
-                if (kaspa.textToHex) {
-                    try {
-                        const hexResult = kaspa.textToHex(testText);
-                        logTest('textToHex function', hexResult === testPayloadHex, hexResult);
-                    } catch (e) {
-                        logTest('textToHex function', false, e.message);
-                    }
-                }
-                
-                if (kaspa.hexToText) {
-                    try {
-                        const textResult = kaspa.hexToText(testPayloadHex);
-                        logTest('hexToText function', textResult === testText, textResult);
-                    } catch (e) {
-                        logTest('hexToText function', false, e.message);
-                    }
-                }
-                
-                if (kaspa.arrayBufferToHex) {
-                    try {
-                        const hexResult = kaspa.arrayBufferToHex(testPayloadBytes);
-                        logTest('arrayBufferToHex function', hexResult === testPayloadHex, hexResult);
-                    } catch (e) {
-                        logTest('arrayBufferToHex function', false, e.message);
-                    }
-                }
-                
-                if (kaspa.hexToArrayBuffer) {
-                    try {
-                        const bufferResult = kaspa.hexToArrayBuffer(testPayloadHex);
-                        logTest('hexToArrayBuffer function', bufferResult.byteLength === testPayloadBytes.length, `${bufferResult.byteLength} bytes`);
-                    } catch (e) {
-                        logTest('hexToArrayBuffer function', false, e.message);
-                    }
+                // 独自実装のペイロード関数をテスト
+                try {
+                    const hexResult = textToHex(testText);
+                    logTest('textToHex function', hexResult === testPayloadHex, hexResult);
+                    
+                    const textResult = hexToText(testPayloadHex);
+                    logTest('hexToText function', textResult === testText, textResult);
+                    
+                    const bufferHex = arrayBufferToHex(testPayloadBytes.buffer);
+                    logTest('arrayBufferToHex function', bufferHex === testPayloadHex, bufferHex);
+                    
+                    const bufferResult = hexToArrayBuffer(testPayloadHex);
+                    const bufferMatch = new Uint8Array(bufferResult).every((val, idx) => val === testPayloadBytes[idx]);
+                    logTest('hexToArrayBuffer function', bufferMatch, `${new Uint8Array(bufferResult).length} bytes`);
+                    
+                } catch (error) {
+                    logTest('Payload helper functions', false, error.message);
                 }
                 
             } catch (error) {
@@ -287,46 +291,18 @@
                 
                 // Test payload
                 const testPayload = 'Test file storage payload';
-                const payloadHex = kaspa.textToHex ? kaspa.textToHex(testPayload) : '';
+                const payloadBytes = new TextEncoder().encode(testPayload);
                 logTest('Test payload prepared', true, `${testPayload.length} bytes`);
                 
                 // Test createTransaction with various parameter combinations
                 logTest('Calling createTransaction with real data...', true);
                 
                 try {
-                    // Method 1: Standard parameters
-                    const result1 = kaspa.createTransaction([], [], address, 1000n, payloadHex);
-                    logTest('createTransaction Method 1 (standard)', !!result1, 'success');
+                    // Method 1: Basic test with empty arrays
+                    const result1 = kaspa.createTransaction([], [], 1000n, payloadBytes, 1);
+                    logTest('createTransaction Method 1 (empty)', !!result1, 'success');
                 } catch (e) {
-                    logTest('createTransaction Method 1 (standard)', false, e.message.substring(0, 50));
-                }
-                
-                try {
-                    // Method 2: Object parameter
-                    const result2 = kaspa.createTransaction({
-                        utxos: [],
-                        outputs: [],
-                        changeAddress: address,
-                        feeRate: 1000n,
-                        payload: payloadHex
-                    });
-                    logTest('createTransaction Method 2 (object)', !!result2, 'success');
-                } catch (e) {
-                    logTest('createTransaction Method 2 (object)', false, e.message.substring(0, 50));
-                }
-                
-                try {
-                    // Method 3: createTransactions (multiple)
-                    const result3 = kaspa.createTransactions({
-                        utxos: [],
-                        outputs: [],
-                        changeAddress: address,
-                        feeRate: 1000n,
-                        payload: payloadHex
-                    });
-                    logTest('createTransactions method', !!result3, 'success');
-                } catch (e) {
-                    logTest('createTransactions method', false, e.message.substring(0, 50));
+                    logTest('createTransaction Method 1 (empty)', false, e.message.substring(0, 50));
                 }
                 
                 logTest('=== UTXO AND OUTPUT FORMAT TEST ===', true);
@@ -390,63 +366,112 @@
                 const keypair = privateKey.toKeypair();
                 const address = keypair.toAddress(kaspa.NetworkType.Testnet);
                 
-                // 複数の異なるUTXO/Output形式をテスト
-                const testCases = [
-                    {
-                        name: 'Empty arrays',
-                        utxos: [],
-                        outputs: [],
-                        feeRate: 1000n,
-                        payload: 'test'
+                // 正しいIUtxoEntry形式のテストデータ
+                const testUtxos = [{
+                    outpoint: {
+                        transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                        index: 0
                     },
-                    {
-                        name: 'Simple UTXO format',
-                        utxos: [{
-                            outpoint: { transactionId: 'a'.repeat(64), index: 0 },
-                            amount: 100000000n,
-                            scriptPublicKey: { version: 0, script: new Uint8Array([0x76, 0xa9, 0x14]) }
-                        }],
-                        outputs: [{ address: address.toString(), amount: 50000000n }],
-                        feeRate: 1000n,
-                        payload: 'test payload'
+                    amount: 150000000000n, // 1500 KAS in sompi
+                    scriptPublicKey: {
+                        version: 0,
+                        script: new Uint8Array([0x20, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11])
                     },
-                    {
-                        name: 'PaymentOutput format',
-                        utxos: [],
-                        outputs: kaspa.PaymentOutput ? [new kaspa.PaymentOutput(address, 50000000n)] : [],
-                        feeRate: 1000n,
-                        payload: new Uint8Array([1, 2, 3, 4])
-                    }
-                ];
+                    blockDaaScore: 12345678n
+                }];
+                logTest('Test UTXO data prepared (IUtxoEntry format)', true, `${testUtxos.length} UTXOs`);
                 
-                for (const testCase of testCases) {
+                // 正しいIPaymentOutput形式のテストデータ
+                const testOutputs = [{
+                    address: address.toString(), // use generated address
+                    amount: 100000000n // 1 KAS in sompi
+                }];
+                logTest('Test output data prepared (IPaymentOutput format)', true, `${testOutputs.length} outputs`);
+                
+                // テストペイロード（Uint8Array形式）
+                const testFileData = "Hello Kaspa File Storage!";
+                const payloadBytes = new TextEncoder().encode(testFileData);
+                logTest('Test payload prepared (Uint8Array)', true, `${payloadBytes.length} bytes`);
+                
+                // createTransaction関数をSDK仕様に準拠して呼び出し
+                try {
+                    logTest('=== Testing createTransaction with proper SDK interfaces ===', true);
+                    
+                    // Test Case 1: Empty arrays (should work)
                     try {
-                        logTest(`Testing ${testCase.name}...`, true);
-                        
-                        const result = kaspa.createTransaction(
-                            testCase.utxos,
-                            testCase.outputs,
-                            address,
-                            testCase.feeRate,
-                            testCase.payload
+                        const emptyResult = kaspa.createTransaction(
+                            [],        // empty utxo_entry_source
+                            [],        // empty outputs
+                            1000n,     // priority_fee
+                            payloadBytes,  // payload as Uint8Array
+                            1          // sig_op_count
+                        );
+                        logTest('Empty arrays test', !!emptyResult, typeof emptyResult);
+                    } catch (e) {
+                        logTest('Empty arrays test', false, e.message.substring(0, 50));
+                    }
+                    
+                    // Test Case 2: With proper UTXO and output data
+                    try {
+                        const transaction = kaspa.createTransaction(
+                            testUtxos,     // utxo_entry_source (IUtxoEntry[])
+                            testOutputs,   // outputs (IPaymentOutput[])
+                            1000n,         // priority_fee
+                            payloadBytes,  // payload (Uint8Array)
+                            1              // sig_op_count
                         );
                         
-                        logTest(`${testCase.name}: SUCCESS`, true, typeof result);
+                        logTest('createTransaction with data', !!transaction, typeof transaction);
                         
-                    } catch (error) {
-                        // 詳細なエラー情報
-                        logTest(`${testCase.name}: FAILED`, false, error.message);
-                        logTest(`Error type: ${error.name}`, false);
-                        logTest(`Error stack (first 100 chars)`, false, error.stack ? error.stack.substring(0, 100) : 'No stack');
+                        if (transaction) {
+                            // トランザクションオブジェクトの詳細確認
+                            logTest('Transaction object type', typeof transaction === 'object');
+                            
+                            // 利用可能なメソッド確認
+                            const methods = ['sign', 'toString', 'toJson', 'id', 'inputs', 'outputs'].map(method => ({
+                                name: method,
+                                exists: transaction[method] !== undefined
+                            }));
+                            
+                            methods.forEach(method => {
+                                logTest(`Transaction.${method.name}`, method.exists);
+                            });
+                            
+                            window.testTransaction = transaction; // 次のテスト用に保存
+                        }
                         
-                        // コンソールログ
-                        console.group(`🔍 ${testCase.name} Error Details`);
-                        console.error('Full error:', error);
-                        console.log('Test case:', testCase);
-                        console.log('Address object:', address);
-                        console.log('kaspa object keys:', Object.keys(kaspa).slice(0, 20));
+                    } catch (createError) {
+                        logTest('createTransaction with data', false, createError.message);
+                        console.group('🔍 createTransaction Error Details');
+                        console.error('Full error:', createError);
+                        console.log('Test UTXOs:', testUtxos);
+                        console.log('Test outputs:', testOutputs);
+                        console.log('Payload:', payloadBytes);
                         console.groupEnd();
                     }
+                    
+                    // Test Case 3: Test createTransactions (object parameter)
+                    try {
+                        logTest('=== Testing createTransactions function ===', true);
+                        const transactionsResult = await kaspa.createTransactions({
+                            entries: testUtxos,  // use entries instead of utxos
+                            outputs: testOutputs,
+                            changeAddress: address,
+                            priorityFee: 1000n,
+                            payload: payloadBytes
+                        });
+                        logTest('createTransactions call', !!transactionsResult, typeof transactionsResult);
+                        
+                        if (transactionsResult && transactionsResult.transactions) {
+                            logTest('createTransactions result has transactions', true, `${transactionsResult.transactions.length} transactions`);
+                        }
+                    } catch (e) {
+                        logTest('createTransactions call', false, e.message.substring(0, 50));
+                    }
+                    
+                } catch (generalError) {
+                    logTest('General createTransaction test failed', false, generalError.message);
+                    console.error('General error:', generalError);
                 }
                 
                 // 関数signature分析
