@@ -132,8 +132,8 @@
             return new TextDecoder().decode(bytes);
         }
 
-        // Upload preparation
-        async function prepareUpload() {
+        // Upload preparation - make it globally accessible
+        window.prepareUpload = async function prepareUpload() {
             const fileInput = document.getElementById('fileInput');
             const secretKey = document.getElementById('secretKey').value;
             const output = document.getElementById('uploadOutput');
@@ -221,7 +221,7 @@
         const CORS_PROXY = ''; // Add if needed for CORS
 
         // Retrieve files via REST API
-        async function retrieveFiles() {
+        window.retrieveFiles = async function retrieveFiles() {
             const secret = document.getElementById('retrieveSecret').value;
             const output = document.getElementById('retrieveOutput');
             
@@ -357,7 +357,7 @@
         }
 
         // Download file from stored data
-        function downloadFile(index) {
+        window.downloadFile = function downloadFile(index) {
             const file = window.foundFiles[index];
             if (!file) return;
 
@@ -391,7 +391,7 @@
         }
 
         // Copy transaction to clipboard
-        function copyTransaction() {
+        window.copyTransaction = function copyTransaction() {
             const textarea = document.getElementById('transactionData');
             textarea.select();
             document.execCommand('copy');
@@ -401,7 +401,7 @@
         }
 
         // Save transaction as file
-        function saveTransactionFile() {
+        window.saveTransactionFile = function saveTransactionFile() {
             const transactionData = document.getElementById('transactionData').value;
             if (!transactionData) {
                 document.getElementById('status').innerHTML = 
@@ -424,7 +424,7 @@
         }
 
         // Create test text file
-        function createTestFile() {
+        window.createTestFile = function createTestFile() {
             const testContent = `# Kaspa Storage Test File
 Created: ${new Date().toISOString()}
 Secret: test_secret_12345
@@ -453,7 +453,7 @@ Test data: Hello Kaspa! 🚀`;
         }
 
         // Save current payload as text file
-        function savePayloadAsText() {
+        window.savePayloadAsText = function savePayloadAsText() {
             if (!currentFile || !currentSecret) {
                 document.getElementById('testOutput').innerHTML = 
                     '<span class="error">No file prepared. Use "Prepare Transaction" first.</span>';
@@ -493,7 +493,7 @@ Ready for testnet transaction.`;
         // Wallet functions
         const WALLET_ADDRESS = 'kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd';
 
-        async function checkBalance() {
+        window.checkBalance = async function checkBalance() {
             document.getElementById('walletBalance').innerHTML = 'Checking...';
             
             // Try multiple API endpoints for testnet compatibility
@@ -548,7 +548,7 @@ Ready for testnet transaction.`;
         }
 
         // Sign and send transaction function
-        async function sendTransaction() {
+        window.sendTransaction = async function sendTransaction() {
             if (!isWasmLoaded) {
                 document.getElementById('status').innerHTML = 
                     '<span class="error">WASM SDK not loaded yet</span>';
