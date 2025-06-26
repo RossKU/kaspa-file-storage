@@ -69,6 +69,13 @@
             <div class="output" id="testOutput"></div>
         </div>
 
+        <!-- Debug Section -->
+        <div class="section">
+            <h3>🐛 Debug Information</h3>
+            <div class="output" id="debugOutput" style="max-height: 200px; overflow-y: auto;"></div>
+            <button onclick="showDetailedDebug()">Show Detailed Status</button>
+        </div>
+
         <!-- Status -->
         <div class="output" id="status">Ready</div>
     </div>
@@ -77,27 +84,67 @@
         // Kaspa WASM SDK loading
         let kaspaWasm = null;
         let isWasmLoaded = false;
+        let debugLog = [];
+        
+        // Debug function
+        function debug(message) {
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] ${message}`;
+            debugLog.push(logEntry);
+            console.log(logEntry);
+            
+            // Update debug display
+            const debugDiv = document.getElementById('debugOutput');
+            if (debugDiv) {
+                debugDiv.innerHTML = debugLog.slice(-10).join('<br>');
+            }
+        }
 
         async function loadKaspaWasm() {
             try {
+                debug('🔄 Starting WASM SDK loading...');
                 document.getElementById('status').innerHTML = '<span class="info">Loading Kaspa WASM SDK...</span>';
                 
+                debug('📦 Importing kaspa-wasm.js module...');
                 const module = await import('./kaspa-wasm.js');
+                debug(`✅ Module imported: ${!!module}`);
+                debug(`📋 Module.default type: ${typeof module.default}`);
+                
+                debug('🏗️ Initializing WASM with kaspa-wasm_bg.wasm...');
                 kaspaWasm = await module.default('./kaspa-wasm_bg.wasm');
+                debug(`✅ WASM initialized: ${!!kaspaWasm}`);
+                debug(`📋 kaspaWasm type: ${typeof kaspaWasm}`);
+                
+                // Detailed verification
+                debug(`🔍 Checking kaspaWasm properties:`);
+                debug(`  - kaspaWasm exists: ${!!kaspaWasm}`);
+                debug(`  - kaspaWasm.PrivateKey exists: ${!!(kaspaWasm && kaspaWasm.PrivateKey)}`);
+                debug(`  - kaspaWasm.Transaction exists: ${!!(kaspaWasm && kaspaWasm.Transaction)}`);
+                debug(`  - kaspaWasm.signTransaction exists: ${!!(kaspaWasm && kaspaWasm.signTransaction)}`);
+                
+                if (kaspaWasm) {
+                    debug(`📋 kaspaWasm object keys: ${Object.keys(kaspaWasm).slice(0, 10).join(', ')}...`);
+                }
                 
                 // Verify WASM is properly initialized
                 if (kaspaWasm && kaspaWasm.PrivateKey && kaspaWasm.Transaction) {
                     isWasmLoaded = true;
+                    debug('✅ WASM SDK validation passed');
                     document.getElementById('status').innerHTML = '<span class="success">✅ Kaspa WASM SDK loaded successfully!</span>';
                 } else {
-                    throw new Error('WASM SDK loaded but missing required functions');
+                    const missing = [];
+                    if (!kaspaWasm) missing.push('kaspaWasm');
+                    if (!kaspaWasm?.PrivateKey) missing.push('PrivateKey');
+                    if (!kaspaWasm?.Transaction) missing.push('Transaction');
+                    throw new Error(`WASM SDK loaded but missing: ${missing.join(', ')}`);
                 }
                 
-                // Check balance after WASM loads
+                debug('💰 Checking balance after WASM loads...');
                 await checkBalance();
                 
                 return true;
             } catch (error) {
+                debug(`❌ WASM loading failed: ${error.message}`);
                 document.getElementById('status').innerHTML = `<span class="error">❌ Failed to load WASM SDK: ${error.message}</span>`;
                 console.error('WASM loading error:', error);
                 return false;
@@ -554,11 +601,21 @@ Ready for testnet transaction.`;
 
         // Sign and send transaction function
         window.sendTransaction = async function sendTransaction() {
+            debug('🚀 sendTransaction() called');
+            debug(`📊 Current state: isWasmLoaded=${isWasmLoaded}, kaspaWasm=${!!kaspaWasm}`);
+            
             if (!isWasmLoaded) {
+                debug('❌ isWasmLoaded is false');
                 document.getElementById('status').innerHTML = 
                     '<span class="error">WASM SDK not loaded yet</span>';
                 return;
             }
+            
+            debug('🔍 Detailed WASM state check:');
+            debug(`  - kaspaWasm exists: ${!!kaspaWasm}`);
+            debug(`  - kaspaWasm.PrivateKey: ${!!(kaspaWasm && kaspaWasm.PrivateKey)}`);
+            debug(`  - kaspaWasm.Transaction: ${!!(kaspaWasm && kaspaWasm.Transaction)}`);
+            debug(`  - kaspaWasm.signTransaction: ${!!(kaspaWasm && kaspaWasm.signTransaction)}`);
 
             const transactionData = document.getElementById('transactionData').value;
             if (!transactionData) {
@@ -632,13 +689,44 @@ Ready for testnet transaction.`;
             }
         }
 
+        // Detailed debug function
+        window.showDetailedDebug = function showDetailedDebug() {
+            debug('🔍 === DETAILED DEBUG REPORT ===');
+            debug(`📊 Global variables:`);
+            debug(`  - isWasmLoaded: ${isWasmLoaded}`);
+            debug(`  - kaspaWasm: ${!!kaspaWasm}`);
+            debug(`  - kaspaWasm type: ${typeof kaspaWasm}`);
+            
+            if (kaspaWasm) {
+                try {
+                    const keys = Object.keys(kaspaWasm);
+                    debug(`  - kaspaWasm keys (${keys.length}): ${keys.slice(0, 20).join(', ')}...`);
+                    debug(`  - kaspaWasm.PrivateKey: ${typeof kaspaWasm.PrivateKey}`);
+                    debug(`  - kaspaWasm.Transaction: ${typeof kaspaWasm.Transaction}`);
+                    debug(`  - kaspaWasm.signTransaction: ${typeof kaspaWasm.signTransaction}`);
+                } catch (e) {
+                    debug(`  - Error accessing kaspaWasm: ${e.message}`);
+                }
+            }
+            
+            debug(`📋 Current file state:`);
+            debug(`  - currentFile: ${!!currentFile}`);
+            debug(`  - currentSecret: ${!!currentSecret}`);
+            
+            debug('=== END DEBUG REPORT ===');
+        };
+
         // Initialize - Load WASM SDK first
+        debug('🚀 Starting application initialization...');
         document.getElementById('status').innerHTML = 'Initializing...';
         
         // Load WASM SDK on page load
         loadKaspaWasm().then(success => {
             if (success) {
+                debug('✅ Application initialization complete');
                 document.getElementById('status').innerHTML = 'Ready - WASM SDK loaded, select file to upload';
+            } else {
+                debug('❌ Application initialization failed');
             }
         });
     </script>
