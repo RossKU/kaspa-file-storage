@@ -120,9 +120,12 @@
             }
             
             try {
-                // テスト用の既知の秘密鍵
-                const testKeyHex = '1111111111111111111111111111111111111111111111111111111111111111';
+                // テスト用の既知の秘密鍵（公式例と同じ形式）
+                const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
                 logTest('Creating PrivateKey from hex', true, testKeyHex.substring(0, 8) + '...');
+                
+                // 小さな待機時間を入れてWASM完全初期化を確保
+                await new Promise(resolve => setTimeout(resolve, 10));
                 
                 const privateKey = new kaspa.PrivateKey(testKeyHex);
                 logTest('PrivateKey created', !!privateKey);
@@ -146,7 +149,8 @@
                 window.testPrivateKey = privateKey; // 次のテスト用に保存
                 
             } catch (error) {
-                logTest('PrivateKey creation failed', false, error.message);
+                logTest('PrivateKey creation failed', false, (error.message || error.toString()).substring(0, 100));
+                console.error('PrivateKey creation error details:', error);
             }
         };
         
@@ -160,7 +164,8 @@
             if (!window.testPrivateKey) {
                 // If no existing private key, create one for this test
                 try {
-                    const testKeyHex = '1111111111111111111111111111111111111111111111111111111111111111';
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
                     window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
                 } catch (e) {
                     logTest('Address test skipped', false, 'Cannot create PrivateKey - run test 2 first');
@@ -289,7 +294,8 @@
             if (!window.testPrivateKey) {
                 // Create a private key for this test
                 try {
-                    const testKeyHex = '1111111111111111111111111111111111111111111111111111111111111111';
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
                     window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
                 } catch (e) {
                     logTest('Detailed transaction test skipped', false, 'Cannot create PrivateKey');
@@ -389,7 +395,8 @@
             if (!window.testPrivateKey) {
                 // Create a private key for this test
                 try {
-                    const testKeyHex = '1111111111111111111111111111111111111111111111111111111111111111';
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
                     window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
                 } catch (e) {
                     logTest('Debug test skipped', false, 'Cannot create PrivateKey');
