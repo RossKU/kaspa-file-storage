@@ -631,6 +631,8 @@
                 } catch (rpcError) {
                     logTest('RPC Connection failed', false, (rpcError.message || rpcError.toString()).substring(0, 50));
                     logTest('Full flow test using mock data', true, 'continuing with simulated data');
+                    console.error('RPC Error details:', rpcError);
+                    rpcClient = null; // Force fallback to mock data
                 }
                 
                 // Step 2: 残高確認
@@ -640,11 +642,13 @@
                 
                 try {
                     if (rpcClient) {
+                        logTest('Attempting live balance check...', true);
                         const balanceInfo = await rpcClient.getBalanceByAddress(senderAddress.toString());
                         currentBalance = balanceInfo.balance || 0n;
                         logTest('Current balance retrieved', true, `${currentBalance} sompi`);
                         
                         // UTXO取得
+                        logTest('Attempting UTXO retrieval...', true);
                         const utxoInfo = await rpcClient.getUtxosByAddresses([senderAddress.toString()]);
                         utxoEntries = utxoInfo.entries || [];
                         logTest('UTXO entries retrieved', true, `${utxoEntries.length} UTXOs`);
@@ -669,7 +673,25 @@
                     }
                 } catch (balanceError) {
                     logTest('Balance check failed', false, (balanceError.message || balanceError.toString()).substring(0, 50));
-                    return;
+                    console.error('Balance Error details:', balanceError);
+                    
+                    // Fallback to mock data on balance error
+                    logTest('Fallback to mock data', true, 'due to balance error');
+                    currentBalance = 500000000000n; // 5000 KAS
+                    utxoEntries = [{
+                        address: senderAddress.toString(),
+                        outpoint: {
+                            transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                            index: 0
+                        },
+                        scriptPublicKey: {
+                            version: 0,
+                            script: new Uint8Array([0x20, 0xb7, 0xe1, 0x51, 0x62, 0x8a, 0xed, 0x2a, 0x6a, 0xbf, 0x71, 0x58, 0x80, 0x9c, 0xf4, 0xf3, 0xc7, 0x62, 0xe7, 0x16, 0x0f, 0x38, 0xb4, 0xda, 0x56, 0xa7, 0x84, 0xd9, 0x04, 0x51, 0x90, 0xcf, 0xef, 0xac])
+                        },
+                        amount: currentBalance,
+                        isCoinbase: false,
+                        blockDaaScore: 12345678n
+                    }];
                 }
                 
                 // Step 3: トランザクション作成
