@@ -582,6 +582,13 @@
                 return;
             }
             
+            // 重複実行を防ぐ
+            if (window.testFullTransactionFlow.running) {
+                logTest('Full flow test already running', false, 'please wait for completion');
+                return;
+            }
+            window.testFullTransactionFlow.running = true;
+            
             if (!window.testPrivateKey) {
                 try {
                     const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
@@ -613,6 +620,7 @@
                         'wss://testnet-2.kaspa.aspectron.org'
                     ];
                     
+                    logTest('Creating RPC client...', true);
                     rpcClient = new kaspa.RpcClient({
                         url: testnetNodes[0],
                         networkId: 'testnet-10'
@@ -621,17 +629,21 @@
                     logTest('RPC Client created', true, testnetNodes[0]);
                     
                     // 接続試行
+                    logTest('Attempting RPC connection...', true);
                     await rpcClient.connect();
                     logTest('RPC Connection established', true);
                     
                     // ネットワーク情報取得
+                    logTest('Requesting network info...', true);
                     const networkInfo = await rpcClient.getBlockDagInfo();
                     logTest('Network info retrieved', !!networkInfo, `DAA Score: ${networkInfo.daaScore || 'unknown'}`);
+                    logTest('Network info details', true, `blockCount: ${networkInfo.blockCount || 'unknown'}, headerCount: ${networkInfo.headerCount || 'unknown'}`);
                     
                 } catch (rpcError) {
-                    logTest('RPC Connection failed', false, (rpcError.message || rpcError.toString()).substring(0, 50));
+                    logTest('RPC Connection failed', false, (rpcError.message || rpcError.toString()).substring(0, 100));
+                    logTest('RPC Error name', false, rpcError.name || 'unknown error type');
+                    logTest('RPC Error stack trace', false, (rpcError.stack || 'no stack').substring(0, 200));
                     logTest('Full flow test using mock data', true, 'continuing with simulated data');
-                    console.error('RPC Error details:', rpcError);
                     rpcClient = null; // Force fallback to mock data
                 }
                 
@@ -672,8 +684,9 @@
                         logTest('Using mock balance data', true, `${currentBalance} sompi (5000 KAS)`);
                     }
                 } catch (balanceError) {
-                    logTest('Balance check failed', false, (balanceError.message || balanceError.toString()).substring(0, 50));
-                    console.error('Balance Error details:', balanceError);
+                    logTest('Balance check failed', false, (balanceError.message || balanceError.toString()).substring(0, 100));
+                    logTest('Balance Error name', false, balanceError.name || 'unknown error type');
+                    logTest('Balance Error stack trace', false, (balanceError.stack || 'no stack').substring(0, 200));
                     
                     // Fallback to mock data on balance error
                     logTest('Fallback to mock data', true, 'due to balance error');
@@ -739,7 +752,9 @@
                     }
                     
                 } catch (txError) {
-                    logTest('Transaction creation failed', false, (txError.message || txError.toString()).substring(0, 50));
+                    logTest('Transaction creation failed', false, (txError.message || txError.toString()).substring(0, 100));
+                    logTest('Transaction Error name', false, txError.name || 'unknown error type');
+                    logTest('Transaction Error stack trace', false, (txError.stack || 'no stack').substring(0, 200));
                     return;
                 }
                 
@@ -783,7 +798,12 @@
                 
             } catch (error) {
                 logTest('Full transaction flow failed', false, (error.message || error.toString()).substring(0, 100));
-                console.error('Full flow error:', error);
+                logTest('Full Flow Error name', false, error.name || 'unknown error type');
+                logTest('Full Flow Error stack trace', false, (error.stack || 'no stack').substring(0, 300));
+                logTest('Full Flow Error details', false, `Error at line: ${error.lineNumber || 'unknown'}, column: ${error.columnNumber || 'unknown'}`);
+            } finally {
+                // 実行フラグをリセット
+                window.testFullTransactionFlow.running = false;
             }
         };
         
