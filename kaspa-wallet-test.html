@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kaspa Wallet & Transaction Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .result { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        button { padding: 15px 25px; margin: 10px; font-size: 16px; }
+        .danger { background: #e74c3c; color: white; }
+        .safe { background: #27ae60; color: white; }
+        .info { background: #3498db; color: white; }
+        .warning { background: #f39c12; color: white; }
+        .wallet-section { background: #f8f9fa; padding: 20px; margin: 15px 0; border: 1px solid #dee2e6; border-radius: 5px; }
+        input[type="text"] { width: 100%; padding: 10px; margin: 10px 0; font-family: monospace; font-size: 14px; }
+        .hidden { display: none; }
+        .faucet-info { background: #fff3cd; padding: 15px; border-left: 4px solid #ffc107; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Kaspa Wallet & Transaction Test</h1>
+    
+    <div style="background: #e8f5e8; padding: 15px; margin: 10px 0; border-left: 4px solid #28a745;">
+        <h3>💡 Wallet Setup Required</h3>
+        <p>Choose your wallet setup method, then proceed to transaction testing.</p>
+        <p><strong>Network:</strong> Kaspa Testnet-10</p>
+    </div>
+    
+    <!-- Wallet Selection -->
+    <div class="wallet-section">
+        <h3>📱 Wallet Setup</h3>
+        <button class="info" onclick="selectExistingWallet()">1. Import Existing Wallet</button>
+        <button class="warning" onclick="selectNewWallet()">2. Create New Wallet</button>
+        <button class="safe" onclick="initializeWasm()" id="initButton" style="display: none;">3. Initialize & Test Transaction</button>
+    </div>
+    
+    <!-- Existing Wallet Section -->
+    <div id="existingWalletSection" class="wallet-section hidden">
+        <h4>🔑 Import Existing Wallet</h4>
+        <p><strong>Private Key (64 chars hex):</strong></p>
+        <input type="text" id="privateKeyInput" placeholder="Enter private key or use preset..." maxlength="64">
+        <p><strong>Expected Address:</strong> <span id="expectedAddress">Will be calculated...</span></p>
+        <button class="info" onclick="usePresetWallet()">Use Preset Wallet (979 KAS)</button>
+        <button class="safe" onclick="validateExistingWallet()">Validate & Check Balance</button>
+    </div>
+    
+    <!-- New Wallet Section -->
+    <div id="newWalletSection" class="wallet-section hidden">
+        <h4>✨ Create New Wallet</h4>
+        <button class="warning" onclick="generateNewWallet()">Generate New Wallet</button>
+        <div id="newWalletInfo" class="hidden">
+            <p><strong>Generated Private Key:</strong></p>
+            <input type="text" id="generatedPrivateKey" readonly>
+            <p><strong>Generated Address:</strong></p>
+            <input type="text" id="generatedAddress" readonly>
+            <div class="faucet-info">
+                <h4>💰 Fund Your New Wallet</h4>
+                <p>1. Copy your address above</p>
+                <p>2. Visit <a href="https://faucet.kaspanet.io/" target="_blank">https://faucet.kaspanet.io/</a></p>
+                <p>3. Request testnet KAS to your address</p>
+                <p>4. Wait for transaction confirmation (1-2 minutes)</p>
+                <p>5. Click "Check Balance" below</p>
+            </div>
+            <button class="info" onclick="checkNewWalletBalance()">Check Balance</button>
+        </div>
+    </div>
+    
+    <!-- Wallet Status -->
+    <div id="walletStatus" class="wallet-section hidden">
+        <h4>💼 Wallet Status</h4>
+        <p><strong>Address:</strong> <span id="currentAddress"></span></p>
+        <p><strong>Balance:</strong> <span id="currentBalance">Checking...</span></p>
+        <p><strong>Status:</strong> <span id="walletStatusText">Ready</span></p>
+    </div>
+    
+    <div class="result" id="testOutput"></div>
+
+    <script type="module">
+        let kaspa = null;
+        let testResults = [];
+        let currentWallet = null;
+        let isWasmInitialized = false;
+        
+        function logTest(testName, result, details = '') {
+            const status = result ? '✅' : '❌';
+            const message = `${status} ${testName}: ${result ? 'PASS' : 'FAIL'} ${details}`;
+            testResults.push(message);
+            console.log(message);
+            updateDisplay();
+        }
+        
+        function updateDisplay() {
+            document.getElementById('testOutput').innerHTML = testResults.join('<br>');
+        }
+        
+        function hideAllSections() {
+            document.getElementById('existingWalletSection').classList.add('hidden');
+            document.getElementById('newWalletSection').classList.add('hidden');
+        }
+        
+        // プリセットウォレット情報
+        const PRESET_WALLET = {
+            privateKey: 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef',
+            expectedBalance: '979 KAS'
+        };
+        
+        // 1. 既存ウォレット選択
+        window.selectExistingWallet = function() {
+            hideAllSections();
+            document.getElementById('existingWalletSection').classList.remove('hidden');
+            logTest('Selected existing wallet import', true);
+        };
+        
+        // 2. 新規ウォレット選択
+        window.selectNewWallet = function() {
+            hideAllSections();
+            document.getElementById('newWalletSection').classList.remove('hidden');
+            logTest('Selected new wallet creation', true);
+        };
+        
+        // プリセットウォレット使用
+        window.usePresetWallet = function() {
+            document.getElementById('privateKeyInput').value = PRESET_WALLET.privateKey;
+            logTest('Preset wallet loaded', true, PRESET_WALLET.expectedBalance);
+            validateExistingWallet();
+        };
+        
+        // 既存ウォレット検証
+        window.validateExistingWallet = async function() {
+            const privateKeyHex = document.getElementById('privateKeyInput').value.trim();
+            
+            if (!privateKeyHex || privateKeyHex.length !== 64) {
+                logTest('Invalid private key', false, 'Must be 64 character hex string');
+                return;
+            }
+            
+            try {
+                // WASM初期化（必要に応じて）
+                if (!kaspa) {
+                    kaspa = await import('./kaspa-core.js');
+                }
+                
+                const privateKey = new kaspa.PrivateKey(privateKeyHex);
+                const keypair = privateKey.toKeypair();
+                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                document.getElementById('expectedAddress').textContent = address.toString();
+                logTest('Address generated', true, address.toString().substring(0, 30) + '...');
+                
+                // 残高チェック
+                await checkWalletBalance(privateKey, address);
+                
+            } catch (error) {
+                logTest('Wallet validation failed', false, error.message);
+            }
+        };
+        
+        // 新規ウォレット生成
+        window.generateNewWallet = async function() {
+            try {
+                // WASM初期化（必要に応じて）
+                if (!kaspa) {
+                    kaspa = await import('./kaspa-core.js');
+                }
+                
+                // ランダム秘密鍵生成
+                const privateKey = kaspa.PrivateKey.random();
+                const keypair = privateKey.toKeypair();
+                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                document.getElementById('generatedPrivateKey').value = privateKey.toString();
+                document.getElementById('generatedAddress').value = address.toString();
+                document.getElementById('newWalletInfo').classList.remove('hidden');
+                
+                logTest('New wallet generated', true, address.toString().substring(0, 30) + '...');
+                
+                currentWallet = { privateKey, address };
+                
+            } catch (error) {
+                logTest('New wallet generation failed', false, error.message);
+            }
+        };
+        
+        // 新規ウォレット残高チェック
+        window.checkNewWalletBalance = async function() {
+            if (!currentWallet) {
+                logTest('No wallet generated', false, 'Generate wallet first');
+                return;
+            }
+            
+            await checkWalletBalance(currentWallet.privateKey, currentWallet.address);
+        };
+        
+        // 残高チェック共通関数
+        async function checkWalletBalance(privateKey, address) {
+            try {
+                logTest('Connecting to testnet for balance check...', true);
+                
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                await rpcClient.connect();
+                logTest('RPC connected', true, rpcClient.url);
+                
+                const balanceInfo = await rpcClient.getBalanceByAddress(address.toString());
+                const balance = BigInt(balanceInfo.balance || 0);
+                const balanceKAS = balance / 100000000n;
+                
+                logTest('Balance retrieved', true, `${balanceKAS} KAS`);
+                
+                // ウォレット情報表示
+                document.getElementById('currentAddress').textContent = address.toString();
+                document.getElementById('currentBalance').textContent = `${balanceKAS} KAS`;
+                document.getElementById('walletStatus').classList.remove('hidden');
+                
+                // 最小残高チェック (1 KAS)
+                if (balanceKAS >= 1n) {
+                    document.getElementById('walletStatusText').textContent = '✅ Ready for transactions';
+                    document.getElementById('walletStatusText').style.color = 'green';
+                    document.getElementById('initButton').style.display = 'inline-block';
+                    
+                    currentWallet = { privateKey, address, balance };
+                    logTest('Wallet ready', true, `${balanceKAS} KAS ≥ 1 KAS minimum`);
+                    
+                } else {
+                    document.getElementById('walletStatusText').textContent = '⚠️ Insufficient funds (need ≥1 KAS)';
+                    document.getElementById('walletStatusText').style.color = 'orange';
+                    logTest('Insufficient balance', false, `${balanceKAS} KAS < 1 KAS required`);
+                    
+                    if (balanceKAS === 0n) {
+                        logTest('Fund wallet via faucet', false, 'https://faucet.kaspanet.io/');
+                    }
+                }
+                
+                await rpcClient.disconnect();
+                
+            } catch (error) {
+                logTest('Balance check failed', false, error.message);
+            }
+        }
+        
+        // 3. WASM初期化 & トランザクションテスト
+        window.initializeWasm = async function() {
+            if (!currentWallet) {
+                logTest('No wallet selected', false, 'Complete wallet setup first');
+                return;
+            }
+            
+            testResults = [];
+            logTest('=== KASPA TRANSACTION TEST ===', true, 'Starting with validated wallet');
+            
+            try {
+                // WASM確認
+                if (!kaspa) {
+                    kaspa = await import('./kaspa-core.js');
+                }
+                logTest('WASM SDK ready', true);
+                
+                // 確認プロンプト
+                const confirmed = confirm(
+                    '🚨 REAL BLOCKCHAIN TRANSACTION 🚨\\n\\n' +
+                    'This will send 5 KAS to yourself on Kaspa testnet.\\n' +
+                    'Real testnet funds will be spent for transaction fees.\\n\\n' +
+                    `Current balance: ${currentWallet.balance / 100000000n} KAS\\n` +
+                    'Amount to send: 5 KAS\\n' +
+                    'Expected fee: ~0.05 KAS\\n\\n' +
+                    'Continue with REAL transaction?'
+                );
+                
+                if (!confirmed) {
+                    logTest('Transaction cancelled', false, 'User cancelled');
+                    return;
+                }
+                
+                await executeRealTransaction();
+                
+            } catch (error) {
+                logTest('Transaction test failed', false, error.message);
+            }
+        };
+        
+        // 実際のトランザクション実行
+        async function executeRealTransaction() {
+            logTest('=== EXECUTING REAL TRANSACTION ===', true, '🚨 SPENDING ACTUAL FUNDS');
+            
+            try {
+                const { privateKey, address } = currentWallet;
+                
+                // RPC接続
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                await rpcClient.connect();
+                logTest('RPC connected for transaction', true, rpcClient.url);
+                
+                // UTXO取得
+                const utxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+                const utxoEntries = utxoResponse.entries || [];
+                logTest('UTXOs retrieved', true, `${utxoEntries.length} UTXOs`);
+                
+                // トランザクション設定
+                const transferAmount = 500000000n; // 5 KAS
+                const priorityFee = 5000000n; // 0.05 KAS
+                
+                logTest('Transfer configuration', true, `${transferAmount / 100000000n} KAS + ${priorityFee / 100000000n} KAS fee`);
+                
+                // ペイロード作成
+                const payload = `TX-${Date.now()}`;
+                const payloadBytes = new TextEncoder().encode(payload);
+                logTest('Payload created', true, `${payloadBytes.length} bytes: "${payload}"`);
+                
+                // UTXO形式変換
+                const formattedUtxos = utxoEntries.map(utxo => ({
+                    address: address.toString(),
+                    outpoint: {
+                        transactionId: utxo.outpoint.transactionId,
+                        index: utxo.outpoint.index
+                    },
+                    scriptPublicKey: utxo.scriptPublicKey,
+                    amount: BigInt(utxo.amount),
+                    isCoinbase: utxo.isCoinbase || false,
+                    blockDaaScore: BigInt(utxo.blockDaaScore)
+                }));
+                
+                // トランザクション作成
+                logTest('Creating transaction...', true);
+                const transactionResult = await kaspa.createTransactions({
+                    entries: formattedUtxos,
+                    outputs: [{
+                        address: address.toString(),
+                        amount: transferAmount
+                    }],
+                    changeAddress: address.toString(),
+                    priorityFee: priorityFee,
+                    networkId: "testnet-10",
+                    payload: payloadBytes
+                });
+                
+                logTest('Transaction created', !!transactionResult, `${transactionResult.transactions?.length || 0} transactions`);
+                
+                if (!transactionResult?.transactions?.length) {
+                    throw new Error('No pending transactions generated');
+                }
+                
+                const pendingTx = transactionResult.transactions[0];
+                
+                // 手数料確認
+                if (transactionResult.summary) {
+                    const actualFee = transactionResult.summary.fees;
+                    logTest('Actual fee calculated', true, `${(actualFee / 100000000n).toString()} KAS`);
+                }
+                
+                // 署名
+                logTest('Signing transaction...', true);
+                await pendingTx.sign([privateKey]);
+                logTest('Transaction signed', true, 'Cryptographic signature applied');
+                
+                // ブロックチェーン送信
+                logTest('Submitting to blockchain...', true, '🚨 FINAL STEP');
+                const txid = await pendingTx.submit(rpcClient);
+                
+                // 成功！
+                logTest('🎉 TRANSACTION SUCCESSFUL! 🎉', true, 'Submitted to Kaspa testnet');
+                logTest('Transaction ID', true, txid);
+                logTest('Block explorer', true, `https://explorer.kaspa.org/txs/${txid}`);
+                logTest('Status', true, 'Awaiting block confirmation (1-2 minutes)');
+                
+                await rpcClient.disconnect();
+                
+            } catch (error) {
+                logTest('Transaction execution failed', false, error.message);
+                console.error('Transaction error:', error);
+            }
+        }
+        
+        // 初期表示
+        window.addEventListener('load', updateDisplay);
+        
+    </script>
+</body>
+</html>
