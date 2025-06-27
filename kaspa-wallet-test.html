@@ -138,7 +138,11 @@
             try {
                 // WASM初期化（必要に応じて）
                 if (!kaspa) {
+                    logTest('Loading WASM SDK...', true);
                     kaspa = await import('./kaspa-core.js');
+                    // 初期化待機
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    logTest('WASM SDK loaded', true);
                 }
                 
                 const privateKey = new kaspa.PrivateKey(privateKeyHex);
@@ -153,6 +157,10 @@
                 
             } catch (error) {
                 logTest('Wallet validation failed', false, error.message);
+                console.error('Wallet validation error:', error);
+                if (error.message.includes('__wbindgen_add_to_stack_pointer')) {
+                    logTest('WASM initialization issue', false, 'Try refreshing the page');
+                }
             }
         };
         
@@ -161,7 +169,11 @@
             try {
                 // WASM初期化（必要に応じて）
                 if (!kaspa) {
+                    logTest('Loading WASM SDK...', true);
                     kaspa = await import('./kaspa-core.js');
+                    // 初期化待機
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    logTest('WASM SDK loaded', true);
                 }
                 
                 // ランダム秘密鍵生成
