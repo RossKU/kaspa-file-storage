@@ -24,7 +24,7 @@
         <button onclick="testFullTransactionFlow()">8. Test Full Transaction Flow (RPC + Balance)</button>
         <button onclick="testConsecutiveTransfers()">9. Test 10x Consecutive Self-Transfers (UTXO Chain)</button>
         <button onclick="testRealTestnetTransfer()">10. Test Testnet Connection (RPC + Balance + UTXO)</button>
-        <button onclick="testRealTransactionSubmit()" style="background: #e74c3c; color: white;">11. REAL TRANSACTION: Send 0.01 KAS to Self (⚠️ SPENDS FUNDS)</button>
+        <button onclick="testRealTransactionSubmit()" style="background: #e74c3c; color: white;">11. REAL TRANSACTION: Send 5 KAS to Self (⚠️ SPENDS FUNDS)</button>
     </div>
     
     <div style="background: #f8f9fa; padding: 15px; margin: 10px 0; border-left: 4px solid #17a2b8;">
@@ -1444,11 +1444,11 @@
             // 確認プロンプト
             const userConfirm = confirm(
                 '⚠️ REAL BLOCKCHAIN TRANSACTION ⚠️\n\n' +
-                'This will send 0.01 KAS to yourself on testnet.\n' +
+                'This will send 5 KAS to yourself on testnet.\n' +
                 'Transaction fees will be deducted from your balance.\n\n' +
                 'Current balance: ~979 KAS\n' +
-                'Amount to send: 0.01 KAS\n' +
-                'Expected fee: ~0.01 KAS\n\n' +
+                'Amount to send: 5 KAS\n' +
+                'Expected fee: ~0.05 KAS\n\n' +
                 'Continue with REAL transaction?'
             );
             
@@ -1521,8 +1521,8 @@
                 
                 logTest('Current balance', true, `${currentBalance} sompi (${currentBalance / 100000000n} KAS)`);
                 
-                const transferAmount = 1000000n; // 0.01 KAS
-                const expectedFee = 1000000n; // ~0.01 KAS estimated fee
+                const transferAmount = 500000000n; // 5 KAS (500 million sompi) - well above minimum
+                const expectedFee = 5000000n; // 0.05 KAS (5 million sompi) - generous fee
                 const totalRequired = transferAmount + expectedFee;
                 
                 if (currentBalance < totalRequired) {
@@ -1530,8 +1530,8 @@
                     return;
                 }
                 
-                logTest('Transfer amount', true, `${transferAmount / 100000000n} KAS`);
-                logTest('Estimated fee', true, `~${expectedFee / 100000000n} KAS`);
+                logTest('Transfer amount', true, `${Number(transferAmount / 100000000n)} KAS`);
+                logTest('Estimated fee', true, `~${Number(expectedFee / 100000000n)} KAS`);
                 logTest('Balance check', true, `Sufficient funds available`);
                 
                 // UTXO取得
@@ -1586,7 +1586,9 @@
                 
                 logTest('UTXOs formatted', true, `${formattedUtxos.length} UTXOs ready`);
                 
-                // createTransactions実行
+                // createTransactions実行 - 手数料明示指定
+                logTest('Creating transaction with explicit fees...', true, `Amount: ${transferAmount / 100000000n} KAS, Fee: ${expectedFee / 100000000n} KAS`);
+                
                 const transactionStart = Date.now();
                 const transactionResult = await kaspa.createTransactions({
                     entries: formattedUtxos,
