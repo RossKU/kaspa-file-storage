@@ -136,26 +136,22 @@
             }
             
             try {
-                // WASM初期化（必要に応じて）
+                // WASM初期化（元々の動作する方法）
                 if (!kaspa) {
-                    logTest('Loading WASM SDK...', true);
+                    logTest('Importing kaspa-core.js', true);
                     kaspa = await import('./kaspa-core.js');
+                    logTest('Module imported', !!kaspa);
                     
-                    // WASM明示的初期化
-                    if (kaspa.default) {
-                        await kaspa.default();
-                        logTest('WASM backend initialized', true);
-                    }
+                    logTest('Initializing WASM', true);
+                    await kaspa.default('./kaspa-core_bg.wasm');
+                    logTest('WASM initialized', true);
                     
-                    // 追加待機時間
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    logTest('WASM SDK ready', true);
+                    // 少し待機
+                    await new Promise(resolve => setTimeout(resolve, 100));
                     
-                    // 機能確認
-                    if (!kaspa.PrivateKey || !kaspa.NetworkType) {
-                        throw new Error('WASM functions not available');
-                    }
-                    logTest('WASM functions verified', true);
+                    // 基本クラスの存在確認
+                    logTest('PrivateKey class exists', !!kaspa.PrivateKey);
+                    logTest('createTransactions function exists', !!kaspa.createTransactions);
                 }
                 
                 const privateKey = new kaspa.PrivateKey(privateKeyHex);
@@ -180,26 +176,22 @@
         // 新規ウォレット生成
         window.generateNewWallet = async function() {
             try {
-                // WASM初期化（必要に応じて）
+                // WASM初期化（元々の動作する方法）
                 if (!kaspa) {
-                    logTest('Loading WASM SDK...', true);
+                    logTest('Importing kaspa-core.js', true);
                     kaspa = await import('./kaspa-core.js');
+                    logTest('Module imported', !!kaspa);
                     
-                    // WASM明示的初期化
-                    if (kaspa.default) {
-                        await kaspa.default();
-                        logTest('WASM backend initialized', true);
-                    }
+                    logTest('Initializing WASM', true);
+                    await kaspa.default('./kaspa-core_bg.wasm');
+                    logTest('WASM initialized', true);
                     
-                    // 追加待機時間
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                    logTest('WASM SDK ready', true);
+                    // 少し待機
+                    await new Promise(resolve => setTimeout(resolve, 100));
                     
-                    // 機能確認
-                    if (!kaspa.PrivateKey || !kaspa.NetworkType) {
-                        throw new Error('WASM functions not available');
-                    }
-                    logTest('WASM functions verified', true);
+                    // 基本クラスの存在確認
+                    logTest('PrivateKey class exists', !!kaspa.PrivateKey);
+                    logTest('createTransactions function exists', !!kaspa.createTransactions);
                 }
                 
                 // ランダム秘密鍵生成
