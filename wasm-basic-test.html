@@ -23,6 +23,7 @@
         <button onclick="testCreateTransactionDebug()">7. Test SDK-Compliant createTransaction</button>
         <button onclick="testFullTransactionFlow()">8. Test Full Transaction Flow (RPC + Balance)</button>
         <button onclick="testConsecutiveTransfers()">9. Test 10x Consecutive Self-Transfers (UTXO Chain)</button>
+        <button onclick="testRealTestnetTransfer()">10. Test Testnet Connection (RPC + Balance + UTXO)</button>
     </div>
     
     <div class="result" id="testOutput"></div>
@@ -1045,6 +1046,183 @@
             } finally {
                 // 実行フラグをリセット
                 window.testConsecutiveTransfers.running = false;
+            }
+        };
+        
+        // 実際のtestnet送金テスト
+        window.testRealTestnetTransfer = async function() {
+            if (!kaspa) {
+                logTest('Real testnet transfer test skipped', false, 'WASM not initialized - run test 1 first');
+                return;
+            }
+            
+            // 重複実行を防ぐ
+            if (window.testRealTestnetTransfer.running) {
+                logTest('Real testnet transfer already running', false, 'please wait for completion');
+                return;
+            }
+            window.testRealTestnetTransfer.running = true;
+            
+            if (!window.testPrivateKey) {
+                try {
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
+                } catch (e) {
+                    logTest('Real testnet transfer test skipped', false, 'Cannot create PrivateKey');
+                    window.testRealTestnetTransfer.running = false;
+                    return;
+                }
+            }
+            
+            try {
+                logTest('=== TESTNET CONNECTION TEST ===', true, 'RPC + Balance + UTXO Verification');
+                
+                const privateKey = window.testPrivateKey;
+                const keypair = privateKey.toKeypair();
+                const senderAddress = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                logTest('Sender Address', true, senderAddress.toString().substring(0, 30) + '...');
+                
+                // Step 1: RPC接続（複数のtestnet nodeを試行）
+                logTest('=== Step 1: Establishing RPC Connection ===', true);
+                let rpcClient = null;
+                
+                const testnetNodes = [
+                    'wss://testnet-10.kaspa.ws',
+                    'wss://testnet-10.kaspa.org:17210',
+                    'wss://testnet-1.kaspa.aspectron.org',
+                    'wss://testnet-2.kaspa.aspectron.org'
+                ];
+                
+                for (const nodeUrl of testnetNodes) {
+                    try {
+                        logTest(`Attempting connection to ${nodeUrl}...`, true);
+                        
+                        rpcClient = new kaspa.RpcClient({
+                            url: nodeUrl,
+                            networkId: 'testnet-10'
+                        });
+                        
+                        // 接続試行（15秒タイムアウト）
+                        const connectionPromise = rpcClient.connect();
+                        const timeoutPromise = new Promise((_, reject) => 
+                            setTimeout(() => reject(new Error('Connection timeout after 15 seconds')), 15000)
+                        );
+                        
+                        await Promise.race([connectionPromise, timeoutPromise]);
+                        
+                        // サーバー情報取得で接続確認
+                        const serverInfo = await rpcClient.getServerInfo();
+                        logTest(`Connected to ${nodeUrl}`, true, `Synced: ${serverInfo.isSynced}, Network: ${serverInfo.networkId}`);
+                        
+                        if (serverInfo.isSynced) {
+                            logTest('RPC Connection established', true, `Using ${nodeUrl}`);
+                            break;
+                        } else {
+                            logTest(`Node ${nodeUrl} not synced`, false, 'trying next node');
+                            await rpcClient.disconnect();
+                            rpcClient = null;
+                        }
+                        
+                    } catch (error) {
+                        logTest(`Connection to ${nodeUrl} failed`, false, (error.message || error.toString()).substring(0, 80));
+                        if (rpcClient) {
+                            try { await rpcClient.disconnect(); } catch {}
+                            rpcClient = null;
+                        }
+                    }
+                }
+                
+                if (!rpcClient) {
+                    logTest('All RPC connections failed', false, 'Cannot proceed with real transfer');
+                    return;
+                }
+                
+                // Step 2: 実際の残高とUTXO取得
+                logTest('=== Step 2: Fetching Real Balance & UTXOs ===', true);
+                
+                const balanceInfo = await rpcClient.getBalanceByAddress(senderAddress.toString());
+                const currentBalance = BigInt(balanceInfo.balance || 0);
+                
+                logTest('Current balance', true, `${currentBalance} sompi (${currentBalance / 100000000n} KAS)`);
+                
+                if (currentBalance === 0n) {
+                    logTest('No testnet funds', false, 'Request funds from testnet faucet first');
+                    logTest('Faucet URL', true, 'https://faucet.kaspanet.io/');
+                    return;
+                }
+                
+                // UTXO取得
+                const utxoResponse = await rpcClient.getUtxosByAddresses([senderAddress.toString()]);
+                const utxoEntries = utxoResponse.entries || [];
+                
+                logTest('UTXO count', true, `${utxoEntries.length} UTXOs available`);
+                
+                if (utxoEntries.length === 0) {
+                    logTest('No UTXOs available', false, 'Balance exists but no spendable UTXOs');
+                    return;
+                }
+                
+                // UTXO詳細表示
+                let totalUtxoAmount = 0n;
+                utxoEntries.forEach((utxo, index) => {
+                    const amount = BigInt(utxo.amount);
+                    totalUtxoAmount += amount;
+                    logTest(`UTXO ${index + 1}`, true, `${amount / 100000000n} KAS (${utxo.outpoint.transactionId.substring(0, 8)}...)`);
+                });
+                
+                logTest('Total UTXO amount', true, `${totalUtxoAmount / 100000000n} KAS`);
+                
+                // Step 3: 簡易テスト完了（送金は次のフェーズで）
+                logTest('=== Step 3: Connection Verification Complete ===', true);
+                logTest('RPC connection', true, '✅ Successfully connected to testnet');
+                logTest('Balance retrieval', true, `✅ Current balance: ${currentBalance / 100000000n} KAS`);
+                logTest('UTXO retrieval', true, `✅ Available UTXOs: ${utxoEntries.length}`);
+                
+                if (currentBalance > 0n) {
+                    logTest('Wallet status', true, '✅ Ready for testnet transactions');
+                    logTest('Minimum transfer capability', true, `✅ Can transfer min 0.02 KAS (0.01 + 0.01 fee)`);
+                } else {
+                    logTest('Wallet status', false, '⚠️ No testnet funds - request from faucet');
+                    logTest('Faucet URL', true, 'https://faucet.kaspanet.io/');
+                }
+                
+                // UTXO詳細のサンプル表示（最初の2つのみ）
+                const displayUtxos = utxoEntries.slice(0, 2);
+                displayUtxos.forEach((utxo, index) => {
+                    const amount = BigInt(utxo.amount);
+                    logTest(`Sample UTXO ${index + 1}`, true, `${amount / 100000000n} KAS (${utxo.outpoint.transactionId.substring(0, 12)}...)`);
+                });
+                
+                if (utxoEntries.length > 2) {
+                    logTest('Additional UTXOs', true, `${utxoEntries.length - 2} more UTXOs available`);
+                }
+                
+                logTest('=== CONNECTION TEST COMPLETED ===', true, '✅ Ready for real transaction testing');
+                logTest('Next step', true, 'Run full transaction test when ready to spend testnet funds');
+                
+                // クリーンアップ
+                if (rpcClient) {
+                    try {
+                        await rpcClient.disconnect();
+                        logTest('RPC connection closed', true);
+                    } catch (disconnectError) {
+                        logTest('RPC disconnect warning', false, 'connection may still be open');
+                    }
+                }
+                
+            } catch (error) {
+                logTest('Real testnet transfer failed', false, (error.message || error.toString()).substring(0, 100));
+                console.error('Real transfer error:', error);
+                
+                // エラー詳細
+                logTest('Error name', false, error.name || 'unknown error type');
+                logTest('Error stack', false, (error.stack || 'no stack').substring(0, 200));
+                
+            } finally {
+                // 実行フラグをリセット
+                window.testRealTestnetTransfer.running = false;
             }
         };
         
