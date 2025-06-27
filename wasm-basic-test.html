@@ -24,6 +24,21 @@
         <button onclick="testFullTransactionFlow()">8. Test Full Transaction Flow (RPC + Balance)</button>
         <button onclick="testConsecutiveTransfers()">9. Test 10x Consecutive Self-Transfers (UTXO Chain)</button>
         <button onclick="testRealTestnetTransfer()">10. Test Testnet Connection (RPC + Balance + UTXO)</button>
+        <button onclick="testRealTransactionSubmit()" style="background: #e74c3c; color: white;">11. REAL TRANSACTION: Send 0.01 KAS to Self (⚠️ SPENDS FUNDS)</button>
+    </div>
+    
+    <div style="background: #f8f9fa; padding: 15px; margin: 10px 0; border-left: 4px solid #17a2b8;">
+        <h3>🎯 Test Execution Guide</h3>
+        <p><strong>Recommended order:</strong></p>
+        <ol>
+            <li><strong>Button 1</strong>: Basic Initialization (always run first)</li>
+            <li><strong>Button 2</strong>: PrivateKey Creation</li>
+            <li><strong>Button 3</strong>: Address Generation</li>
+            <li><strong>Button 10</strong>: Testnet Connection Test (verify balance & UTXOs)</li>
+            <li><strong>Button 11</strong>: ⚠️ REAL TRANSACTION (spends 0.01 KAS) ⚠️</li>
+        </ol>
+        <p><strong>Optional tests:</strong> Buttons 4-9 (various simulation tests)</p>
+        <p><strong>⚠️ WARNING:</strong> Button 11 sends an actual blockchain transaction and spends real testnet funds!</p>
     </div>
     
     <div class="result" id="testOutput"></div>
@@ -1409,6 +1424,248 @@
             } finally {
                 // 実行フラグをリセット
                 window.testRealTestnetTransfer.running = false;
+            }
+        };
+        
+        // 実際のトランザクション送信テスト
+        window.testRealTransactionSubmit = async function() {
+            if (!kaspa) {
+                logTest('Real transaction submit test skipped', false, 'WASM not initialized - run test 1 first');
+                return;
+            }
+            
+            // 重複実行を防ぐ
+            if (window.testRealTransactionSubmit.running) {
+                logTest('Real transaction submit already running', false, 'please wait for completion');
+                return;
+            }
+            window.testRealTransactionSubmit.running = true;
+            
+            // 確認プロンプト
+            const userConfirm = confirm(
+                '⚠️ REAL BLOCKCHAIN TRANSACTION ⚠️\n\n' +
+                'This will send 0.01 KAS to yourself on testnet.\n' +
+                'Transaction fees will be deducted from your balance.\n\n' +
+                'Current balance: ~979 KAS\n' +
+                'Amount to send: 0.01 KAS\n' +
+                'Expected fee: ~0.01 KAS\n\n' +
+                'Continue with REAL transaction?'
+            );
+            
+            if (!userConfirm) {
+                logTest('Real transaction cancelled by user', false, 'Transaction not submitted');
+                window.testRealTransactionSubmit.running = false;
+                return;
+            }
+            
+            if (!window.testPrivateKey) {
+                try {
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
+                } catch (e) {
+                    logTest('Real transaction submit test skipped', false, 'Cannot create PrivateKey');
+                    window.testRealTransactionSubmit.running = false;
+                    return;
+                }
+            }
+            
+            try {
+                logTest('=== REAL BLOCKCHAIN TRANSACTION ===', true, '⚠️ SPENDING ACTUAL TESTNET FUNDS ⚠️');
+                
+                const privateKey = window.testPrivateKey;
+                const keypair = privateKey.toKeypair();
+                const senderAddress = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                logTest('Transaction sender', true, senderAddress.toString().substring(0, 30) + '...');
+                logTest('Transaction recipient', true, 'Self (same address)');
+                
+                // Step 1: RPC接続 (Resolver使用)
+                logTest('=== Step 1: Establishing RPC Connection ===', true);
+                let rpcClient = null;
+                
+                try {
+                    rpcClient = new kaspa.RpcClient({
+                        resolver: new kaspa.Resolver(),
+                        networkId: 'testnet-10'
+                    });
+                    
+                    const connectTimeout = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
+                    );
+                    
+                    await Promise.race([rpcClient.connect(), connectTimeout]);
+                    
+                    if (rpcClient.isConnected) {
+                        const serverInfo = await rpcClient.getServerInfo();
+                        logTest('RPC Connected', true, `${rpcClient.url}, Synced: ${serverInfo.isSynced}`);
+                        
+                        if (!serverInfo.isSynced) {
+                            logTest('Node not synced', false, 'Cannot proceed with real transaction');
+                            return;
+                        }
+                    } else {
+                        logTest('RPC connection failed', false, 'Cannot proceed without RPC');
+                        return;
+                    }
+                } catch (rpcError) {
+                    logTest('RPC connection failed', false, (rpcError.message || '').substring(0, 100));
+                    return;
+                }
+                
+                // Step 2: 実際の残高とUTXO確認
+                logTest('=== Step 2: Fetching Current Balance & UTXOs ===', true);
+                
+                const balanceInfo = await rpcClient.getBalanceByAddress(senderAddress.toString());
+                const currentBalance = BigInt(balanceInfo.balance || 0);
+                
+                logTest('Current balance', true, `${currentBalance} sompi (${currentBalance / 100000000n} KAS)`);
+                
+                const transferAmount = 1000000n; // 0.01 KAS
+                const expectedFee = 1000000n; // ~0.01 KAS estimated fee
+                const totalRequired = transferAmount + expectedFee;
+                
+                if (currentBalance < totalRequired) {
+                    logTest('Insufficient balance', false, `Need ${totalRequired / 100000000n} KAS, have ${currentBalance / 100000000n} KAS`);
+                    return;
+                }
+                
+                logTest('Transfer amount', true, `${transferAmount / 100000000n} KAS`);
+                logTest('Estimated fee', true, `~${expectedFee / 100000000n} KAS`);
+                logTest('Balance check', true, `Sufficient funds available`);
+                
+                // UTXO取得
+                const utxoResponse = await rpcClient.getUtxosByAddresses([senderAddress.toString()]);
+                const utxoEntries = utxoResponse.entries || [];
+                
+                logTest('Available UTXOs', true, `${utxoEntries.length} UTXOs found`);
+                
+                if (utxoEntries.length === 0) {
+                    logTest('No UTXOs available', false, 'Cannot create transaction without UTXOs');
+                    return;
+                }
+                
+                // Step 3: トランザクション作成
+                logTest('=== Step 3: Creating Real Transaction ===', true);
+                
+                const recipientAddress = senderAddress.toString(); // 自分に送金
+                
+                // リアルなペイロード
+                const realPayload = `REAL TESTNET TRANSACTION - ${new Date().toISOString()} - Self-transfer test with file storage capability`;
+                const payloadBytes = new TextEncoder().encode(realPayload);
+                
+                logTest('Payload created', true, `${payloadBytes.length} bytes: "${realPayload.substring(0, 50)}..."`);
+                
+                // UTXO形式変換
+                const formattedUtxos = utxoEntries.map(utxo => ({
+                    address: senderAddress.toString(),
+                    outpoint: {
+                        transactionId: utxo.outpoint.transactionId,
+                        index: utxo.outpoint.index
+                    },
+                    scriptPublicKey: {
+                        version: utxo.scriptPublicKey.version,
+                        script: new Uint8Array(Object.values(utxo.scriptPublicKey.script))
+                    },
+                    amount: BigInt(utxo.amount),
+                    isCoinbase: utxo.isCoinbase || false,
+                    blockDaaScore: BigInt(utxo.blockDaaScore)
+                }));
+                
+                logTest('UTXOs formatted', true, `${formattedUtxos.length} UTXOs ready`);
+                
+                // createTransactions実行
+                const transactionStart = Date.now();
+                const transactionResult = await kaspa.createTransactions({
+                    entries: formattedUtxos,
+                    outputs: [{
+                        address: recipientAddress,
+                        amount: transferAmount
+                    }],
+                    changeAddress: senderAddress.toString(),
+                    priorityFee: expectedFee,
+                    networkId: "testnet-10",
+                    payload: payloadBytes
+                });
+                const transactionTime = Date.now() - transactionStart;
+                
+                logTest('Transaction created', !!transactionResult, `${transactionTime}ms, ${transactionResult.transactions?.length || 0} transactions`);
+                
+                if (!transactionResult || !transactionResult.transactions || transactionResult.transactions.length === 0) {
+                    logTest('Transaction creation failed', false, 'No pending transactions generated');
+                    return;
+                }
+                
+                const pendingTx = transactionResult.transactions[0];
+                
+                // 手数料確認
+                if (transactionResult.summary) {
+                    const actualFee = transactionResult.summary.fees;
+                    logTest('Actual transaction fee', true, `${actualFee} sompi (${actualFee / 100000000n} KAS)`);
+                }
+                
+                // Step 4: トランザクション署名
+                logTest('=== Step 4: Signing Transaction ===', true);
+                
+                const signingStart = Date.now();
+                await pendingTx.sign([privateKey]);
+                const signingTime = Date.now() - signingStart;
+                
+                logTest('Transaction signed', true, `${signingTime}ms - Cryptographic signature applied`);
+                logTest('Transaction ID', true, pendingTx.id ? pendingTx.id.substring(0, 16) + '...' : 'generating...');
+                
+                // Step 5: 実際のブロックチェーン送信
+                logTest('=== Step 5: SUBMITTING TO BLOCKCHAIN ===', true);
+                logTest('🚨 FINAL WARNING', true, 'About to submit REAL transaction to testnet!');
+                
+                const submissionStart = Date.now();
+                const txid = await pendingTx.submit(rpcClient);
+                const submissionTime = Date.now() - submissionStart;
+                
+                // Step 6: 成功！
+                logTest('🎉🎉🎉 TRANSACTION SUBMITTED! 🎉🎉🎉', true, 'SUCCESS!');
+                logTest('Transaction ID (TXID)', true, txid);
+                logTest('Submission time', true, `${submissionTime}ms`);
+                logTest('Network status', true, 'Transaction accepted by Kaspa testnet');
+                
+                // Step 7: 詳細サマリー
+                logTest('=== Step 7: Transaction Summary ===', true);
+                logTest('Blockchain network', true, 'Kaspa Testnet-10');
+                logTest('From address', true, senderAddress.toString().substring(0, 40) + '...');
+                logTest('To address', true, recipientAddress.substring(0, 40) + '...');
+                logTest('Amount sent', true, `${transferAmount / 100000000n} KAS`);
+                logTest('Transaction fee', true, `${transactionResult.summary?.fees / 100000000n || 'calculating'} KAS`);
+                logTest('Payload included', true, `${payloadBytes.length} bytes of file storage data`);
+                logTest('Block explorer', true, `https://explorer.kaspa.org/txs/${txid}`);
+                
+                // Step 8: 確認待機情報
+                logTest('=== Step 8: Confirmation Status ===', true);
+                logTest('Transaction status', true, 'Submitted to mempool');
+                logTest('Expected confirmation', true, '1-2 minutes for inclusion in block');
+                logTest('Finality', true, '~10 minutes for full finality');
+                logTest('Monitor progress', true, 'Check block explorer for real-time updates');
+                
+                logTest('=== REAL TESTNET TRANSACTION COMPLETED ===', true, '🎉 SUCCESSFULLY SENT!');
+                
+                // クリーンアップ
+                if (rpcClient) {
+                    try {
+                        await rpcClient.disconnect();
+                        logTest('RPC connection closed', true);
+                    } catch {}
+                }
+                
+            } catch (error) {
+                logTest('Real transaction failed', false, (error.message || error.toString()).substring(0, 100));
+                console.error('Real transaction error:', error);
+                
+                // 詳細エラー情報
+                logTest('Error type', false, error.name || 'Unknown error');
+                logTest('Error details', false, (error.stack || 'No stack trace').substring(0, 200));
+                
+            } finally {
+                // 実行フラグをリセット
+                window.testRealTransactionSubmit.running = false;
             }
         };
         
