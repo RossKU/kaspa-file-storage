@@ -880,9 +880,16 @@
                 let totalFeePaid = 0n;
                 let successfulTransfers = 0;
                 
+                // タイムスタンプ記録用
+                const startTime = Date.now();
+                const transferTimes = [];
+                
+                logTest('=== TIMING VERIFICATION ===', true, `Start time: ${new Date().toISOString()}`);
+                
                 // 10回の連続転送
                 for (let i = 1; i <= 10; i++) {
-                    logTest(`=== Transfer ${i}/10 ===`, true, `Processing...`);
+                    const transferStart = Date.now();
+                    logTest(`=== Transfer ${i}/10 ===`, true, `Start: ${new Date(transferStart).toISOString()}`);
                     
                     try {
                         // 現在の残高を計算
@@ -968,6 +975,13 @@
                         logTest(`Transfer ${i} - Fee paid`, true, `${feePerTx / 100000000n} KAS`);
                         logTest(`Transfer ${i} - Payload`, true, `${payloadBytes.length} bytes`);
                         
+                        // 転送時間を記録
+                        const transferEnd = Date.now();
+                        const transferTime = transferEnd - transferStart;
+                        transferTimes.push(transferTime);
+                        
+                        logTest(`Transfer ${i} - Duration`, true, `${transferTime}ms (End: ${new Date(transferEnd).toISOString()})`);
+                        
                         // 短い待機時間（実際のブロック確認時間をシミュレート）
                         await new Promise(resolve => setTimeout(resolve, 100));
                         
@@ -978,9 +992,30 @@
                 }
                 
                 // 最終結果の集計
+                const endTime = Date.now();
+                const totalTime = endTime - startTime;
+                
                 logTest('=== CONSECUTIVE TRANSFERS SUMMARY ===', true);
+                logTest('Test completion time', true, `End: ${new Date(endTime).toISOString()}`);
+                logTest('Total execution time', true, `${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`);
                 logTest('Successful transfers', successfulTransfers === 10, `${successfulTransfers}/10 completed`);
                 logTest('Total fees paid', true, `${totalFeePaid / 100000000n} KAS`);
+                
+                // 個別転送時間の分析
+                if (transferTimes.length > 0) {
+                    const avgTime = transferTimes.reduce((a, b) => a + b, 0) / transferTimes.length;
+                    const minTime = Math.min(...transferTimes);
+                    const maxTime = Math.max(...transferTimes);
+                    
+                    logTest('Average transfer time', true, `${avgTime.toFixed(1)}ms`);
+                    logTest('Fastest transfer', true, `${minTime}ms`);
+                    logTest('Slowest transfer', true, `${maxTime}ms`);
+                    
+                    // 各転送の詳細時間
+                    transferTimes.forEach((time, index) => {
+                        logTest(`Transfer ${index + 1} time`, true, `${time}ms`);
+                    });
+                }
                 
                 const finalBalance = currentUtxos.reduce((sum, utxo) => sum + utxo.amount, 0n);
                 const expectedBalance = initialBalance - totalFeePaid; // 自分に送金なので、手数料のみ減る
