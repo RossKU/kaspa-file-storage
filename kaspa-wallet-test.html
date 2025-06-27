@@ -33,7 +33,7 @@
         <button class="safe" onclick="initializeWasm()">1. Initialize WASM SDK</button>
         <button class="info" onclick="selectWalletType()" id="walletButton" style="display: none;">2. Setup Wallet</button>
         <button class="danger" onclick="executeTransaction()" id="transactionButton" style="display: none;">3. Execute Real Transaction</button>
-        <button class="warning" onclick="testPayloadSizeLimit()" id="payloadTestButton" style="display: none;">4. 🧪 Test Payload Size Limit</button>
+        <button class="warning" onclick="testPayloadSizeLimit()" id="payloadTestButton" style="display: none;">4. 🧪 Test Payload Size Limit (50KB→0KB)</button>
     </div>
     
     <!-- Wallet Selection (appears after step 1) -->
@@ -342,12 +342,12 @@
             // 確認プロンプト
             const confirmed = confirm(
                 '🧪 PAYLOAD SIZE LIMIT TEST 🧪\\n\\n' +
-                'This will send multiple transactions with increasing payload sizes.\\n' +
-                'Starting from 50KB, increasing by 1KB each time until mass error.\\n\\n' +
+                'This will send multiple transactions with decreasing payload sizes.\\n' +
+                'Starting from 50KB, decreasing by 1KB each time until success.\\n\\n' +
                 'Expected behavior:\\n' +
-                '- 50KB → 60KB+: Success\\n' +
-                '- 80KB+: Likely mass error\\n' +
-                '- Auto-stop after 10 consecutive errors\\n\\n' +
+                '- 50KB: Mass error (too large)\\n' +
+                '- Decreasing until success found\\n' +
+                '- Continue until 0KB or 10 consecutive successes\\n\\n' +
                 'Continue with payload size test?'
             );
             
@@ -361,19 +361,19 @@
         
         // ペイロードサイズテスト実行
         async function executePayloadSizeTest() {
-            logTest('=== PAYLOAD SIZE LIMIT TEST ===', true, '🧪 Finding maximum payload size');
+            logTest('=== PAYLOAD SIZE LIMIT TEST ===', true, '🧪 Finding maximum payload size (decreasing)');
             
             let currentSize = 50000; // 50KB開始
-            const increment = 1000;  // 1KB増分
-            let errorCount = 0;
-            const maxErrors = 10;
+            const decrement = 1000;  // 1KB減分
             let successCount = 0;
-            let lastSuccessSize = 0;
+            let consecutiveSuccesses = 0;
+            let maxConsecutiveSuccesses = 10;
+            let largestSuccessSize = 0;
             
             try {
                 const { privateKey, address } = currentWallet;
                 
-                while (errorCount < maxErrors) {
+                while (currentSize >= 0 && consecutiveSuccesses < maxConsecutiveSuccesses) {
                     // ランダムペイロード生成
                     const randomPayload = generateRandomBytes(currentSize);
                     const sizeKB = Math.round(currentSize / 1000);
@@ -443,16 +443,19 @@
                         
                         // 成功
                         successCount++;
-                        lastSuccessSize = currentSize;
-                        errorCount = 0; // エラーカウントリセット
+                        consecutiveSuccesses++;
+                        if (currentSize > largestSuccessSize) {
+                            largestSuccessSize = currentSize;
+                        }
                         
                         logTest(`✅ ${sizeKB}KB SUCCESS`, true, `TXID: ${txid.substring(0, 16)}...`);
                         logTest(`Transaction fee`, true, `${(transactionResult.summary?.fees / 100000000n).toString()} KAS`);
+                        logTest(`Consecutive successes`, true, `${consecutiveSuccesses}/${maxConsecutiveSuccesses}`);
                         
                         await rpcClient.disconnect();
                         
-                        // 次のサイズへ
-                        currentSize += increment;
+                        // 次のサイズへ（減少）
+                        currentSize -= decrement;
                         
                         // 短い待機（ネットワーク負荷軽減）
                         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -461,16 +464,11 @@
                         const errorMsg = error.message || error.toString();
                         
                         if (errorMsg.includes('mass') || errorMsg.includes('Mass')) {
-                            errorCount++;
-                            logTest(`❌ ${sizeKB}KB MASS ERROR`, false, `Error ${errorCount}/${maxErrors}: ${errorMsg.substring(0, 50)}`);
+                            consecutiveSuccesses = 0; // 連続成功カウントリセット
+                            logTest(`❌ ${sizeKB}KB MASS ERROR`, false, `${errorMsg.substring(0, 50)}`);
                             
-                            if (errorCount >= maxErrors) {
-                                logTest('Mass limit reached', false, `${maxErrors} consecutive errors`);
-                                break;
-                            }
-                            
-                            // 次のサイズを試行
-                            currentSize += increment;
+                            // 次のサイズを試行（減少）
+                            currentSize -= decrement;
                             
                         } else {
                             // Mass以外のエラーは停止
@@ -483,15 +481,23 @@
                 // テスト結果サマリー
                 logTest('=== PAYLOAD SIZE TEST RESULTS ===', true);
                 logTest('Total successful transactions', true, `${successCount} transactions`);
-                logTest('Maximum successful payload', true, `${Math.round(lastSuccessSize / 1000)}KB (${lastSuccessSize} bytes)`);
-                logTest('Test range', true, `50KB → ${Math.round(currentSize / 1000)}KB`);
+                logTest('Largest successful payload', true, `${Math.round(largestSuccessSize / 1000)}KB (${largestSuccessSize} bytes)`);
+                logTest('Test range', true, `50KB → ${Math.round(currentSize / 1000)}KB (decreasing)`);
+                logTest('Final consecutive successes', true, `${consecutiveSuccesses}/${maxConsecutiveSuccesses}`);
                 
-                if (lastSuccessSize > 0) {
-                    const efficiency = Math.round((lastSuccessSize / 100000) * 100);
+                if (largestSuccessSize > 0) {
+                    const efficiency = Math.round((largestSuccessSize / 100000) * 100);
                     logTest('Mass efficiency', true, `~${efficiency}% of theoretical 100KB limit`);
                 }
                 
-                logTest('=== PAYLOAD LIMIT TEST COMPLETED ===', true, `Maximum: ${Math.round(lastSuccessSize / 1000)}KB`);
+                let stopReason = '';
+                if (consecutiveSuccesses >= maxConsecutiveSuccesses) {
+                    stopReason = 'Found stable success range';
+                } else if (currentSize < 0) {
+                    stopReason = 'Reached 0KB minimum';
+                }
+                
+                logTest('=== PAYLOAD LIMIT TEST COMPLETED ===', true, `Maximum: ${Math.round(largestSuccessSize / 1000)}KB (${stopReason})`);
                 
             } catch (error) {
                 logTest('Payload size test failed', false, error.message);
