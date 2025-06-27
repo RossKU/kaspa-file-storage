@@ -924,7 +924,10 @@
                         const changeAmount = currentBalance - transferAmount - feePerTx;
                         
                         // 新しいUTXOエントリを作成（実際のトランザクションのアウトプットをシミュレート）
-                        const newTxId = `tx${i}_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
+                        // Kaspa transaction IDは64文字の16進数文字列である必要がある
+                        const randomBytes = new Uint8Array(32);
+                        crypto.getRandomValues(randomBytes);
+                        const newTxId = Array.from(randomBytes, b => b.toString(16).padStart(2, '0')).join('');
                         
                         // メインアウトプット（受信者への送金）
                         const mainOutput = {
