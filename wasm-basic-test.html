@@ -628,14 +628,24 @@
                     
                     logTest('RPC Client created', true, testnetNodes[0]);
                     
-                    // 接続試行
+                    // 接続試行（タイムアウト付き）
                     logTest('Attempting RPC connection...', true);
-                    await rpcClient.connect();
+                    const connectionPromise = rpcClient.connect();
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
+                    );
+                    
+                    await Promise.race([connectionPromise, timeoutPromise]);
                     logTest('RPC Connection established', true);
                     
-                    // ネットワーク情報取得
+                    // ネットワーク情報取得（タイムアウト付き）
                     logTest('Requesting network info...', true);
-                    const networkInfo = await rpcClient.getBlockDagInfo();
+                    const networkInfoPromise = rpcClient.getBlockDagInfo();
+                    const networkTimeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Network info timeout after 5 seconds')), 5000)
+                    );
+                    
+                    const networkInfo = await Promise.race([networkInfoPromise, networkTimeoutPromise]);
                     logTest('Network info retrieved', !!networkInfo, `DAA Score: ${networkInfo.daaScore || 'unknown'}`);
                     logTest('Network info details', true, `blockCount: ${networkInfo.blockCount || 'unknown'}, headerCount: ${networkInfo.headerCount || 'unknown'}`);
                     
