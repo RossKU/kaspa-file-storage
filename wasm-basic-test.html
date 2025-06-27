@@ -1550,11 +1550,23 @@
                 
                 const recipientAddress = senderAddress.toString(); // 自分に送金
                 
-                // リアルなペイロード
-                const realPayload = `REAL TESTNET TRANSACTION - ${new Date().toISOString()} - Self-transfer test with file storage capability`;
+                // リアルなペイロード（Kaspaマス制限対応: 50バイト以下）
+                const realPayload = `Real TX - ${new Date().toISOString().substring(0, 16)}`;
                 const payloadBytes = new TextEncoder().encode(realPayload);
                 
-                logTest('Payload created', true, `${payloadBytes.length} bytes: "${realPayload.substring(0, 50)}..."`);
+                // ペイロードサイズ制限チェック（Safety: 50バイト以下）
+                const MAX_SAFE_PAYLOAD = 50;
+                if (payloadBytes.length > MAX_SAFE_PAYLOAD) {
+                    logTest('Payload too large', false, `${payloadBytes.length} > ${MAX_SAFE_PAYLOAD} bytes - reducing size`);
+                    const shortPayload = `TX-${Date.now().toString(36)}`;
+                    const shortPayloadBytes = new TextEncoder().encode(shortPayload);
+                    logTest('Using shorter payload', true, `${shortPayloadBytes.length} bytes: "${shortPayload}"`);
+                    realPayload = shortPayload;
+                    payloadBytes = shortPayloadBytes;
+                }
+                
+                logTest('Payload created', true, `${payloadBytes.length} bytes: "${realPayload}"`);
+                logTest('Mass-safe payload', true, `Under ${MAX_SAFE_PAYLOAD} byte limit for transaction mass`);
                 
                 // UTXO形式変換
                 const formattedUtxos = utxoEntries.map(utxo => ({
