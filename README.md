@@ -5,7 +5,7 @@ Anonymous file storage system using Kaspa blockchain transaction payloads.
 ## Features
 
 - 💰 **Real-time Balance**: Check testnet wallet balance
-- 📤 **File Upload**: Store files up to 80KB in Kaspa blockchain
+- 📤 **File Upload**: Store files up to 24KB in Kaspa blockchain
 - 🔐 **Anonymous Storage**: Use secret identifiers for privacy
 - 📥 **File Retrieval**: Search and download files using secret keys
 - 🚀 **Direct Transaction**: WASM SDK integration for signing and sending
@@ -13,7 +13,7 @@ Anonymous file storage system using Kaspa blockchain transaction payloads.
 ## How to Use
 
 1. **Balance Check**: Automatically displays your testnet balance
-2. **Upload File**: Select file (max 80KB) and enter secret identifier
+2. **Upload File**: Select file (max 24KB) and enter secret identifier
 3. **Prepare Transaction**: Generate transaction JSON with file payload
 4. **Send Transaction**: Sign and submit using integrated WASM SDK
 5. **Retrieve Files**: Search blockchain using secret identifier
@@ -23,7 +23,7 @@ Anonymous file storage system using Kaspa blockchain transaction payloads.
 - **Network**: Kaspa Testnet (TN-10)
 - **SDK**: Kaspa WASM v1.0.0
 - **API**: TN-10 REST API
-- **Storage**: Transaction payloads (max 80KB)
+- **Storage**: Transaction payloads (max 24KB)
 - **Security**: Client-side signing with WASM
 
 ## Demo Address
