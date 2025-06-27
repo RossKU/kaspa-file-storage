@@ -27,12 +27,19 @@
         <p><strong>Network:</strong> Kaspa Testnet-10</p>
     </div>
     
-    <!-- Wallet Selection -->
+    <!-- Step-by-step initialization -->
     <div class="wallet-section">
+        <h3>🔧 Initialization Steps</h3>
+        <button class="safe" onclick="initializeWasm()">1. Initialize WASM SDK</button>
+        <button class="info" onclick="selectWalletType()" id="walletButton" style="display: none;">2. Setup Wallet</button>
+        <button class="danger" onclick="executeTransaction()" id="transactionButton" style="display: none;">3. Execute Real Transaction</button>
+    </div>
+    
+    <!-- Wallet Selection (appears after step 1) -->
+    <div id="walletSelection" class="wallet-section hidden">
         <h3>📱 Wallet Setup</h3>
-        <button class="info" onclick="selectExistingWallet()">1. Import Existing Wallet</button>
-        <button class="warning" onclick="selectNewWallet()">2. Create New Wallet</button>
-        <button class="safe" onclick="initializeWasm()" id="initButton" style="display: none;">3. Initialize & Test Transaction</button>
+        <button class="info" onclick="selectExistingWallet()">Import Existing Wallet</button>
+        <button class="warning" onclick="selectNewWallet()">Create New Wallet</button>
     </div>
     
     <!-- Existing Wallet Section -->
@@ -136,22 +143,10 @@
             }
             
             try {
-                // WASM初期化（元々の動作する方法）
-                if (!kaspa) {
-                    logTest('Importing kaspa-core.js', true);
-                    kaspa = await import('./kaspa-core.js');
-                    logTest('Module imported', !!kaspa);
-                    
-                    logTest('Initializing WASM', true);
-                    await kaspa.default('./kaspa-core_bg.wasm');
-                    logTest('WASM initialized', true);
-                    
-                    // 少し待機
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    // 基本クラスの存在確認
-                    logTest('PrivateKey class exists', !!kaspa.PrivateKey);
-                    logTest('createTransactions function exists', !!kaspa.createTransactions);
+                // WASM確認
+                if (!kaspa || !kaspa.PrivateKey) {
+                    logTest('WASM not initialized', false, 'Run step 1 first');
+                    return;
                 }
                 
                 const privateKey = new kaspa.PrivateKey(privateKeyHex);
@@ -176,22 +171,10 @@
         // 新規ウォレット生成
         window.generateNewWallet = async function() {
             try {
-                // WASM初期化（元々の動作する方法）
-                if (!kaspa) {
-                    logTest('Importing kaspa-core.js', true);
-                    kaspa = await import('./kaspa-core.js');
-                    logTest('Module imported', !!kaspa);
-                    
-                    logTest('Initializing WASM', true);
-                    await kaspa.default('./kaspa-core_bg.wasm');
-                    logTest('WASM initialized', true);
-                    
-                    // 少し待機
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    // 基本クラスの存在確認
-                    logTest('PrivateKey class exists', !!kaspa.PrivateKey);
-                    logTest('createTransactions function exists', !!kaspa.createTransactions);
+                // WASM確認
+                if (!kaspa || !kaspa.PrivateKey) {
+                    logTest('WASM not initialized', false, 'Run step 1 first');
+                    return;
                 }
                 
                 // ランダム秘密鍵生成
@@ -255,7 +238,7 @@
                 if (balanceKAS >= 1n) {
                     document.getElementById('walletStatusText').textContent = '✅ Ready for transactions';
                     document.getElementById('walletStatusText').style.color = 'green';
-                    document.getElementById('initButton').style.display = 'inline-block';
+                    document.getElementById('transactionButton').style.display = 'inline-block';
                     
                     currentWallet = { privateKey, address, balance };
                     logTest('Wallet ready', true, `${balanceKAS} KAS ≥ 1 KAS minimum`);
@@ -277,44 +260,74 @@
             }
         }
         
-        // 3. WASM初期化 & トランザクションテスト
+        // 1. WASM初期化 (元の動作する方法)
         window.initializeWasm = async function() {
+            testResults = [];
+            logTest('Starting WASM Basic Tests', true, 'v1.0.0-basic');
+            
+            try {
+                logTest('Importing kaspa-core.js', true);
+                kaspa = await import('./kaspa-core.js');
+                logTest('Module imported', !!kaspa);
+                
+                logTest('Initializing WASM', true);
+                await kaspa.default('./kaspa-core_bg.wasm');
+                logTest('WASM initialized', true);
+                
+                // バージョン確認
+                if (kaspa.version) {
+                    const version = kaspa.version();
+                    logTest('Version check', true, version);
+                } else {
+                    logTest('Version check', false, 'version() not found');
+                }
+                
+                // 基本クラスの存在確認
+                logTest('PrivateKey class exists', !!kaspa.PrivateKey);
+                logTest('Transaction class exists', !!kaspa.Transaction);
+                logTest('createTransaction function exists', !!kaspa.createTransaction);
+                logTest('createTransactions function exists', !!kaspa.createTransactions);
+                
+                logTest('=== WASM SDK INITIALIZED ===', true, 'Ready for wallet setup');
+                
+                // 次のボタンを表示
+                document.getElementById('walletButton').style.display = 'inline-block';
+                document.getElementById('walletSelection').classList.remove('hidden');
+                
+            } catch (error) {
+                logTest('WASM initialization failed', false, error.message);
+            }
+        };
+        
+        // 2. ウォレット選択表示
+        window.selectWalletType = function() {
+            logTest('Wallet selection ready', true, 'Choose your wallet method');
+        };
+        
+        // 3. トランザクション実行
+        window.executeTransaction = async function() {
             if (!currentWallet) {
-                logTest('No wallet selected', false, 'Complete wallet setup first');
+                logTest('No wallet setup', false, 'Complete wallet setup first');
                 return;
             }
             
-            testResults = [];
-            logTest('=== KASPA TRANSACTION TEST ===', true, 'Starting with validated wallet');
+            // 確認プロンプト
+            const confirmed = confirm(
+                '🚨 REAL BLOCKCHAIN TRANSACTION 🚨\\n\\n' +
+                'This will send 5 KAS to yourself on Kaspa testnet.\\n' +
+                'Real testnet funds will be spent for transaction fees.\\n\\n' +
+                `Current balance: ${currentWallet.balance / 100000000n} KAS\\n` +
+                'Amount to send: 5 KAS\\n' +
+                'Expected fee: ~0.05 KAS\\n\\n' +
+                'Continue with REAL transaction?'
+            );
             
-            try {
-                // WASM確認
-                if (!kaspa) {
-                    kaspa = await import('./kaspa-core.js');
-                }
-                logTest('WASM SDK ready', true);
-                
-                // 確認プロンプト
-                const confirmed = confirm(
-                    '🚨 REAL BLOCKCHAIN TRANSACTION 🚨\\n\\n' +
-                    'This will send 5 KAS to yourself on Kaspa testnet.\\n' +
-                    'Real testnet funds will be spent for transaction fees.\\n\\n' +
-                    `Current balance: ${currentWallet.balance / 100000000n} KAS\\n` +
-                    'Amount to send: 5 KAS\\n' +
-                    'Expected fee: ~0.05 KAS\\n\\n' +
-                    'Continue with REAL transaction?'
-                );
-                
-                if (!confirmed) {
-                    logTest('Transaction cancelled', false, 'User cancelled');
-                    return;
-                }
-                
-                await executeRealTransaction();
-                
-            } catch (error) {
-                logTest('Transaction test failed', false, error.message);
+            if (!confirmed) {
+                logTest('Transaction cancelled', false, 'User cancelled');
+                return;
             }
+            
+            await executeRealTransaction();
         };
         
         // 実際のトランザクション実行
