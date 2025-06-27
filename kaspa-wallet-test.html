@@ -140,9 +140,22 @@
                 if (!kaspa) {
                     logTest('Loading WASM SDK...', true);
                     kaspa = await import('./kaspa-core.js');
-                    // 初期化待機
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    logTest('WASM SDK loaded', true);
+                    
+                    // WASM明示的初期化
+                    if (kaspa.default) {
+                        await kaspa.default();
+                        logTest('WASM backend initialized', true);
+                    }
+                    
+                    // 追加待機時間
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    logTest('WASM SDK ready', true);
+                    
+                    // 機能確認
+                    if (!kaspa.PrivateKey || !kaspa.NetworkType) {
+                        throw new Error('WASM functions not available');
+                    }
+                    logTest('WASM functions verified', true);
                 }
                 
                 const privateKey = new kaspa.PrivateKey(privateKeyHex);
@@ -171,9 +184,22 @@
                 if (!kaspa) {
                     logTest('Loading WASM SDK...', true);
                     kaspa = await import('./kaspa-core.js');
-                    // 初期化待機
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    logTest('WASM SDK loaded', true);
+                    
+                    // WASM明示的初期化
+                    if (kaspa.default) {
+                        await kaspa.default();
+                        logTest('WASM backend initialized', true);
+                    }
+                    
+                    // 追加待機時間
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    logTest('WASM SDK ready', true);
+                    
+                    // 機能確認
+                    if (!kaspa.PrivateKey || !kaspa.NetworkType) {
+                        throw new Error('WASM functions not available');
+                    }
+                    logTest('WASM functions verified', true);
                 }
                 
                 // ランダム秘密鍵生成
@@ -207,6 +233,11 @@
         // 残高チェック共通関数
         async function checkWalletBalance(privateKey, address) {
             try {
+                // WASM確認
+                if (!kaspa || !kaspa.RpcClient) {
+                    throw new Error('WASM SDK not properly initialized');
+                }
+                
                 logTest('Connecting to testnet for balance check...', true);
                 
                 const rpcClient = new kaspa.RpcClient({
