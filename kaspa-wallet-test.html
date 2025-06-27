@@ -33,6 +33,7 @@
         <button class="safe" onclick="initializeWasm()">1. Initialize WASM SDK</button>
         <button class="info" onclick="selectWalletType()" id="walletButton" style="display: none;">2. Setup Wallet</button>
         <button class="danger" onclick="executeTransaction()" id="transactionButton" style="display: none;">3. Execute Real Transaction</button>
+        <button class="warning" onclick="testPayloadSizeLimit()" id="payloadTestButton" style="display: none;">4. 🧪 Test Payload Size Limit</button>
     </div>
     
     <!-- Wallet Selection (appears after step 1) -->
@@ -239,6 +240,7 @@
                     document.getElementById('walletStatusText').textContent = '✅ Ready for transactions';
                     document.getElementById('walletStatusText').style.color = 'green';
                     document.getElementById('transactionButton').style.display = 'inline-block';
+                    document.getElementById('payloadTestButton').style.display = 'inline-block';
                     
                     currentWallet = { privateKey, address, balance };
                     logTest('Wallet ready', true, `${balanceKAS} KAS ≥ 1 KAS minimum`);
@@ -329,6 +331,180 @@
             
             await executeRealTransaction();
         };
+        
+        // 4. ペイロードサイズ制限テスト
+        window.testPayloadSizeLimit = async function() {
+            if (!currentWallet) {
+                logTest('No wallet setup', false, 'Complete wallet setup first');
+                return;
+            }
+            
+            // 確認プロンプト
+            const confirmed = confirm(
+                '🧪 PAYLOAD SIZE LIMIT TEST 🧪\\n\\n' +
+                'This will send multiple transactions with increasing payload sizes.\\n' +
+                'Starting from 50KB, increasing by 1KB each time until mass error.\\n\\n' +
+                'Expected behavior:\\n' +
+                '- 50KB → 60KB+: Success\\n' +
+                '- 80KB+: Likely mass error\\n' +
+                '- Auto-stop after 10 consecutive errors\\n\\n' +
+                'Continue with payload size test?'
+            );
+            
+            if (!confirmed) {
+                logTest('Payload test cancelled', false, 'User cancelled');
+                return;
+            }
+            
+            await executePayloadSizeTest();
+        };
+        
+        // ペイロードサイズテスト実行
+        async function executePayloadSizeTest() {
+            logTest('=== PAYLOAD SIZE LIMIT TEST ===', true, '🧪 Finding maximum payload size');
+            
+            let currentSize = 50000; // 50KB開始
+            const increment = 1000;  // 1KB増分
+            let errorCount = 0;
+            const maxErrors = 10;
+            let successCount = 0;
+            let lastSuccessSize = 0;
+            
+            try {
+                const { privateKey, address } = currentWallet;
+                
+                while (errorCount < maxErrors) {
+                    // ランダムペイロード生成
+                    const randomPayload = generateRandomBytes(currentSize);
+                    const sizeKB = Math.round(currentSize / 1000);
+                    
+                    logTest(`Testing ${sizeKB}KB payload...`, true, `Generating ${currentSize} bytes`);
+                    
+                    try {
+                        // RPC接続
+                        const rpcClient = new kaspa.RpcClient({
+                            resolver: new kaspa.Resolver(),
+                            networkId: 'testnet-10'
+                        });
+                        
+                        await rpcClient.connect();
+                        
+                        // 最新UTXO取得
+                        const utxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+                        const utxoEntries = utxoResponse.entries || [];
+                        
+                        if (utxoEntries.length === 0) {
+                            throw new Error('No UTXOs available');
+                        }
+                        
+                        logTest(`Using ${utxoEntries.length} UTXOs`, true);
+                        
+                        // トランザクション設定
+                        const transferAmount = 500000000n; // 5 KAS
+                        const lowPriorityFee = 1000000n;   // 0.01 KAS (ゆっくり手数料)
+                        
+                        // UTXO形式変換
+                        const formattedUtxos = utxoEntries.map(utxo => ({
+                            address: address.toString(),
+                            outpoint: {
+                                transactionId: utxo.outpoint.transactionId,
+                                index: utxo.outpoint.index
+                            },
+                            scriptPublicKey: utxo.scriptPublicKey,
+                            amount: BigInt(utxo.amount),
+                            isCoinbase: utxo.isCoinbase || false,
+                            blockDaaScore: BigInt(utxo.blockDaaScore)
+                        }));
+                        
+                        // トランザクション作成
+                        const transactionResult = await kaspa.createTransactions({
+                            entries: formattedUtxos,
+                            outputs: [{
+                                address: address.toString(),
+                                amount: transferAmount
+                            }],
+                            changeAddress: address.toString(),
+                            priorityFee: lowPriorityFee,
+                            networkId: "testnet-10",
+                            payload: randomPayload
+                        });
+                        
+                        if (!transactionResult?.transactions?.length) {
+                            throw new Error('No pending transactions generated');
+                        }
+                        
+                        const pendingTx = transactionResult.transactions[0];
+                        
+                        // 署名
+                        await pendingTx.sign([privateKey]);
+                        
+                        // ブロックチェーン送信
+                        const txid = await pendingTx.submit(rpcClient);
+                        
+                        // 成功
+                        successCount++;
+                        lastSuccessSize = currentSize;
+                        errorCount = 0; // エラーカウントリセット
+                        
+                        logTest(`✅ ${sizeKB}KB SUCCESS`, true, `TXID: ${txid.substring(0, 16)}...`);
+                        logTest(`Transaction fee`, true, `${(transactionResult.summary?.fees / 100000000n).toString()} KAS`);
+                        
+                        await rpcClient.disconnect();
+                        
+                        // 次のサイズへ
+                        currentSize += increment;
+                        
+                        // 短い待機（ネットワーク負荷軽減）
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        
+                    } catch (error) {
+                        const errorMsg = error.message || error.toString();
+                        
+                        if (errorMsg.includes('mass') || errorMsg.includes('Mass')) {
+                            errorCount++;
+                            logTest(`❌ ${sizeKB}KB MASS ERROR`, false, `Error ${errorCount}/${maxErrors}: ${errorMsg.substring(0, 50)}`);
+                            
+                            if (errorCount >= maxErrors) {
+                                logTest('Mass limit reached', false, `${maxErrors} consecutive errors`);
+                                break;
+                            }
+                            
+                            // 次のサイズを試行
+                            currentSize += increment;
+                            
+                        } else {
+                            // Mass以外のエラーは停止
+                            logTest(`❌ ${sizeKB}KB FATAL ERROR`, false, errorMsg.substring(0, 100));
+                            throw error;
+                        }
+                    }
+                }
+                
+                // テスト結果サマリー
+                logTest('=== PAYLOAD SIZE TEST RESULTS ===', true);
+                logTest('Total successful transactions', true, `${successCount} transactions`);
+                logTest('Maximum successful payload', true, `${Math.round(lastSuccessSize / 1000)}KB (${lastSuccessSize} bytes)`);
+                logTest('Test range', true, `50KB → ${Math.round(currentSize / 1000)}KB`);
+                
+                if (lastSuccessSize > 0) {
+                    const efficiency = Math.round((lastSuccessSize / 100000) * 100);
+                    logTest('Mass efficiency', true, `~${efficiency}% of theoretical 100KB limit`);
+                }
+                
+                logTest('=== PAYLOAD LIMIT TEST COMPLETED ===', true, `Maximum: ${Math.round(lastSuccessSize / 1000)}KB`);
+                
+            } catch (error) {
+                logTest('Payload size test failed', false, error.message);
+                console.error('Payload test error:', error);
+            }
+        }
+        
+        // ランダムバイト生成
+        function generateRandomBytes(size) {
+            const randomBytes = new Uint8Array(size);
+            crypto.getRandomValues(randomBytes);
+            return randomBytes;
+        }
         
         // 実際のトランザクション実行
         async function executeRealTransaction() {
