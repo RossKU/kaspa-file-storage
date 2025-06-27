@@ -1092,7 +1092,11 @@
                     'wss://testnet-10.kaspa.ws',
                     'wss://testnet-10.kaspa.org:17210',
                     'wss://testnet-1.kaspa.aspectron.org',
-                    'wss://testnet-2.kaspa.aspectron.org'
+                    'wss://testnet-2.kaspa.aspectron.org',
+                    // Additional testnet nodes
+                    'wss://testnet.kaspad.net:17210',
+                    'wss://tn10-1.kaspa.red:17210',
+                    'wss://tn10-2.kaspa.red:17210'
                 ];
                 
                 for (const nodeUrl of testnetNodes) {
@@ -1134,8 +1138,65 @@
                     }
                 }
                 
+                // RPC接続に失敗した場合、REST APIフォールバック
                 if (!rpcClient) {
-                    logTest('All RPC connections failed', false, 'Cannot proceed with real transfer');
+                    logTest('All RPC connections failed', false, 'Trying REST API fallback');
+                    
+                    // Step 1B: REST APIフォールバック
+                    logTest('=== Step 1B: REST API Fallback ===', true);
+                    
+                    try {
+                        // REST API経由での残高確認
+                        const testAddress = senderAddress.toString();
+                        const restEndpoints = [
+                            `https://api-tn10.kaspa.org/addresses/${testAddress}/balance`,
+                            `https://api.kaspa.org/addresses/${testAddress}/balance`,
+                            `https://cors-anywhere.herokuapp.com/https://api-tn10.kaspa.org/addresses/${testAddress}/balance`
+                        ];
+                        
+                        let restSuccess = false;
+                        let balanceData = null;
+                        
+                        for (const endpoint of restEndpoints) {
+                            try {
+                                logTest(`Trying REST API: ${endpoint.split('/')[2]}...`, true);
+                                const response = await fetch(endpoint);
+                                
+                                if (response.ok) {
+                                    balanceData = await response.json();
+                                    logTest(`REST API success`, true, `Balance: ${balanceData.balance || 0} sompi`);
+                                    restSuccess = true;
+                                    break;
+                                }
+                            } catch (restError) {
+                                logTest(`REST API failed`, false, (restError.message || '').substring(0, 50));
+                            }
+                        }
+                        
+                        if (restSuccess && balanceData) {
+                            // REST APIでの結果表示
+                            const currentBalance = BigInt(balanceData.balance || 0);
+                            logTest('=== Step 2: REST API Balance Retrieved ===', true);
+                            logTest('Current balance (REST)', true, `${currentBalance} sompi (${currentBalance / 100000000n} KAS)`);
+                            
+                            if (currentBalance > 0n) {
+                                logTest('Wallet status (REST)', true, '✅ Funds available via REST API');
+                                logTest('Note', true, 'RPC required for actual transactions');
+                            } else {
+                                logTest('Wallet status (REST)', false, '⚠️ No testnet funds found');
+                                logTest('Faucet URL', true, 'https://faucet.kaspanet.io/');
+                            }
+                            
+                            logTest('=== REST API TEST COMPLETED ===', true, '✅ Basic connectivity verified');
+                            logTest('Limitation', false, 'Full transactions require working RPC connection');
+                            return;
+                        }
+                    } catch (restError) {
+                        logTest('REST API fallback failed', false, (restError.message || '').substring(0, 100));
+                    }
+                    
+                    logTest('All connection methods failed', false, 'Neither RPC nor REST API accessible');
+                    logTest('Possible causes', false, 'Network restrictions, CORS issues, or node maintenance');
                     return;
                 }
                 
