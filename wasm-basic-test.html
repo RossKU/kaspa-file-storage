@@ -1084,56 +1084,181 @@
                 
                 logTest('Sender Address', true, senderAddress.toString().substring(0, 30) + '...');
                 
-                // Step 1: RPC接続（複数のtestnet nodeを試行）
+                // Step 1: RPC接続（複数の方法を順次試行）
                 logTest('=== Step 1: Establishing RPC Connection ===', true);
                 let rpcClient = null;
                 
-                const testnetNodes = [
-                    'wss://testnet-10.kaspa.ws',
-                    'wss://testnet-10.kaspa.org:17210',
-                    'wss://testnet-1.kaspa.aspectron.org',
-                    'wss://testnet-2.kaspa.aspectron.org',
-                    // Additional testnet nodes
-                    'wss://testnet.kaspad.net:17210',
-                    'wss://tn10-1.kaspa.red:17210',
-                    'wss://tn10-2.kaspa.red:17210'
-                ];
-                
-                for (const nodeUrl of testnetNodes) {
-                    try {
-                        logTest(`Attempting connection to ${nodeUrl}...`, true);
-                        
-                        rpcClient = new kaspa.RpcClient({
-                            url: nodeUrl,
-                            networkId: 'testnet-10'
-                        });
-                        
-                        // 接続試行（15秒タイムアウト）
-                        const connectionPromise = rpcClient.connect();
-                        const timeoutPromise = new Promise((_, reject) => 
-                            setTimeout(() => reject(new Error('Connection timeout after 15 seconds')), 15000)
-                        );
-                        
-                        await Promise.race([connectionPromise, timeoutPromise]);
-                        
-                        // サーバー情報取得で接続確認
+                // 接続方法1: Resolver使用（推奨）
+                logTest('=== Method 1: Using Resolver (Auto Node Discovery) ===', true);
+                try {
+                    logTest('Creating RpcClient with Resolver...', true);
+                    rpcClient = new kaspa.RpcClient({
+                        resolver: new kaspa.Resolver(),
+                        networkId: 'testnet-10'
+                    });
+                    
+                    logTest('Attempting Resolver-based connection...', true);
+                    const resolverTimeout = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Resolver timeout after 20 seconds')), 20000)
+                    );
+                    
+                    await Promise.race([rpcClient.connect(), resolverTimeout]);
+                    
+                    if (rpcClient.isConnected) {
                         const serverInfo = await rpcClient.getServerInfo();
-                        logTest(`Connected to ${nodeUrl}`, true, `Synced: ${serverInfo.isSynced}, Network: ${serverInfo.networkId}`);
+                        logTest('Resolver connection SUCCESS', true, `URL: ${rpcClient.url}, Synced: ${serverInfo.isSynced}`);
                         
                         if (serverInfo.isSynced) {
-                            logTest('RPC Connection established', true, `Using ${nodeUrl}`);
-                            break;
+                            logTest('RPC Connection established via Resolver', true, `Using ${rpcClient.url}`);
                         } else {
-                            logTest(`Node ${nodeUrl} not synced`, false, 'trying next node');
+                            logTest('Node not synced, trying direct connection', false);
                             await rpcClient.disconnect();
                             rpcClient = null;
                         }
-                        
-                    } catch (error) {
-                        logTest(`Connection to ${nodeUrl} failed`, false, (error.message || error.toString()).substring(0, 80));
-                        if (rpcClient) {
-                            try { await rpcClient.disconnect(); } catch {}
-                            rpcClient = null;
+                    }
+                } catch (resolverError) {
+                    logTest('Resolver method failed', false, (resolverError.message || '').substring(0, 80));
+                    if (rpcClient) {
+                        try { await rpcClient.disconnect(); } catch {}
+                        rpcClient = null;
+                    }
+                }
+                
+                // 接続方法2: 直接URL接続（IPアドレス形式）
+                if (!rpcClient) {
+                    logTest('=== Method 2: Direct IP Address Connection ===', true);
+                    
+                    const directNodes = [
+                        // IPアドレス形式（ポート自動設定）
+                        { url: '127.0.0.1', name: 'localhost' },
+                        { url: '194.195.213.25', name: 'kaspa.red testnet' },
+                        { url: '45.76.96.11', name: 'kaspa.aspectron testnet' },
+                    ];
+                    
+                    for (const node of directNodes) {
+                        try {
+                            logTest(`Trying direct connection to ${node.name} (${node.url})...`, true);
+                            
+                            rpcClient = new kaspa.RpcClient({
+                                url: node.url,
+                                networkId: 'testnet-10'
+                            });
+                            
+                            const directTimeout = new Promise((_, reject) => 
+                                setTimeout(() => reject(new Error('Direct connection timeout after 15 seconds')), 15000)
+                            );
+                            
+                            await Promise.race([rpcClient.connect(), directTimeout]);
+                            
+                            if (rpcClient.isConnected) {
+                                const serverInfo = await rpcClient.getServerInfo();
+                                logTest(`Direct connection to ${node.name}`, true, `Synced: ${serverInfo.isSynced}`);
+                                
+                                if (serverInfo.isSynced) {
+                                    logTest('RPC Connection established via direct IP', true, `Using ${node.url}`);
+                                    break;
+                                } else {
+                                    logTest(`${node.name} not synced`, false, 'trying next node');
+                                    await rpcClient.disconnect();
+                                    rpcClient = null;
+                                }
+                            }
+                        } catch (directError) {
+                            logTest(`Direct connection to ${node.name} failed`, false, (directError.message || '').substring(0, 80));
+                            if (rpcClient) {
+                                try { await rpcClient.disconnect(); } catch {}
+                                rpcClient = null;
+                            }
+                        }
+                    }
+                }
+                
+                // 接続方法3: 完全WebSocket URL
+                if (!rpcClient) {
+                    logTest('=== Method 3: WebSocket URL Connection ===', true);
+                    
+                    const websocketNodes = [
+                        'ws://127.0.0.1:16210',
+                        'wss://kaspa.red:17210',
+                        'ws://194.195.213.25:16210'
+                    ];
+                    
+                    for (const wsUrl of websocketNodes) {
+                        try {
+                            logTest(`Trying WebSocket connection to ${wsUrl}...`, true);
+                            
+                            rpcClient = new kaspa.RpcClient({
+                                url: wsUrl,
+                                networkId: 'testnet-10'
+                            });
+                            
+                            const wsTimeout = new Promise((_, reject) => 
+                                setTimeout(() => reject(new Error('WebSocket timeout after 10 seconds')), 10000)
+                            );
+                            
+                            await Promise.race([rpcClient.connect(), wsTimeout]);
+                            
+                            if (rpcClient.isConnected) {
+                                const serverInfo = await rpcClient.getServerInfo();
+                                logTest(`WebSocket connection to ${wsUrl}`, true, `Synced: ${serverInfo.isSynced}`);
+                                
+                                if (serverInfo.isSynced) {
+                                    logTest('RPC Connection established via WebSocket', true, `Using ${wsUrl}`);
+                                    break;
+                                } else {
+                                    await rpcClient.disconnect();
+                                    rpcClient = null;
+                                }
+                            }
+                        } catch (wsError) {
+                            logTest(`WebSocket connection to ${wsUrl} failed`, false, (wsError.message || '').substring(0, 80));
+                            if (rpcClient) {
+                                try { await rpcClient.disconnect(); } catch {}
+                                rpcClient = null;
+                            }
+                        }
+                    }
+                }
+                
+                // 接続方法4: 異なるNetworkIdを試行
+                if (!rpcClient) {
+                    logTest('=== Method 4: Alternative NetworkIds ===', true);
+                    
+                    const alternativeNetworks = ['testnet-11', 'testnet'];
+                    
+                    for (const networkId of alternativeNetworks) {
+                        try {
+                            logTest(`Trying Resolver with ${networkId}...`, true);
+                            
+                            rpcClient = new kaspa.RpcClient({
+                                resolver: new kaspa.Resolver(),
+                                networkId: networkId
+                            });
+                            
+                            const altTimeout = new Promise((_, reject) => 
+                                setTimeout(() => reject(new Error(`${networkId} timeout after 15 seconds`)), 15000)
+                            );
+                            
+                            await Promise.race([rpcClient.connect(), altTimeout]);
+                            
+                            if (rpcClient.isConnected) {
+                                const serverInfo = await rpcClient.getServerInfo();
+                                logTest(`${networkId} connection`, true, `URL: ${rpcClient.url}, Synced: ${serverInfo.isSynced}`);
+                                
+                                if (serverInfo.isSynced) {
+                                    logTest(`RPC Connection established via ${networkId}`, true, `Using ${rpcClient.url}`);
+                                    break;
+                                } else {
+                                    await rpcClient.disconnect();
+                                    rpcClient = null;
+                                }
+                            }
+                        } catch (altError) {
+                            logTest(`${networkId} connection failed`, false, (altError.message || '').substring(0, 80));
+                            if (rpcClient) {
+                                try { await rpcClient.disconnect(); } catch {}
+                                rpcClient = null;
+                            }
                         }
                     }
                 }
