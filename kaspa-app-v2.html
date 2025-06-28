@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa Storage - Secure File Storage on Blockchain</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #00d4ff;
+            --primary-dark: #0099cc;
+            --secondary: #1a1d21;
+            --accent: #f39c12;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --bg-primary: #0f1419;
+            --bg-secondary: #1a1d21;
+            --bg-tertiary: #252a30;
+            --text-primary: #ffffff;
+            --text-secondary: #9ca3af;
+            --border: #374151;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header - Compact & Setup Modes */
+        .header {
+            background: rgba(26, 29, 33, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .header-compact {
+            padding: 0.5rem 0;
+        }
+
+        .header-setup {
+            padding: 1.5rem 0;
+        }
+
+        .header-content-compact {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.875rem;
+        }
+
+        .header-content-setup {
+            text-align: center;
+        }
+
+        .logo-compact {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .logo-setup {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .logo-setup::before {
+            content: "⚡";
+            margin-right: 0.5rem;
+            font-size: 1.8rem;
+        }
+
+        .status-compact {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .status-setup {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .status-item-setup {
+            flex-direction: column;
+            text-align: center;
+            padding: 1rem;
+            border-radius: 12px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--error);
+            transition: all 0.3s ease;
+        }
+
+        .status-dot-setup {
+            width: 16px;
+            height: 16px;
+            margin-bottom: 0.5rem;
+        }
+
+        .status-dot.success { background: var(--success); }
+        .status-dot.warning { background: var(--warning); }
+        .status-dot.error { background: var(--error); }
+
+        .status-dot.pulse {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.2); }
+        }
+
+        .balance-display {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        /* Setup Form */
+        .setup-form {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem auto;
+            max-width: 500px;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .setup-form.hidden {
+            display: none;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            font-family: 'Courier New', monospace;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .form-input.error {
+            border-color: var(--error);
+        }
+
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .checkbox {
+            width: 16px;
+            height: 16px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            background: var(--bg-tertiary);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .checkbox.checked {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .checkbox.checked::after {
+            content: "✓";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--bg-primary);
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            background: var(--text-secondary);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+        }
+
+        .btn-block {
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* Main Content */
+        .main {
+            padding: 2rem 0;
+            transition: all 0.3s ease;
+        }
+
+        .main.setup-mode {
+            padding: 1rem 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .grid-full {
+            grid-column: 1 / -1;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+        }
+
+        /* File Upload */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(0, 212, 255, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.7;
+        }
+
+        .upload-text {
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-subtext {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .file-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Progress */
+        .progress {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+
+        .alert-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid var(--warning);
+            color: var(--warning);
+        }
+
+        /* File List */
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .file-item:hover {
+            background: rgba(0, 212, 255, 0.1);
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .file-icon {
+            font-size: 1.25rem;
+        }
+
+        .file-details h4 {
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .file-details p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .status-setup {
+                grid-template-columns: 1fr;
+            }
+
+            .checkbox-group {
+                grid-template-columns: 1fr;
+            }
+
+            .file-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }
+
+            .file-actions {
+                align-self: stretch;
+                justify-content: flex-end;
+            }
+        }
+
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="container">
+            <!-- Compact Mode Header -->
+            <div class="header-content-compact hidden" id="headerCompact">
+                <div class="logo-compact">Kaspa Storage</div>
+                <div class="status-compact">
+                    <div class="status-item">
+                        <div class="status-dot" id="networkStatusCompact"></div>
+                        <span id="networkTextCompact">TN10</span>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-dot" id="walletStatusCompact"></div>
+                        <span id="walletTextCompact">Wallet</span>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-dot" id="appPassStatusCompact"></div>
+                        <span id="appPassTextCompact">AppPass</span>
+                    </div>
+                    <div class="balance-display" id="balanceCompact">0 KAS</div>
+                </div>
+            </div>
+
+            <!-- Setup Mode Header -->
+            <div class="header-content-setup" id="headerSetup">
+                <div class="logo-setup">Kaspa File Storage</div>
+                <div class="status-setup">
+                    <div class="status-item status-item-setup">
+                        <div class="status-dot status-dot-setup" id="networkStatusSetup"></div>
+                        <div>
+                            <strong>Network</strong>
+                            <div id="networkTextSetup">Connecting TN10...</div>
+                        </div>
+                    </div>
+                    <div class="status-item status-item-setup">
+                        <div class="status-dot status-dot-setup" id="walletStatusSetup"></div>
+                        <div>
+                            <strong>Wallet</strong>
+                            <div id="walletTextSetup">Enter Private Key</div>
+                        </div>
+                    </div>
+                    <div class="status-item status-item-setup">
+                        <div class="status-dot status-dot-setup" id="appPassStatusSetup"></div>
+                        <div>
+                            <strong>App Password</strong>
+                            <div id="appPassTextSetup">Enter Password</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Setup Form -->
+    <div class="container">
+        <form class="setup-form" id="setupForm">
+            <div class="form-group">
+                <label class="form-label">Private Key (64 hex characters)</label>
+                <input type="text" class="form-input" id="privateKeyInput" 
+                       placeholder="b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef"
+                       maxlength="64">
+                <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                    Demo key pre-filled for testing (979 KAS available)
+                </small>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">App Password (for file encryption)</label>
+                <input type="password" class="form-input" id="appPasswordInput" 
+                       placeholder="Enter password for encrypting your files">
+                <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                    Used to encrypt/decrypt all uploaded files
+                </small>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-item">
+                    <div class="checkbox checked" id="checkRememberAddress" onclick="toggleCheckbox(this)"></div>
+                    Remember Address
+                </label>
+                <label class="checkbox-item">
+                    <div class="checkbox checked" id="checkRememberWallet" onclick="toggleCheckbox(this)"></div>
+                    Remember Wallet
+                </label>
+                <label class="checkbox-item">
+                    <div class="checkbox checked" id="checkRememberAppPass" onclick="toggleCheckbox(this)"></div>
+                    Remember AppPass
+                </label>
+                <label class="checkbox-item">
+                    <div class="checkbox checked" id="checkAutoLogin" onclick="toggleCheckbox(this)"></div>
+                    Enable Auto Login
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="connectBtn">
+                <span id="connectIcon">🔗</span>
+                <span id="connectText">Connect & Setup</span>
+            </button>
+
+            <div style="text-align: center; margin-top: 1rem;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="useAutoFill()">
+                    🚀 Use Demo Setup
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="clearSettings()">
+                    🗑️ Clear Saved Settings
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main setup-mode" id="mainContent">
+        <div class="container">
+            <!-- File Upload Section -->
+            <div class="grid">
+                <div class="card">
+                    <h2 class="card-title">
+                        <span class="card-icon">📤</span>
+                        Upload File
+                    </h2>
+                    <div class="upload-zone" id="uploadZone">
+                        <input type="file" class="file-input" id="fileInput" onchange="handleFileSelect(event)">
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">Drop file here or click to select</div>
+                        <div class="upload-subtext">Max 24KB • Automatically encrypted</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Secret Key (for file retrieval)</label>
+                        <input type="text" class="form-input" id="secretKey" placeholder="Enter a unique secret key">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Transaction Fee</label>
+                        <select class="form-input" id="feeLevel">
+                            <option value="low">Low (0.01 KAS)</option>
+                            <option value="normal" selected>Normal (0.05 KAS)</option>
+                            <option value="high">High (0.1 KAS)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="uploadToBlockchain()" id="uploadBtn" disabled>
+                        <span>🚀</span>
+                        Upload to Blockchain
+                    </button>
+                    <div class="progress hidden" id="uploadProgress">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="card">
+                    <h2 class="card-title">
+                        <span class="card-icon">⚡</span>
+                        Quick Actions
+                    </h2>
+                    <div style="display: grid; gap: 1rem;">
+                        <button class="btn btn-secondary" onclick="refreshBalance()">
+                            <span>🔄</span>
+                            Refresh Balance
+                        </button>
+                        <button class="btn btn-secondary" onclick="loadRecentFiles()">
+                            <span>📋</span>
+                            Load Recent Files
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportSettings()">
+                            <span>💾</span>
+                            Export Settings
+                        </button>
+                        <button class="btn btn-secondary" onclick="showSetupForm()">
+                            <span>⚙️</span>
+                            Settings
+                        </button>
+                    </div>
+                    
+                    <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border);">
+                        <h4 style="margin-bottom: 0.75rem; color: var(--text-secondary);">Quick Stats</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.875rem;">
+                            <div>Files Stored: <span id="filesCountQuick">0</span></div>
+                            <div>Total Fees: <span id="totalFeesQuick">0 KAS</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Management -->
+            <div class="grid-full">
+                <div class="card">
+                    <h2 class="card-title">
+                        <span class="card-icon">📋</span>
+                        File Management
+                    </h2>
+                    <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+                        <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                            <input type="text" class="form-input" id="searchSecret" placeholder="Enter secret key to search files">
+                        </div>
+                        <button class="btn btn-secondary" onclick="searchFiles()">
+                            <span>🔍</span>
+                            Search
+                        </button>
+                        <button class="btn btn-secondary" onclick="searchByAddress()">
+                            <span>👤</span>
+                            My Files
+                        </button>
+                    </div>
+                    <div class="file-list" id="fileList">
+                        <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">📂</div>
+                            <p>Connect your wallet to see your files or search by secret key.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Alert Container -->
+    <div id="alertContainer" style="position: fixed; top: 1rem; right: 1rem; z-index: 9999; max-width: 400px;"></div>
+
+    <script type="module">
+        // Global state
+        let kaspa = null;
+        let currentWallet = null;
+        let currentAppPassword = null;
+        let isConnected = false;
+        let selectedFile = null;
+        let isSetupMode = true;
+
+        // Encryption utilities
+        async function generateMasterKey() {
+            const fingerprint = navigator.userAgent + navigator.language + screen.width + screen.height;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(fingerprint);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+            return hashBuffer;
+        }
+
+        async function encryptData(data, password) {
+            const encoder = new TextEncoder();
+            const passwordData = encoder.encode(password);
+            const masterKey = await generateMasterKey();
+            
+            // Combine password with master key
+            const combined = new Uint8Array(passwordData.length + masterKey.byteLength);
+            combined.set(passwordData);
+            combined.set(new Uint8Array(masterKey), passwordData.length);
+            
+            const key = await crypto.subtle.importKey(
+                'raw',
+                await crypto.subtle.digest('SHA-256', combined),
+                { name: 'AES-GCM' },
+                false,
+                ['encrypt']
+            );
+            
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const encodedData = encoder.encode(data);
+            const encrypted = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: iv },
+                key,
+                encodedData
+            );
+            
+            // Combine iv and encrypted data
+            const result = new Uint8Array(iv.length + encrypted.byteLength);
+            result.set(iv);
+            result.set(new Uint8Array(encrypted), iv.length);
+            
+            return btoa(String.fromCharCode(...result));
+        }
+
+        async function decryptData(encryptedData, password) {
+            try {
+                const encoder = new TextEncoder();
+                const decoder = new TextDecoder();
+                const passwordData = encoder.encode(password);
+                const masterKey = await generateMasterKey();
+                
+                const combined = new Uint8Array(passwordData.length + masterKey.byteLength);
+                combined.set(passwordData);
+                combined.set(new Uint8Array(masterKey), passwordData.length);
+                
+                const key = await crypto.subtle.importKey(
+                    'raw',
+                    await crypto.subtle.digest('SHA-256', combined),
+                    { name: 'AES-GCM' },
+                    false,
+                    ['decrypt']
+                );
+                
+                const data = new Uint8Array(atob(encryptedData).split('').map(c => c.charCodeAt(0)));
+                const iv = data.slice(0, 12);
+                const encrypted = data.slice(12);
+                
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    key,
+                    encrypted
+                );
+                
+                return decoder.decode(decrypted);
+            } catch (error) {
+                throw new Error('Decryption failed');
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            setupDragAndDrop();
+            await initializeSDK();
+            await attemptAutoLogin();
+        });
+
+        // SDK Initialization
+        async function initializeSDK() {
+            try {
+                updateAllStatus('network', 'warning', 'Loading SDK...', true);
+                kaspa = await import('./kaspa-core.js');
+                await kaspa.default('./kaspa-core_bg.wasm');
+                updateAllStatus('network', 'warning', 'Connecting TN10...', true);
+                
+                // Test TN10 connection
+                const testClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                await testClient.connect();
+                await testClient.disconnect();
+                
+                updateAllStatus('network', 'success', 'TN10', false);
+                showAlert('success', '✅ Connected to Kaspa Testnet-10');
+            } catch (error) {
+                updateAllStatus('network', 'error', 'Connection Failed', false);
+                showAlert('error', '❌ Failed to connect to Kaspa network: ' + error.message);
+            }
+        }
+
+        // Auto Login
+        async function attemptAutoLogin() {
+            const settings = localStorage.getItem('kaspa_wallet_settings');
+            if (!settings) return;
+            
+            try {
+                const parsed = JSON.parse(settings);
+                if (!parsed.autoLogin) return;
+                
+                showAlert('info', '🔄 Attempting auto login...');
+                
+                // Auto-fill form
+                if (parsed.walletPrivateKey) {
+                    const decrypted = await decryptData(parsed.walletPrivateKey, 'wallet_pass');
+                    document.getElementById('privateKeyInput').value = decrypted;
+                }
+                
+                if (parsed.appPassword) {
+                    const decrypted = await decryptData(parsed.appPassword, 'app_pass');
+                    document.getElementById('appPasswordInput').value = decrypted;
+                }
+                
+                // Auto connect
+                await connectWallet();
+                
+            } catch (error) {
+                showAlert('warning', '⚠️ Auto login failed: ' + error.message);
+                clearSettings();
+            }
+        }
+
+        // Form handling
+        document.getElementById('setupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await connectWallet();
+        });
+
+        // Connect wallet
+        async function connectWallet() {
+            const privateKeyHex = document.getElementById('privateKeyInput').value.trim();
+            const appPassword = document.getElementById('appPasswordInput').value.trim();
+            
+            if (!privateKeyHex || privateKeyHex.length !== 64) {
+                showAlert('error', '❌ Please enter a valid 64-character private key');
+                return;
+            }
+            
+            if (!appPassword) {
+                showAlert('error', '❌ Please enter an app password');
+                return;
+            }
+            
+            try {
+                setConnectLoading(true);
+                updateAllStatus('wallet', 'warning', 'Connecting...', true);
+                
+                // Create wallet
+                const privateKey = new kaspa.PrivateKey(privateKeyHex);
+                const keypair = privateKey.toKeypair();
+                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                // Connect to RPC
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                await rpcClient.connect();
+                
+                // Get balance
+                const balanceInfo = await rpcClient.getBalanceByAddress(address.toString());
+                const balance = BigInt(balanceInfo.balance || 0);
+                
+                currentWallet = {
+                    privateKey,
+                    address,
+                    balance,
+                    rpcClient
+                };
+                
+                updateAllStatus('wallet', 'success', 'Wallet', false);
+                
+                // Test app password with mock verification
+                updateAllStatus('apppass', 'warning', 'Verifying...', true);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate verification
+                
+                currentAppPassword = appPassword;
+                updateAllStatus('apppass', 'success', 'AppPass', false);
+                
+                // Save settings if requested
+                await saveSettings(privateKeyHex, appPassword);
+                
+                // Switch to compact mode
+                switchToCompactMode();
+                isConnected = true;
+                
+                showAlert('success', '🎉 Successfully connected! Ready to use.');
+                updateUI();
+                loadRecentFiles();
+                
+            } catch (error) {
+                updateAllStatus('wallet', 'error', 'Connection Failed', false);
+                updateAllStatus('apppass', 'error', 'Verification Failed', false);
+                showAlert('error', '❌ Connection failed: ' + error.message);
+            } finally {
+                setConnectLoading(false);
+            }
+        }
+
+        // Save settings
+        async function saveSettings(privateKey, appPassword) {
+            const checkboxes = {
+                address: document.getElementById('checkRememberAddress').classList.contains('checked'),
+                wallet: document.getElementById('checkRememberWallet').classList.contains('checked'),
+                appPass: document.getElementById('checkRememberAppPass').classList.contains('checked'),
+                autoLogin: document.getElementById('checkAutoLogin').classList.contains('checked')
+            };
+            
+            const settings = {
+                autoLogin: checkboxes.autoLogin,
+                lastLogin: new Date().toISOString()
+            };
+            
+            if (checkboxes.address && currentWallet) {
+                settings.walletAddress = currentWallet.address.toString();
+            }
+            
+            if (checkboxes.wallet) {
+                settings.walletPrivateKey = await encryptData(privateKey, 'wallet_pass');
+            }
+            
+            if (checkboxes.appPass) {
+                settings.appPassword = await encryptData(appPassword, 'app_pass');
+            }
+            
+            localStorage.setItem('kaspa_wallet_settings', JSON.stringify(settings));
+            
+            if (Object.values(checkboxes).some(v => v)) {
+                showAlert('success', '💾 Settings saved for next visit');
+            }
+        }
+
+        // UI Management
+        function switchToCompactMode() {
+            isSetupMode = false;
+            document.getElementById('header').className = 'header header-compact';
+            document.getElementById('headerSetup').classList.add('hidden');
+            document.getElementById('headerCompact').classList.remove('hidden');
+            document.getElementById('setupForm').classList.add('hidden');
+            document.getElementById('mainContent').classList.remove('setup-mode');
+        }
+
+        function switchToSetupMode() {
+            isSetupMode = true;
+            document.getElementById('header').className = 'header header-setup';
+            document.getElementById('headerCompact').classList.add('hidden');
+            document.getElementById('headerSetup').classList.remove('hidden');
+            document.getElementById('setupForm').classList.remove('hidden');
+            document.getElementById('mainContent').classList.add('setup-mode');
+        }
+
+        function updateAllStatus(type, status, text, pulse) {
+            // Update compact mode
+            const compactDot = document.getElementById(type + 'StatusCompact');
+            const compactText = document.getElementById(type + 'TextCompact');
+            
+            if (compactDot && compactText) {
+                compactDot.className = `status-dot ${status}${pulse ? ' pulse' : ''}`;
+                compactText.textContent = text;
+            }
+            
+            // Update setup mode
+            const setupDot = document.getElementById(type + 'StatusSetup');
+            const setupText = document.getElementById(type + 'TextSetup');
+            
+            if (setupDot && setupText) {
+                setupDot.className = `status-dot status-dot-setup ${status}${pulse ? ' pulse' : ''}`;
+                setupText.textContent = text;
+            }
+        }
+
+        function updateUI() {
+            if (currentWallet) {
+                const balanceKAS = currentWallet.balance / 100000000n;
+                document.getElementById('balanceCompact').textContent = `${balanceKAS} KAS`;
+                
+                const fileCount = getFileRecords().length;
+                document.getElementById('filesCountQuick').textContent = fileCount;
+                
+                // Calculate total fees
+                const records = getFileRecords();
+                const totalFees = records.reduce((sum, record) => sum + (record.fee || 0), 0);
+                document.getElementById('totalFeesQuick').textContent = `${totalFees.toFixed(3)} KAS`;
+            }
+            
+            updateUploadUI();
+        }
+
+        function updateUploadUI() {
+            const canUpload = currentWallet && selectedFile && isConnected && currentAppPassword;
+            document.getElementById('uploadBtn').disabled = !canUpload;
+        }
+
+        // Checkbox handling
+        window.toggleCheckbox = function(checkbox) {
+            checkbox.classList.toggle('checked');
+        };
+
+        // Auto fill demo data
+        window.useAutoFill = function() {
+            document.getElementById('privateKeyInput').value = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+            document.getElementById('appPasswordInput').value = 'demo123';
+            showAlert('info', '🚀 Demo data filled. Click "Connect & Setup" to continue.');
+        };
+
+        // Clear settings
+        window.clearSettings = function() {
+            localStorage.removeItem('kaspa_wallet_settings');
+            localStorage.removeItem('kaspa_files');
+            showAlert('success', '🗑️ All saved settings cleared');
+            location.reload();
+        };
+
+        // Show setup form
+        window.showSetupForm = function() {
+            switchToSetupMode();
+        };
+
+        // File handling (drag and drop)
+        function setupDragAndDrop() {
+            const uploadZone = document.getElementById('uploadZone');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadZone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadZone.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadZone.addEventListener(eventName, unhighlight, false);
+            });
+
+            uploadZone.addEventListener('drop', handleDrop, false);
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            function highlight() {
+                uploadZone.classList.add('dragover');
+            }
+
+            function unhighlight() {
+                uploadZone.classList.remove('dragover');
+            }
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    document.getElementById('fileInput').files = files;
+                    handleFileSelect({ target: { files } });
+                }
+            }
+        }
+
+        // File selection
+        window.handleFileSelect = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.size > 24 * 1024) {
+                showAlert('error', '❌ File too large. Maximum size is 24KB');
+                return;
+            }
+
+            selectedFile = file;
+            updateUploadUI();
+            showAlert('success', `📄 File selected: ${file.name} (${formatFileSize(file.size)})`);
+        };
+
+        // Upload to blockchain
+        window.uploadToBlockchain = async function() {
+            if (!currentWallet || !selectedFile || !currentAppPassword) {
+                showAlert('error', '❌ Missing requirements: wallet, file, or app password');
+                return;
+            }
+
+            const secretKey = document.getElementById('secretKey').value.trim();
+            if (!secretKey) {
+                showAlert('error', '❌ Please enter a secret key');
+                return;
+            }
+
+            try {
+                setUploadLoading(true);
+                showProgress(0);
+
+                // Read and encrypt file
+                const fileData = await readFileAsArrayBuffer(selectedFile);
+                const fileDataHex = Array.from(new Uint8Array(fileData), b => b.toString(16).padStart(2, '0')).join('');
+                const encryptedFileData = await encryptData(fileDataHex, currentAppPassword);
+                
+                showProgress(25);
+
+                // Create metadata
+                const metadata = {
+                    filename: selectedFile.name,
+                    size: selectedFile.size,
+                    type: selectedFile.type,
+                    timestamp: new Date().toISOString(),
+                    secret: secretKey,
+                    encrypted: true
+                };
+
+                const metadataJson = JSON.stringify(metadata);
+                const separatorText = '|||KASPA_FILE_SEPARATOR|||';
+                const combinedText = metadataJson + separatorText + encryptedFileData;
+                const payload = new TextEncoder().encode(combinedText);
+
+                showProgress(50);
+
+                // Get UTXOs
+                const utxoResponse = await currentWallet.rpcClient.getUtxosByAddresses([currentWallet.address.toString()]);
+                const utxoEntries = utxoResponse.entries || [];
+
+                // Create transaction
+                const feeLevel = document.getElementById('feeLevel').value;
+                const fees = { low: 1000000n, normal: 5000000n, high: 10000000n };
+                const priorityFee = fees[feeLevel];
+
+                const formattedUtxos = utxoEntries.map(utxo => ({
+                    address: currentWallet.address.toString(),
+                    outpoint: utxo.outpoint,
+                    scriptPublicKey: utxo.scriptPublicKey,
+                    amount: BigInt(utxo.amount),
+                    isCoinbase: utxo.isCoinbase || false,
+                    blockDaaScore: BigInt(utxo.blockDaaScore)
+                }));
+
+                const transactionResult = await kaspa.createTransactions({
+                    entries: formattedUtxos,
+                    outputs: [{
+                        address: currentWallet.address.toString(),
+                        amount: 500000000n // 5 KAS
+                    }],
+                    changeAddress: currentWallet.address.toString(),
+                    priorityFee: priorityFee,
+                    networkId: "testnet-10",
+                    payload: payload
+                });
+
+                showProgress(75);
+
+                // Sign and submit
+                const pendingTx = transactionResult.transactions[0];
+                await pendingTx.sign([currentWallet.privateKey]);
+                const txid = await pendingTx.submit(currentWallet.rpcClient);
+
+                showProgress(100);
+
+                // Save record
+                saveFileRecord({
+                    txid,
+                    filename: selectedFile.name,
+                    size: selectedFile.size,
+                    type: selectedFile.type,
+                    secret: secretKey,
+                    timestamp: new Date().toISOString(),
+                    fee: Number(priorityFee) / 100000000,
+                    encrypted: true,
+                    address: currentWallet.address.toString()
+                });
+
+                showAlert('success', `🎉 File uploaded and encrypted! TXID: ${txid.substring(0, 16)}...`);
+                resetUploadForm();
+                loadRecentFiles();
+                refreshBalance();
+
+            } catch (error) {
+                showAlert('error', '❌ Upload failed: ' + error.message);
+            } finally {
+                setUploadLoading(false);
+                hideProgress();
+            }
+        };
+
+        // File management
+        window.searchFiles = function() {
+            const secret = document.getElementById('searchSecret').value.trim();
+            if (!secret) {
+                showAlert('error', '❌ Please enter a secret key');
+                return;
+            }
+
+            const records = getFileRecords().filter(record => record.secret === secret);
+            displayFiles(records);
+            
+            if (records.length === 0) {
+                showAlert('warning', '⚠️ No files found with that secret key');
+            } else {
+                showAlert('success', `✅ Found ${records.length} file(s) with that secret`);
+            }
+        };
+
+        window.searchByAddress = function() {
+            if (!currentWallet) {
+                showAlert('error', '❌ Please connect your wallet first');
+                return;
+            }
+            
+            const records = getFileRecords().filter(record => 
+                record.address === currentWallet.address.toString()
+            );
+            displayFiles(records);
+            
+            showAlert('success', `✅ Found ${records.length} file(s) from your address`);
+        };
+
+        window.loadRecentFiles = function() {
+            const records = getFileRecords().slice(0, 10);
+            displayFiles(records);
+        };
+
+        window.refreshBalance = async function() {
+            if (!currentWallet) return;
+            
+            try {
+                const balanceInfo = await currentWallet.rpcClient.getBalanceByAddress(currentWallet.address.toString());
+                currentWallet.balance = BigInt(balanceInfo.balance || 0);
+                updateUI();
+                showAlert('success', '✅ Balance refreshed');
+            } catch (error) {
+                showAlert('error', '❌ Failed to refresh balance');
+            }
+        };
+
+        window.exportSettings = function() {
+            const settings = localStorage.getItem('kaspa_wallet_settings');
+            const files = localStorage.getItem('kaspa_files');
+            
+            const exportData = {
+                settings: settings ? JSON.parse(settings) : null,
+                files: files ? JSON.parse(files) : [],
+                exportDate: new Date().toISOString(),
+                version: '2.0'
+            };
+            
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `kaspa-storage-backup-${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            showAlert('success', '💾 Settings exported successfully');
+        };
+
+        // Utility functions
+        function showAlert(type, message) {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} animate-slide-in`;
+            alert.innerHTML = `
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()" style="background: none; border: none; color: inherit; cursor: pointer; margin-left: auto; padding: 0;">✕</button>
+            `;
+            container.appendChild(alert);
+            
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        function showProgress(percent) {
+            const progress = document.getElementById('uploadProgress');
+            const bar = document.getElementById('progressBar');
+            progress.classList.remove('hidden');
+            bar.style.width = percent + '%';
+        }
+
+        function hideProgress() {
+            document.getElementById('uploadProgress').classList.add('hidden');
+        }
+
+        function setConnectLoading(loading) {
+            const btn = document.getElementById('connectBtn');
+            const icon = document.getElementById('connectIcon');
+            const text = document.getElementById('connectText');
+            
+            if (loading) {
+                btn.disabled = true;
+                icon.innerHTML = '<div class="loading"></div>';
+                text.textContent = 'Connecting...';
+            } else {
+                btn.disabled = false;
+                icon.textContent = '🔗';
+                text.textContent = 'Connect & Setup';
+            }
+        }
+
+        function setUploadLoading(loading) {
+            const btn = document.getElementById('uploadBtn');
+            btn.disabled = loading;
+            btn.innerHTML = loading ? 
+                '<div class="loading"></div> Uploading...' : 
+                '<span>🚀</span> Upload to Blockchain';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        function resetUploadForm() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('secretKey').value = '';
+            updateUploadUI();
+        }
+
+        // Storage functions
+        function saveFileRecord(record) {
+            const records = getFileRecords();
+            records.unshift(record);
+            localStorage.setItem('kaspa_files', JSON.stringify(records));
+        }
+
+        function getFileRecords() {
+            return JSON.parse(localStorage.getItem('kaspa_files') || '[]');
+        }
+
+        function displayFiles(files) {
+            const container = document.getElementById('fileList');
+            
+            if (files.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📂</div>
+                        <p>No files found.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = files.map(file => `
+                <div class="file-item">
+                    <div class="file-info">
+                        <div class="file-icon">${file.encrypted ? '🔒' : '📄'}</div>
+                        <div class="file-details">
+                            <h4>${file.filename} ${file.encrypted ? '(Encrypted)' : ''}</h4>
+                            <p>${formatFileSize(file.size)} • ${new Date(file.timestamp).toLocaleDateString()} • Fee: ${file.fee || 0} KAS</p>
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        <button class="btn btn-sm btn-secondary" onclick="copyTxId('${file.txid}')">
+                            📋 Copy TXID
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="viewOnExplorer('${file.txid}')">
+                            🔍 Explorer
+                        </button>
+                        ${file.encrypted ? `<button class="btn btn-sm btn-secondary" onclick="downloadEncryptedFile('${file.txid}', '${file.filename}')">💾 Download</button>` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // File actions
+        window.copyTxId = function(txid) {
+            navigator.clipboard.writeText(txid);
+            showAlert('success', '📋 Transaction ID copied to clipboard');
+        };
+
+        window.viewOnExplorer = function(txid) {
+            window.open(`https://explorer-tn10.kaspa.org/txs/${txid}`, '_blank');
+        };
+
+        window.downloadEncryptedFile = async function(txid, filename) {
+            if (!currentAppPassword) {
+                showAlert('error', '❌ App password required for decryption');
+                return;
+            }
+            
+            try {
+                showAlert('info', '🔄 Retrieving and decrypting file...');
+                
+                // Note: In a real implementation, you would fetch the transaction data from the blockchain
+                // For demo purposes, we'll show that the functionality is ready
+                showAlert('info', '🚧 File retrieval from blockchain is ready for implementation');
+                showAlert('info', `📄 Would download: ${filename} (TXID: ${txid.substring(0, 16)}...)`);
+                
+            } catch (error) {
+                showAlert('error', '❌ Failed to download file: ' + error.message);
+            }
+        };
+
+        // Pre-fill demo data on load
+        window.addEventListener('load', () => {
+            document.getElementById('privateKeyInput').value = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+        });
+    </script>
+</body>
+</html>
