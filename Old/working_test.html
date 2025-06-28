@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kaspa WASM Basic Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .result { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Kaspa WASM SDK Basic Tests</h1>
+    
+    <div>
+        <button onclick="testBasicInitialization()">1. Test Basic Initialization</button>
+        <button onclick="testPrivateKeyCreation()">2. Test PrivateKey Creation</button>
+        <button onclick="testAddressGeneration()">3. Test Address Generation</button>
+        <button onclick="testTransactionFunction()">4. Test Transaction Functions</button>
+        <button onclick="testPayloadHandling()">5. Test Payload Handling</button>
+        <button onclick="testRealTransaction()">6. Test Real Transaction Creation</button>
+        <button onclick="testUtxoAndOutputs()">7. Test UTXO and Outputs</button>
+    </div>
+    
+    <div class="result" id="testOutput"></div>
+
+    <script type="module">
+        let kaspa = null;
+        let testResults = [];
+        
+        // ペイロード処理ヘルパー関数
+        function textToHex(text) {
+            return Array.from(new TextEncoder().encode(text))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function hexToText(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return new TextDecoder().decode(bytes);
+        }
+        
+        function arrayBufferToHex(buffer) {
+            return Array.from(new Uint8Array(buffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function hexToArrayBuffer(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes.buffer;
+        }
+        
+        // テスト結果を表示する関数
+        function logTest(testName, result, details = '') {
+            const status = result ? '✅' : '❌';
+            const message = `${status} ${testName}: ${result ? 'PASS' : 'FAIL'} ${details}`;
+            testResults.push(message);
+            console.log(message);
+            updateDisplay();
+        }
+        
+        function updateDisplay() {
+            document.getElementById('testOutput').innerHTML = testResults.join('<br>');
+        }
+        
+        // 基本初期化テスト
+        window.testBasicInitialization = async function() {
+            testResults = [];
+            logTest('Starting WASM Basic Tests', true, 'v1.0.0-basic');
+            
+            try {
+                logTest('Importing kaspa-core.js', true);
+                kaspa = await import('./kaspa-core.js');
+                logTest('Module imported', !!kaspa);
+                
+                logTest('Initializing WASM', true);
+                await kaspa.default('./kaspa-core_bg.wasm');
+                logTest('WASM initialized', true);
+                
+                // バージョン確認
+                if (kaspa.version) {
+                    const version = kaspa.version();
+                    logTest('Version check', true, version);
+                } else {
+                    logTest('Version check', false, 'version() not found');
+                }
+                
+                // 基本クラスの存在確認
+                logTest('PrivateKey class exists', !!kaspa.PrivateKey);
+                logTest('Transaction class exists', !!kaspa.Transaction);
+                logTest('createTransaction function exists', !!kaspa.createTransaction);
+                logTest('createTransactions function exists', !!kaspa.createTransactions);
+                
+            } catch (error) {
+                logTest('Initialization failed', false, error.message);
+            }
+        };
+        
+        // PrivateKey作成テスト
+        window.testPrivateKeyCreation = async function() {
+            if (!kaspa) {
+                logTest('PrivateKey test skipped', false, 'WASM not initialized');
+                return;
+            }
+            
+            try {
+                // テスト用の既知の秘密鍵
+                const testKeyHex = '1111111111111111111111111111111111111111111111111111111111111111';
+                logTest('Creating PrivateKey from hex', true, testKeyHex.substring(0, 8) + '...');
+                
+                const privateKey = new kaspa.PrivateKey(testKeyHex);
+                logTest('PrivateKey created', !!privateKey);
+                
+                // toString メソッドテスト
+                if (privateKey.toString) {
+                    const keyString = privateKey.toString();
+                    logTest('PrivateKey.toString()', keyString === testKeyHex, keyString.substring(0, 8) + '...');
+                } else {
+                    logTest('PrivateKey.toString()', false, 'method not found');
+                }
+                
+                // toKeypair メソッドテスト
+                if (privateKey.toKeypair) {
+                    const keypair = privateKey.toKeypair();
+                    logTest('PrivateKey.toKeypair()', !!keypair);
+                } else {
+                    logTest('PrivateKey.toKeypair()', false, 'method not found');
+                }
+                
+                window.testPrivateKey = privateKey; // 次のテスト用に保存
+                
+            } catch (error) {
+                logTest('PrivateKey creation failed', false, error.message);
+            }
+        };
+        
+        // アドレス生成テスト
+        window.testAddressGeneration = async function() {
+            if (!window.testPrivateKey) {
+                logTest('Address test skipped', false, 'PrivateKey not available');
+                return;
+            }
+            
+            try {
+                const privateKey = window.testPrivateKey;
+                
+                // NetworkType確認
+                logTest('NetworkType available', !!kaspa.NetworkType);
+                
+                if (kaspa.NetworkType) {
+                    // Keypairからアドレス生成
+                    const keypair = privateKey.toKeypair();
+                    
+                    if (keypair.toAddress) {
+                        // メインネットアドレス
+                        if (kaspa.NetworkType.Mainnet) {
+                            const mainnetAddr = keypair.toAddress(kaspa.NetworkType.Mainnet);
+                            logTest('Mainnet address', !!mainnetAddr, mainnetAddr ? mainnetAddr.toString().substring(0, 20) + '...' : '');
+                        }
+                        
+                        // テストネットアドレス
+                        if (kaspa.NetworkType.Testnet) {
+                            const testnetAddr = keypair.toAddress(kaspa.NetworkType.Testnet);
+                            logTest('Testnet address', !!testnetAddr, testnetAddr ? testnetAddr.toString().substring(0, 20) + '...' : '');
+                        }
+                    } else {
+                        logTest('toAddress method', false, 'not found on keypair');
+                    }
+                } else {
+                    logTest('NetworkType not found', false);
+                }
+                
+            } catch (error) {
+                logTest('Address generation failed', false, error.message);
+            }
+        };
+        
+        // トランザクション関数テスト
+        window.testTransactionFunction = async function() {
+            if (!kaspa) {
+                logTest('Transaction test skipped', false, 'WASM not initialized');
+                return;
+            }
+            
+            try {
+                // createTransaction関数の基本テスト
+                logTest('createTransaction function type', typeof kaspa.createTransaction === 'function');
+                
+                if (kaspa.createTransaction) {
+                    // 関数の長さ（パラメータ数）確認
+                    logTest('createTransaction parameters', true, `expects ${kaspa.createTransaction.length} params`);
+                }
+                
+                // createTransactions関数の基本テスト  
+                logTest('createTransactions function type', typeof kaspa.createTransactions === 'function');
+                
+                if (kaspa.createTransactions) {
+                    logTest('createTransactions parameters', true, `expects ${kaspa.createTransactions.length} params`);
+                }
+                
+                // 実際の呼び出しテスト（エラーが予想される）
+                try {
+                    const result = kaspa.createTransaction([], [], 0n);
+                    logTest('createTransaction call', !!result, 'unexpected success');
+                } catch (error) {
+                    logTest('createTransaction call', true, `expected error: ${error.message.substring(0, 50)}...`);
+                }
+                
+            } catch (error) {
+                logTest('Transaction function test failed', false, error.message);
+            }
+        };
+        
+        // ペイロード処理テスト
+        window.testPayloadHandling = async function() {
+            if (!kaspa) {
+                logTest('Payload test skipped', false, 'WASM not initialized');
+                return;
+            }
+            
+            try {
+                // テストペイロード作成
+                const testText = 'Hello Kaspa!';
+                const testPayloadBytes = new TextEncoder().encode(testText);
+                logTest('Test payload created', true, `${testPayloadBytes.length} bytes`);
+                
+                // Hex変換テスト
+                const testPayloadHex = Array.from(testPayloadBytes, b => b.toString(16).padStart(2, '0')).join('');
+                logTest('Payload hex conversion', true, testPayloadHex);
+                
+                // 独自実装のペイロード関数をテスト
+                try {
+                    const hexResult = textToHex(testText);
+                    logTest('textToHex function', hexResult === testPayloadHex, hexResult);
+                    
+                    const textResult = hexToText(testPayloadHex);
+                    logTest('hexToText function', textResult === testText, textResult);
+                    
+                    const bufferHex = arrayBufferToHex(testPayloadBytes.buffer);
+                    logTest('arrayBufferToHex function', bufferHex === testPayloadHex, bufferHex);
+                    
+                    const bufferResult = hexToArrayBuffer(testPayloadHex);
+                    const bufferMatch = new Uint8Array(bufferResult).every((val, idx) => val === testPayloadBytes[idx]);
+                    logTest('hexToArrayBuffer function', bufferMatch, `${new Uint8Array(bufferResult).length} bytes`);
+                    
+                } catch (error) {
+                    logTest('Payload helper functions', false, error.message);
+                }
+                
+            } catch (error) {
+                logTest('Payload handling test failed', false, error.message);
+            }
+        };
+        
+        // 実際のトランザクション作成テスト
+        window.testRealTransaction = async function() {
+            if (!kaspa || !window.testPrivateKey) {
+                logTest('Real transaction test skipped', false, 'Prerequisites not met');
+                return;
+            }
+            
+            try {
+                logTest('=== REAL TRANSACTION CREATION TEST ===', true);
+                
+                // テスト用のUTXOデータ（実際の形式に近い）
+                const testUtxos = [{
+                    outpoint: {
+                        transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                        index: 0
+                    },
+                    amount: 150000000000n, // 1500 KAS in sompi
+                    scriptPublicKey: {
+                        version: 0,
+                        script: "20qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd"
+                    },
+                    blockDaaScore: 12345678n,
+                    isCoinbase: false
+                }];
+                logTest('Test UTXO data prepared', true, `${testUtxos.length} UTXOs`);
+                
+                // テスト用の出力
+                const testAddress = "kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd";
+                const testOutputs = [{
+                    address: testAddress,
+                    amount: 100000000n // 1 KAS in sompi
+                }];
+                logTest('Test output data prepared', true, `${testOutputs.length} outputs`);
+                
+                // テストペイロード
+                const testFileData = "Hello Kaspa File Storage!";
+                const payloadBytes = new TextEncoder().encode(testFileData);
+                logTest('Test payload prepared', true, `${payloadBytes.length} bytes`);
+                
+                // createTransaction関数を実際のデータで呼び出し
+                try {
+                    logTest('Calling createTransaction with real data...', true);
+                    const transaction = kaspa.createTransaction(
+                        testUtxos,     // utxo_entry_source
+                        testOutputs,   // outputs  
+                        1000n,         // priority_fee (0.00001 KAS)
+                        payloadBytes,  // payload
+                        1              // sig_op_count
+                    );
+                    
+                    logTest('createTransaction call successful', !!transaction, typeof transaction);
+                    
+                    if (transaction) {
+                        // トランザクションオブジェクトの詳細確認
+                        logTest('Transaction object type', typeof transaction === 'object');
+                        
+                        // 利用可能なメソッド確認
+                        const methods = ['sign', 'toString', 'toJson', 'id'].map(method => ({
+                            name: method,
+                            exists: transaction[method] !== undefined
+                        }));
+                        
+                        methods.forEach(method => {
+                            logTest(`Transaction.${method.name}`, method.exists);
+                        });
+                        
+                        window.testTransaction = transaction; // 次のテスト用に保存
+                    }
+                    
+                } catch (createError) {
+                    logTest('createTransaction call failed', false, createError.message);
+                }
+                
+            } catch (error) {
+                logTest('Real transaction test failed', false, error.message);
+            }
+        };
+        
+        // UTXO と Output のテスト
+        window.testUtxoAndOutputs = async function() {
+            if (!kaspa) {
+                logTest('UTXO test skipped', false, 'WASM not initialized');
+                return;
+            }
+            
+            try {
+                logTest('=== UTXO AND OUTPUT FORMAT TEST ===', true);
+                
+                // kaspaToSompi 関数の確認
+                if (kaspa.kaspaToSompi) {
+                    try {
+                        const sompiResult = kaspa.kaspaToSompi("1.0");
+                        logTest('kaspaToSompi function', true, `1 KAS = ${sompiResult} sompi`);
+                    } catch (error) {
+                        logTest('kaspaToSompi function', false, error.message);
+                    }
+                } else {
+                    logTest('kaspaToSompi function', false, 'not found');
+                }
+                
+                // Address クラスの確認
+                if (kaspa.Address) {
+                    try {
+                        const testAddr = new kaspa.Address("kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd");
+                        logTest('Address constructor', !!testAddr, testAddr.toString().substring(0, 20) + '...');
+                    } catch (error) {
+                        logTest('Address constructor', false, error.message);
+                    }
+                } else {
+                    logTest('Address class', false, 'not found');
+                }
+                
+                // PaymentOutput 確認
+                if (kaspa.PaymentOutput) {
+                    logTest('PaymentOutput class', true);
+                } else {
+                    logTest('PaymentOutput class', false, 'not found');
+                }
+                
+                // UtxoEntry 確認
+                if (kaspa.UtxoEntry) {
+                    logTest('UtxoEntry class', true);
+                } else {
+                    logTest('UtxoEntry class', false, 'not found');
+                }
+                
+            } catch (error) {
+                logTest('UTXO and Output test failed', false, error.message);
+            }
+        };
+        
+        // 自動初期化
+        window.addEventListener('load', () => {
+            updateDisplay();
+        });
+        
+    </script>
+</body>
+</html>
