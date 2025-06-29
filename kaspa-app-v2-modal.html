@@ -212,6 +212,39 @@
             flex-shrink: 0;
         }
 
+        /* Header Settings Icons */
+        .header-settings {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .settings-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+
+        .settings-icon:hover {
+            background: var(--border);
+            transform: translateY(-1px);
+        }
+
+        .settings-icon.active {
+            background: var(--primary);
+            color: var(--bg-primary);
+            border-color: var(--primary);
+        }
+
         /* Google Drive Style Action Bar */
         .action-bar {
             display: flex;
@@ -782,6 +815,15 @@
                 </div>
 
                 <div class="balance-compact" id="balanceCompact">0 KAS</div>
+
+                <div class="header-settings">
+                    <div class="settings-icon" onclick="openWalletSettings()" title="Wallet Settings">
+                        👤
+                    </div>
+                    <div class="settings-icon" onclick="openAppSettings()" title="App Settings">
+                        ⚙️
+                    </div>
+                </div>
             </div>
         </div>
     </header>
@@ -876,6 +918,170 @@
             </div>
         </div>
     </main>
+
+    <!-- Wallet Settings Modal -->
+    <div class="modal-overlay" id="walletModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>👤</span>
+                    Wallet Settings
+                </div>
+                <button class="modal-close" onclick="closeWalletModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Wallet Info -->
+                <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 0.875rem; margin-bottom: 0.75rem; color: var(--text-secondary);">Current Wallet</h3>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(45deg, var(--primary), var(--accent)); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">💼</div>
+                        <div>
+                            <div style="font-size: 0.875rem; font-weight: 600;" id="walletModalAddress">kaspatest:qqk8m83y...</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);" id="walletModalBalance">0 KAS</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wallet Actions -->
+                <div class="form-group">
+                    <label class="form-label">Wallet Actions</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <button class="btn btn-secondary" onclick="exportPrivateKey()">
+                            <span>📋</span>
+                            Export Private Key
+                        </button>
+                        <button class="btn btn-secondary" onclick="refreshWalletBalance()">
+                            <span>🔄</span>
+                            Refresh Balance
+                        </button>
+                        <button class="btn btn-secondary" onclick="copyWalletAddress()">
+                            <span>📄</span>
+                            Copy Address
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Security Section -->
+                <div class="form-group">
+                    <label class="form-label">Security</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <button class="btn btn-secondary" onclick="changeAppPassword()">
+                            <span>🔐</span>
+                            Change App Password
+                        </button>
+                        <button class="btn btn-secondary" onclick="clearWalletData()" style="border-color: var(--error); color: var(--error);">
+                            <span>🗑️</span>
+                            Clear Wallet Data
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Disconnect Button -->
+                <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                    <button class="btn btn-secondary btn-block" onclick="disconnectWallet()" style="border-color: var(--error); color: var(--error);">
+                        <span>🚪</span>
+                        Disconnect Wallet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>⚙️</span>
+                    App Settings
+                </div>
+                <button class="modal-close" onclick="closeAppSettings()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Auto-Login Settings -->
+                <div class="form-group">
+                    <label class="form-label">Auto-Login Settings</label>
+                    <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem;">
+                        <div class="checkbox-group" style="flex-direction: column; align-items: flex-start; margin-bottom: 0;">
+                            <label class="checkbox-item">
+                                <div class="checkbox" id="settingsRememberWallet" onclick="toggleSettingsCheckbox(this)"></div>
+                                Remember Wallet Private Key
+                            </label>
+                            <label class="checkbox-item">
+                                <div class="checkbox" id="settingsRememberAppPass" onclick="toggleSettingsCheckbox(this)"></div>
+                                Remember App Password
+                            </label>
+                            <label class="checkbox-item">
+                                <div class="checkbox" id="settingsAutoLogin" onclick="toggleSettingsCheckbox(this)"></div>
+                                Enable Auto-Login on Next Visit
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Settings -->
+                <div class="form-group">
+                    <label class="form-label">Network Settings</label>
+                    <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.875rem;">Network:</span>
+                            <span style="font-size: 0.875rem; color: var(--primary);">Kaspa Testnet-10</span>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 0.875rem;">Status:</span>
+                            <span style="font-size: 0.875rem; color: var(--success);" id="networkStatus">Connected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storage Settings -->
+                <div class="form-group">
+                    <label class="form-label">File Storage</label>
+                    <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.875rem;">Default Fee:</span>
+                            <select style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; padding: 0.25rem; color: var(--text-primary); font-size: 0.75rem;" id="defaultFee">
+                                <option value="low">Low (0.01 KAS)</option>
+                                <option value="normal" selected>Normal (0.05 KAS)</option>
+                                <option value="high">High (0.1 KAS)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 0.875rem;">Files Stored:</span>
+                            <span style="font-size: 0.875rem; color: var(--primary);" id="totalFiles">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- App Info -->
+                <div class="form-group">
+                    <label class="form-label">Application Info</label>
+                    <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.875rem;">Version:</span>
+                            <span style="font-size: 0.875rem; color: var(--text-secondary);">2.0 Modal</span>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 0.875rem;">Last Login:</span>
+                            <span style="font-size: 0.875rem; color: var(--text-secondary);" id="lastLoginTime">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button class="btn btn-secondary" onclick="exportSettings()">
+                        <span>📤</span>
+                        Export Settings
+                    </button>
+                    <button class="btn btn-primary" onclick="saveAppSettings()">
+                        <span>💾</span>
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Upload Modal -->
     <div class="modal-overlay" id="uploadModal">
@@ -1120,6 +1326,55 @@
             document.getElementById('uploadModal').classList.remove('show');
             document.body.style.overflow = '';
             resetUploadForm();
+        };
+
+        // Wallet Settings Modal
+        window.openWalletSettings = function() {
+            if (!currentWallet) {
+                showAlert('warning', '⚠️ Please connect wallet first');
+                return;
+            }
+            
+            // Update wallet info in modal
+            const address = currentWallet.address.toString();
+            document.getElementById('walletModalAddress').textContent = address.substring(0, 20) + '...';
+            document.getElementById('walletModalBalance').textContent = `${Number(currentWallet.balance) / 100000000} KAS`;
+            
+            document.getElementById('walletModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeWalletModal = function() {
+            document.getElementById('walletModal').classList.remove('show');
+            document.body.style.overflow = '';
+        };
+
+        // App Settings Modal
+        window.openAppSettings = function() {
+            // Load current settings
+            const saved = localStorage.getItem('kaspa_wallet_settings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                document.getElementById('settingsRememberWallet').classList.toggle('checked', settings.walletPrivateKey);
+                document.getElementById('settingsRememberAppPass').classList.toggle('checked', settings.appPassword);
+                document.getElementById('settingsAutoLogin').classList.toggle('checked', settings.autoLogin);
+                document.getElementById('lastLoginTime').textContent = settings.lastLogin ? new Date(settings.lastLogin).toLocaleString() : '-';
+            }
+            
+            // Update file count
+            document.getElementById('totalFiles').textContent = getFileRecords().length;
+            
+            document.getElementById('settingsModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeAppSettings = function() {
+            document.getElementById('settingsModal').classList.remove('show');
+            document.body.style.overflow = '';
+        };
+
+        window.toggleSettingsCheckbox = function(checkbox) {
+            checkbox.classList.toggle('checked');
         };
 
         function resetUploadForm() {
@@ -1416,10 +1671,133 @@
             }, 200);
         };
 
-        // Close modal on overlay click
+        // Wallet Settings Actions
+        window.exportPrivateKey = function() {
+            if (!currentWallet) return;
+            
+            const privateKeyHex = currentWallet.privateKey.toString();
+            navigator.clipboard.writeText(privateKeyHex);
+            showAlert('success', '🔑 Private key copied to clipboard');
+        };
+
+        window.refreshWalletBalance = async function() {
+            if (!currentWallet) return;
+            
+            try {
+                const balanceInfo = await currentWallet.rpcClient.getBalanceByAddress(currentWallet.address.toString());
+                currentWallet.balance = BigInt(balanceInfo.balance || 0);
+                updateCompactUI();
+                
+                // Update modal display
+                document.getElementById('walletModalBalance').textContent = `${Number(currentWallet.balance) / 100000000} KAS`;
+                
+                showAlert('success', '✅ Balance refreshed');
+            } catch (error) {
+                showAlert('error', '❌ Failed to refresh balance');
+            }
+        };
+
+        window.copyWalletAddress = function() {
+            if (!currentWallet) return;
+            
+            navigator.clipboard.writeText(currentWallet.address.toString());
+            showAlert('success', '📋 Address copied to clipboard');
+        };
+
+        window.changeAppPassword = function() {
+            const newPassword = prompt('Enter new app password:');
+            if (newPassword) {
+                currentAppPassword = newPassword;
+                showAlert('success', '🔐 App password updated');
+            }
+        };
+
+        window.clearWalletData = function() {
+            if (confirm('Are you sure you want to clear all wallet data? This will remove saved settings and require re-login.')) {
+                localStorage.removeItem('kaspa_wallet_settings');
+                showAlert('success', '🗑️ Wallet data cleared');
+                closeWalletModal();
+            }
+        };
+
+        window.disconnectWallet = function() {
+            if (confirm('Are you sure you want to disconnect? You will need to reconnect to use the app.')) {
+                currentWallet = null;
+                currentAppPassword = null;
+                isConnected = false;
+                
+                // Switch back to setup mode
+                isSetupMode = true;
+                document.getElementById('compactMode').classList.add('hidden');
+                document.getElementById('setupMode').classList.remove('hidden');
+                document.getElementById('headerCompact').classList.add('hidden');
+                document.getElementById('headerSetup').classList.remove('hidden');
+                document.getElementById('header').className = 'header header-setup';
+                document.getElementById('mainContent').className = 'main';
+                
+                closeWalletModal();
+                showAlert('info', '👋 Wallet disconnected');
+            }
+        };
+
+        // App Settings Actions
+        window.saveAppSettings = function() {
+            const settings = {
+                rememberWallet: document.getElementById('settingsRememberWallet').classList.contains('checked'),
+                rememberAppPass: document.getElementById('settingsRememberAppPass').classList.contains('checked'),
+                autoLogin: document.getElementById('settingsAutoLogin').classList.contains('checked'),
+                defaultFee: document.getElementById('defaultFee').value
+            };
+            
+            // Update current settings if wallet is connected
+            if (currentWallet) {
+                const currentSettings = JSON.parse(localStorage.getItem('kaspa_wallet_settings') || '{}');
+                currentSettings.autoLogin = settings.autoLogin;
+                if (settings.rememberWallet && settings.rememberAppPass) {
+                    localStorage.setItem('kaspa_wallet_settings', JSON.stringify(currentSettings));
+                }
+            }
+            
+            showAlert('success', '💾 Settings saved successfully');
+            closeAppSettings();
+        };
+
+        window.exportSettings = function() {
+            const settings = {
+                defaultFee: document.getElementById('defaultFee').value,
+                totalFiles: getFileRecords().length,
+                exportDate: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(settings, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'kaspa-storage-settings.json';
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            showAlert('success', '📤 Settings exported');
+        };
+
+        // Close modals on overlay click
         document.getElementById('uploadModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeUploadModal();
+            }
+        });
+
+        document.getElementById('walletModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeWalletModal();
+            }
+        });
+
+        document.getElementById('settingsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAppSettings();
             }
         });
     </script>
