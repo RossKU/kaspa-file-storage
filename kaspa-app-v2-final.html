@@ -748,11 +748,21 @@
             }
             
             .storage-section {
-                gap: 0.5rem;
+                gap: 0.25rem;
+                min-width: 80px;
             }
             
             .storage-bar {
-                min-width: 60px;
+                min-width: 40px;
+                max-width: 60px;
+            }
+            
+            .storage-text {
+                font-size: 0.7rem;
+            }
+            
+            .balance-compact {
+                font-size: 0.7rem;
             }
             
             .action-bar {
@@ -830,6 +840,28 @@
             
             .action-bar-right {
                 gap: 0.125rem;
+            }
+            
+            /* Hide storage bar on very narrow screens to prevent overlap */
+            .storage-bar {
+                display: none;
+            }
+            
+            .storage-section {
+                min-width: 60px;
+            }
+            
+            .storage-text {
+                font-size: 0.65rem;
+            }
+            
+            .balance-compact {
+                font-size: 0.65rem;
+            }
+            
+            .header-content-compact {
+                gap: 0.25rem;
+                font-size: 0.8rem;
             }
             
             .new-button {
@@ -1427,9 +1459,20 @@
                 const fileRecords = getFileRecords();
                 const usedKB = fileRecords.reduce((total, file) => total + (file.size || 12), 0) / 1024; // Convert bytes to KB
                 
-                // Update display with proper format
-                document.getElementById('storageText').textContent = `${Math.floor(usedKB)}KB (used)`;
-                document.getElementById('balanceCompact').innerHTML = `<span>${totalCapacityMB.toFixed(1)}MB</span> / <span class="kas-balance">${balanceKAS.toFixed(1)}KAS</span>`;
+                // Smart unit conversion function
+                function formatCapacity(kb) {
+                    if (kb >= 1024 * 1024) {
+                        return `${(kb / (1024 * 1024)).toFixed(1)}GB`;
+                    } else if (kb >= 1024) {
+                        return `${(kb / 1024).toFixed(1)}MB`;
+                    } else {
+                        return `${Math.floor(kb)}KB`;
+                    }
+                }
+                
+                // Update display with smart unit formatting
+                document.getElementById('storageText').textContent = `${formatCapacity(usedKB)} (used)`;
+                document.getElementById('balanceCompact').innerHTML = `<span>${formatCapacity(totalCapacityKB)}</span> / <span class="kas-balance">${balanceKAS.toFixed(0)}KAS</span>`;
                 
                 // Update storage bar with actual usage percentage
                 const usedPercentage = Math.min((usedKB * 1024) / totalCapacityKB * 100, 100);
