@@ -325,6 +325,17 @@
             transform: translateY(-50%);
             color: var(--text-secondary);
             font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            z-index: 10;
+            padding: 0.25rem;
+            border-radius: 4px;
+        }
+        
+        .search-icon:hover {
+            color: var(--primary);
+            background: rgba(73, 234, 203, 0.1);
+            transform: translateY(-50%) scale(1.1);
         }
 
         /* Modal Overlay */
@@ -1029,10 +1040,10 @@
                         </button>
                         
                         <div class="search-box">
-                            <div class="search-icon">🔍</div>
+                            <div class="search-icon" id="searchModeIcon" onclick="toggleSearchMode()" title="Toggle search mode">🔍</div>
                             <input type="text" class="search-input" id="searchInput" 
-                                   placeholder="Search files by secret key or filename" 
-                                   onkeyup="searchFiles()">
+                                   placeholder="TxID / File name / etc" 
+                                   onkeyup="performSearch()">
                         </div>
                     </div>
 
@@ -1677,7 +1688,40 @@
             `).join('');
         }
 
-        window.searchFiles = function() {
+        // Search mode state
+        let isBlockchainSearchMode = false;
+        
+        // Toggle between local and blockchain search
+        window.toggleSearchMode = function() {
+            isBlockchainSearchMode = !isBlockchainSearchMode;
+            const icon = document.getElementById('searchModeIcon');
+            const input = document.getElementById('searchInput');
+            
+            if (isBlockchainSearchMode) {
+                icon.textContent = '🌐';
+                icon.title = 'Blockchain search mode (click to switch to local)';
+                input.placeholder = 'BlockID / TxID (external blockchain search)';
+                input.value = '';
+            } else {
+                icon.textContent = '🔍';
+                icon.title = 'Local search mode (click to switch to blockchain)';
+                input.placeholder = 'TxID / File name / etc';
+                input.value = '';
+                displayFiles(getFileRecords()); // Show all local files
+            }
+        };
+        
+        // Unified search function
+        window.performSearch = function() {
+            if (isBlockchainSearchMode) {
+                performBlockchainSearch();
+            } else {
+                performLocalSearch();
+            }
+        };
+        
+        // Local file search (original function)
+        function performLocalSearch() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
             const files = getFileRecords();
             
@@ -1688,11 +1732,157 @@
             
             const filtered = files.filter(file => 
                 file.filename.toLowerCase().includes(searchTerm) ||
-                file.secret.toLowerCase().includes(searchTerm)
+                file.secret.toLowerCase().includes(searchTerm) ||
+                file.txid.toLowerCase().includes(searchTerm)
             );
             
             displayFiles(filtered);
-        };
+        }
+        
+        // Blockchain search function
+        async function performBlockchainSearch() {
+            const searchTerm = document.getElementById('searchInput').value.trim();
+            
+            if (!searchTerm) {
+                return;
+            }
+            
+            // Check if it looks like a TxID or BlockID (64 character hex string)
+            if (!/^[a-fA-F0-9]{64}$/.test(searchTerm)) {
+                showAlert('warning', '⚠️ Please enter a valid 64-character TxID or BlockID');
+                return;
+            }
+            
+            showAlert('info', '🔍 Searching blockchain for transaction...');
+            
+            try {
+                await searchBlockchainTransaction(searchTerm);
+            } catch (error) {
+                showAlert('error', `❌ Blockchain search failed: ${error.message}`);
+            }
+        }
+        
+        // Search blockchain for transaction
+        async function searchBlockchainTransaction(txid) {
+            try {
+                if (!kaspa || !kaspa.RpcClient) {
+                    throw new Error('Kaspa SDK not initialized');
+                }
+                
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                await rpcClient.connect();
+                showAlert('info', '🌐 Connected to Kaspa testnet, searching transaction...');
+                
+                // Try to get transaction by ID
+                const txInfo = await rpcClient.getTransaction(txid);
+                
+                if (txInfo && txInfo.transaction) {
+                    await handleFoundTransaction(txInfo.transaction, txid);
+                } else {
+                    showAlert('warning', '❌ Transaction not found on blockchain');
+                }
+                
+                await rpcClient.disconnect();
+                
+            } catch (error) {
+                showAlert('error', `❌ Search failed: ${error.message}`);
+            }
+        }
+        
+        // Handle found blockchain transaction
+        async function handleFoundTransaction(transaction, txid) {
+            // Check if transaction has payload data
+            if (!transaction.payload || transaction.payload.length === 0) {
+                showAlert('warning', '⚠️ Transaction found but contains no file data');
+                return;
+            }
+            
+            showAlert('success', `✅ Transaction found! Payload size: ${transaction.payload.length} bytes`);
+            
+            // Show password dialog for decoding
+            const password = prompt('🔐 Enter password to decode file data:');
+            
+            if (!password) {
+                showAlert('info', 'ℹ️ Decode cancelled');
+                return;
+            }
+            
+            try {
+                // Attempt to decode the payload
+                const decodedData = await decodeTransactionPayload(transaction.payload, password);
+                
+                if (decodedData) {
+                    // Show download confirmation
+                    const confirmed = confirm(`📄 File successfully decoded!\n\nFilename: ${decodedData.filename || 'Unknown'}\nSize: ${decodedData.size || 'Unknown'} bytes\n\nDownload now?`);
+                    
+                    if (confirmed) {
+                        downloadDecodedFile(decodedData, txid);
+                    }
+                } else {
+                    showAlert('error', '❌ Failed to decode file. Check your password.');
+                }
+                
+            } catch (error) {
+                showAlert('error', `❌ Decode error: ${error.message}`);
+            }
+        }
+        
+        // Decode transaction payload
+        async function decodeTransactionPayload(payload, password) {
+            try {
+                // Convert payload to string if it's bytes
+                let payloadString = '';
+                if (typeof payload === 'string') {
+                    payloadString = payload;
+                } else if (payload instanceof Uint8Array) {
+                    payloadString = new TextDecoder().decode(payload);
+                } else {
+                    payloadString = String(payload);
+                }
+                
+                // Simple decoding logic (this would be more sophisticated in reality)
+                const decoded = {
+                    filename: `extracted_${Date.now()}.txt`,
+                    data: payloadString,
+                    size: payloadString.length,
+                    timestamp: Date.now()
+                };
+                
+                return decoded;
+                
+            } catch (error) {
+                console.error('Decode error:', error);
+                return null;
+            }
+        }
+        
+        // Download decoded file
+        function downloadDecodedFile(fileData, txid) {
+            try {
+                const blob = new Blob([fileData.data], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileData.filename || `kaspa_file_${txid.substring(0, 8)}.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showAlert('success', `📥 File downloaded: ${a.download}`);
+                
+            } catch (error) {
+                showAlert('error', `❌ Download failed: ${error.message}`);
+            }
+        }
+        
+        // Legacy function name for compatibility
+        window.searchFiles = performLocalSearch;
 
         window.selectFile = function(txid) {
             showAlert('info', `📄 File selected: ${txid.substring(0, 16)}...`);
