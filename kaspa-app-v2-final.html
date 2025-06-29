@@ -1309,7 +1309,7 @@
     </div>
 
     <!-- Alert Container -->
-    <div id="alertContainer" style="position: fixed; top: 1rem; right: 1rem; z-index: 9999; max-width: 400px;"></div>
+    <!-- Toast notifications are now dynamically created -->
 
     <script type="module">
         // Global state
@@ -1945,36 +1945,114 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
+        // BOX-style toast notification system
         function showAlert(type, message) {
-            const container = document.getElementById('alertContainer');
-            const alert = document.createElement('div');
-            alert.style.cssText = `
-                padding: 1rem;
-                background: ${type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 
-                            type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 
-                            'rgba(245, 158, 11, 0.1)'};
-                border: 1px solid ${type === 'success' ? 'var(--success)' : 
-                                  type === 'error' ? 'var(--error)' : 
-                                  'var(--warning)'};
-                border-radius: 8px;
-                color: ${type === 'success' ? 'var(--success)' : 
-                         type === 'error' ? 'var(--error)' : 
-                         'var(--warning)'};
-                margin-bottom: 0.5rem;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                animation: slideIn 0.3s ease-out;
+            // Create toast container if it doesn't exist
+            let toastContainer = document.getElementById('toastContainer');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toastContainer';
+                toastContainer.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    z-index: 10000;
+                    pointer-events: none;
+                    max-width: 400px;
+                `;
+                document.body.appendChild(toastContainer);
+            }
+            
+            // Create the toast message
+            const toast = document.createElement('div');
+            const toastId = 'toast_' + Date.now();
+            toast.id = toastId;
+            
+            // Style configurations for different types
+            const typeConfig = {
+                success: { 
+                    bg: 'linear-gradient(135deg, #10b981, #059669)', 
+                    icon: '✅', 
+                    color: '#ffffff'
+                },
+                error: { 
+                    bg: 'linear-gradient(135deg, #ef4444, #dc2626)', 
+                    icon: '❌', 
+                    color: '#ffffff'
+                },
+                warning: { 
+                    bg: 'linear-gradient(135deg, #f59e0b, #d97706)', 
+                    icon: '⚠️', 
+                    color: '#ffffff'
+                },
+                info: { 
+                    bg: 'linear-gradient(135deg, #3b82f6, #2563eb)', 
+                    icon: 'ℹ️', 
+                    color: '#ffffff'
+                }
+            };
+            
+            const config = typeConfig[type] || typeConfig.info;
+            
+            toast.style.cssText = `
+                background: ${config.bg};
+                color: ${config.color};
+                padding: 1rem 1.25rem;
+                border-radius: 12px;
+                margin-bottom: 0.75rem;
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2), 0 6px 12px rgba(0, 0, 0, 0.15);
+                transform: translateX(100%);
+                transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+                pointer-events: auto;
+                cursor: pointer;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                min-width: 300px;
+                max-width: 100%;
+                font-weight: 500;
+                font-size: 0.9rem;
             `;
             
-            alert.innerHTML = `
-                <span>${message}</span>
-                <button onclick="this.parentElement.remove()" 
-                        style="background: none; border: none; color: inherit; cursor: pointer; padding: 0;">✕</button>
+            toast.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <span style="font-size: 1.2rem; flex-shrink: 0;">${config.icon}</span>
+                    <span style="flex: 1; line-height: 1.4;">${message}</span>
+                    <span style="font-size: 1.1rem; opacity: 0.8; cursor: pointer; padding: 0.25rem;" 
+                          onclick="removeToast('${toastId}')">✕</span>
+                </div>
             `;
             
-            container.appendChild(alert);
-            setTimeout(() => alert.remove(), 5000);
+            // Add click to dismiss
+            toast.onclick = () => removeToast(toastId);
+            
+            // Insert at the top of the container
+            toastContainer.insertBefore(toast, toastContainer.firstChild);
+            
+            // Trigger slide-in animation
+            setTimeout(() => {
+                toast.style.transform = 'translateX(0)';
+            }, 10);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                removeToast(toastId);
+            }, 5000);
+            
+            return toastId;
+        }
+        
+        // Remove toast with slide-out animation
+        function removeToast(toastId) {
+            const toast = document.getElementById(toastId);
+            if (toast) {
+                toast.style.transform = 'translateX(100%)';
+                toast.style.opacity = '0';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }
         }
 
         // Placeholder upload function
