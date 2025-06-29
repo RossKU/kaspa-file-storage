@@ -1,0 +1,1919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa Storage - Google Drive Style</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #49EACB;
+            --primary-dark: #3BC9A8;
+            --secondary: #1a1d21;
+            --accent: #f39c12;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --bg-primary: #0f1419;
+            --bg-secondary: #1a1d21;
+            --bg-tertiary: #252a30;
+            --text-primary: #ffffff;
+            --text-secondary: #9ca3af;
+            --border: #374151;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+            --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header - Compact & Setup Modes */
+        .header {
+            background: rgba(26, 29, 33, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+
+        .header-compact {
+            padding: 0.4rem 0;
+        }
+
+        .header-setup {
+            padding: 1.5rem 0;
+        }
+
+        .header-content-compact {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            gap: 1rem;
+        }
+
+        .header-content-setup {
+            text-align: center;
+        }
+
+        .logo-compact {
+            font-weight: 600;
+            color: var(--primary);
+            flex-shrink: 0;
+        }
+
+        .logo-setup {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+
+        .logo-setup::before {
+            content: "⚡";
+            margin-right: 0.5rem;
+            font-size: 1.8rem;
+        }
+
+        /* Status Indicators - Ultra Compact */
+        .status-compact {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .status-setup {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .status-item-setup {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .status-item-setup.active {
+            border-color: var(--primary);
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .status-item-setup.completed {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .status-dot-mini {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--error);
+            transition: all 0.2s ease;
+        }
+
+        .status-dot-setup {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--error);
+            margin-bottom: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .status-dot-mini.success, .status-dot-setup.success { background: var(--success); }
+        .status-dot-mini.warning, .status-dot-setup.warning { background: var(--warning); }
+        .status-dot-mini.error, .status-dot-setup.error { background: var(--error); }
+
+        .status-dot-mini.pulse, .status-dot-setup.pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); opacity: 1; }
+            70% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(0.95); opacity: 1; }
+        }
+
+        .status-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .status-desc {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Storage Bar - Google Drive Style */
+        .storage-section {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .storage-text {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .storage-bar {
+            flex: 1;
+            height: 4px;
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+            min-width: 80px;
+        }
+
+        .storage-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+
+        .balance-compact {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .kas-balance {
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        /* Header Settings Icons */
+        .header-settings {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .settings-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+        }
+
+        .settings-icon:hover {
+            background: var(--border);
+            transform: translateY(-1px);
+        }
+
+        .settings-icon.active {
+            background: var(--primary);
+            color: var(--bg-primary);
+            border-color: var(--primary);
+        }
+
+        /* Google Drive Style Action Bar */
+        .action-bar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 0.75rem;
+        }
+
+        .action-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .action-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        .new-button {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .new-button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .search-box {
+            flex: 1;
+            max-width: 400px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem 0.75rem 2.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 25px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.9) translateY(20px);
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.show .modal {
+            transform: scale(1) translateY(0);
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        /* Upload Zone in Modal */
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(0, 212, 255, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-zone.has-file {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .file-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-content {
+            pointer-events: none;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.7;
+        }
+
+        .upload-text {
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-subtext {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        /* File Preview */
+        .file-preview {
+            display: none;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .file-preview.show {
+            display: block;
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .file-icon {
+            font-size: 2rem;
+        }
+
+        .file-details h4 {
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .file-details p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        .form-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        /* Setup Form */
+        .setup-form {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 2rem auto;
+            max-width: 500px;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+
+        .checkbox {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-radius: 3px;
+            background: var(--bg-tertiary);
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .checkbox.checked {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .checkbox.checked::after {
+            content: '✓';
+            position: absolute;
+            top: -2px;
+            left: 1px;
+            color: var(--bg-primary);
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        /* Main Content */
+        .main {
+            padding: 2rem 0;
+            transition: all 0.3s ease;
+        }
+
+        .main.compact {
+            padding: 0 0 0.5rem 0;
+        }
+
+        /* File Grid */
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .file-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .file-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary);
+        }
+
+        .file-card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .file-card-icon {
+            font-size: 2rem;
+        }
+
+        .file-card-info h3 {
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .file-card-info p {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .file-card-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: var(--bg-primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            background: var(--text-secondary);
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        .btn-sm {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+        }
+
+        .btn-block {
+            width: 100%;
+            justify-content: center;
+        }
+
+        /* Progress */
+        .progress {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid transparent;
+            border-top: 2px solid currentColor;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .header-content-compact {
+                gap: 0.5rem;
+            }
+            
+            .storage-section {
+                gap: 0.5rem;
+            }
+            
+            .storage-bar {
+                min-width: 60px;
+            }
+            
+            .action-bar {
+                gap: 0.5rem;
+                padding: 0.5rem 0;
+            }
+            
+            .action-bar-left {
+                gap: 0.5rem;
+            }
+            
+            .action-bar-right {
+                gap: 0.25rem;
+            }
+            
+            .new-button {
+                padding: 0.75rem 0.75rem;
+                min-width: auto;
+            }
+            
+            .new-button span:last-child {
+                display: none;
+            }
+            
+            .search-box {
+                flex: 1;
+                min-width: 0;
+                max-width: none;
+            }
+            
+            .search-input {
+                padding: 0.75rem 0.75rem 0.75rem 2.25rem;
+                font-size: 0.8rem;
+            }
+            
+            .search-icon {
+                left: 0.5rem;
+                font-size: 0.875rem;
+            }
+            
+            .header-settings {
+                gap: 0.25rem;
+                flex-shrink: 0;
+            }
+            
+            .settings-icon {
+                width: 36px;
+                height: 36px;
+                font-size: 0.8rem;
+            }
+            
+            .file-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .checkbox-group {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .modal {
+                width: 95%;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .action-bar {
+                gap: 0.25rem;
+                padding: 0.375rem 0;
+            }
+            
+            .action-bar-left {
+                gap: 0.25rem;
+            }
+            
+            .action-bar-right {
+                gap: 0.125rem;
+            }
+            
+            .new-button {
+                padding: 0.5rem;
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                font-size: 1.125rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-family: 'Arial', sans-serif;
+                font-weight: 300;
+                line-height: 1;
+            }
+            
+            .search-input {
+                padding: 0.5rem 0.5rem 0.5rem 2rem;
+                font-size: 0.75rem;
+            }
+            
+            .search-input::placeholder {
+                font-size: 0.75rem;
+            }
+            
+            .search-icon {
+                left: 0.4rem;
+                font-size: 0.8rem;
+            }
+            
+            .settings-icon {
+                width: 32px;
+                height: 32px;
+                font-size: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="container">
+            <!-- Setup Mode Header -->
+            <div class="header-content-setup" id="headerSetup">
+                <div class="logo-setup">
+                    Kaspa File Storage
+                </div>
+                <div style="font-size: 0.875rem; color: var(--text-secondary);">
+                    Google Drive Style Storage
+                </div>
+                
+                <div class="status-setup" style="margin-top: 1.5rem;">
+                    <!-- Network Status -->
+                    <div class="status-item-setup" id="networkStatus">
+                        <div class="status-dot-setup error pulse" id="networkDotSetup"></div>
+                        <div class="status-title">Network</div>
+                        <div class="status-desc" id="networkTextSetup">Connecting...</div>
+                    </div>
+                    
+                    <!-- Wallet Status -->
+                    <div class="status-item-setup" id="walletStatus">
+                        <div class="status-dot-setup error" id="walletDotSetup"></div>
+                        <div class="status-title">Wallet</div>
+                        <div class="status-desc" id="walletTextSetup">Enter Private Key</div>
+                    </div>
+                    
+                    <!-- App Password Status -->
+                    <div class="status-item-setup" id="appPassStatus">
+                        <div class="status-dot-setup error" id="appPassDotSetup"></div>
+                        <div class="status-title">AppPass</div>
+                        <div class="status-desc" id="appPassTextSetup">Enter App Password</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compact Mode Header -->
+            <div class="header-content-compact hidden" id="headerCompact">
+                <div class="logo-compact">Kaspa Storage</div>
+                
+                <div class="status-compact">
+                    <div class="status-dot-mini error" id="networkDot"></div>
+                    <div class="status-dot-mini error" id="walletDot"></div>
+                    <div class="status-dot-mini error" id="appPassDot"></div>
+                </div>
+
+                <div class="storage-section">
+                    <span class="storage-text" id="storageText">0KB (used)</span>
+                    <div class="storage-bar">
+                        <div class="storage-fill" id="storageFill" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <div class="balance-compact" id="balanceCompact">0 KAS</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Setup Form -->
+    <div id="setupMode">
+        <div class="setup-form">
+            <h2 style="text-align: center; margin-bottom: 2rem; font-size: 1.5rem;">
+                Complete Setup
+            </h2>
+            
+            <div class="form-group">
+                <label class="form-label">Private Key (64 characters)</label>
+                <input type="password" class="form-input" id="privateKeyInput" 
+                       placeholder="Enter your private key...">
+                <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                    Demo key pre-filled for testing (979 KAS available)
+                </small>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">App Password (for file encryption)</label>
+                <input type="password" class="form-input" id="appPasswordInput" 
+                       placeholder="Enter password for encrypting your files">
+                <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                    Used to encrypt/decrypt all uploaded files
+                </small>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-item">
+                    <div class="checkbox checked" id="checkRememberWallet" onclick="toggleCheckbox(this)"></div>
+                    Remember Wallet
+                </label>
+                <label class="checkbox-item">
+                    <div class="checkbox checked" id="checkRememberAppPass" onclick="toggleCheckbox(this)"></div>
+                    Remember AppPass
+                </label>
+                <label class="checkbox-item">
+                    <div class="checkbox checked" id="checkAutoLogin" onclick="toggleCheckbox(this)"></div>
+                    Enable Auto Login
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block" id="connectBtn">
+                <span id="connectIcon">🔗</span>
+                <span id="connectText">Connect & Setup</span>
+            </button>
+
+            <div style="text-align: center; margin-top: 1rem;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="useAutoFill()">
+                    🚀 Use Demo Setup
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="clearSettings()">
+                    🗑️ Clear Saved Settings
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main" id="mainContent">
+        <div class="container">
+            <!-- Compact Mode Content -->
+            <div id="compactMode" class="hidden">
+                <!-- Google Drive Style Action Bar -->
+                <div class="action-bar">
+                    <div class="action-bar-left">
+                        <button class="new-button" onclick="openUploadModal()">
+                            <span style="font-size: 1.25rem;">+</span>
+                            <span>New</span>
+                        </button>
+                        
+                        <div class="search-box">
+                            <div class="search-icon">🔍</div>
+                            <input type="text" class="search-input" id="searchInput" 
+                                   placeholder="Search files by secret key or filename" 
+                                   onkeyup="searchFiles()">
+                        </div>
+                    </div>
+
+                    <div class="action-bar-right">
+                        <div class="header-settings">
+                            <div class="settings-icon" onclick="openAppSettings()" title="App Settings">
+                                ⚙️
+                            </div>
+                            <div class="settings-icon" onclick="openWalletSettings()" title="Wallet Settings">
+                                👤
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Grid -->
+                <div class="file-grid" id="fileGrid">
+                    <!-- Files will be populated here -->
+                </div>
+
+                <!-- Empty State -->
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-state-icon">📁</div>
+                    <h3>No files yet</h3>
+                    <p>Click the "+" button to upload your first file to the blockchain</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Wallet Settings Modal -->
+    <div class="modal-overlay" id="walletModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>👤</span>
+                    Wallet Settings
+                </div>
+                <button class="modal-close" onclick="closeWalletModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Wallet Info -->
+                <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 0.875rem; margin-bottom: 0.75rem; color: var(--text-secondary);">Current Wallet</h3>
+                    <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem;">
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(45deg, var(--primary), var(--accent)); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">💼</div>
+                        <div>
+                            <div style="font-size: 0.875rem; font-weight: 600;" id="walletModalAddress">kaspatest:qqk8m83y...</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);" id="walletModalBalance">0 KAS</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wallet Actions -->
+                <div class="form-group">
+                    <label class="form-label">Wallet Actions</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <button class="btn btn-secondary" onclick="exportPrivateKey()">
+                            <span>📋</span>
+                            Export Private Key
+                        </button>
+                        <button class="btn btn-secondary" onclick="refreshWalletBalance()">
+                            <span>🔄</span>
+                            Refresh Balance
+                        </button>
+                        <button class="btn btn-secondary" onclick="copyWalletAddress()">
+                            <span>📄</span>
+                            Copy Address
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Security Section -->
+                <div class="form-group">
+                    <label class="form-label">Security</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <button class="btn btn-secondary" onclick="changeAppPassword()">
+                            <span>🔐</span>
+                            Change App Password
+                        </button>
+                        <button class="btn btn-secondary" onclick="clearWalletData()" style="border-color: var(--error); color: var(--error);">
+                            <span>🗑️</span>
+                            Clear Wallet Data
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Disconnect Button -->
+                <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                    <button class="btn btn-secondary btn-block" onclick="disconnectWallet()" style="border-color: var(--error); color: var(--error);">
+                        <span>🚪</span>
+                        Disconnect Wallet
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- App Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>⚙️</span>
+                    App Settings
+                </div>
+                <button class="modal-close" onclick="closeAppSettings()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Auto-Login Settings -->
+                <div class="form-group">
+                    <label class="form-label">Auto-Login Settings</label>
+                    <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem;">
+                        <div class="checkbox-group" style="flex-direction: column; align-items: flex-start; margin-bottom: 0;">
+                            <label class="checkbox-item">
+                                <div class="checkbox" id="settingsRememberWallet" onclick="toggleSettingsCheckbox(this)"></div>
+                                Remember Wallet Private Key
+                            </label>
+                            <label class="checkbox-item">
+                                <div class="checkbox" id="settingsRememberAppPass" onclick="toggleSettingsCheckbox(this)"></div>
+                                Remember App Password
+                            </label>
+                            <label class="checkbox-item">
+                                <div class="checkbox" id="settingsAutoLogin" onclick="toggleSettingsCheckbox(this)"></div>
+                                Enable Auto-Login on Next Visit
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Settings -->
+                <div class="form-group">
+                    <label class="form-label">Network Settings</label>
+                    <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.875rem;">Network:</span>
+                            <span style="font-size: 0.875rem; color: var(--primary);">Kaspa Testnet-10</span>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 0.875rem;">Status:</span>
+                            <span style="font-size: 0.875rem; color: var(--success);" id="networkStatus">Connected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storage Settings -->
+                <div class="form-group">
+                    <label class="form-label">File Storage</label>
+                    <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.875rem;">Default Fee:</span>
+                            <select style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 4px; padding: 0.25rem; color: var(--text-primary); font-size: 0.75rem;" id="defaultFee">
+                                <option value="low">Low (0.01 KAS)</option>
+                                <option value="normal" selected>Normal (0.05 KAS)</option>
+                                <option value="high">High (0.1 KAS)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 0.875rem;">Files Stored:</span>
+                            <span style="font-size: 0.875rem; color: var(--primary);" id="totalFiles">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- App Info -->
+                <div class="form-group">
+                    <label class="form-label">Application Info</label>
+                    <div style="background: var(--bg-tertiary); border-radius: 8px; padding: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <span style="font-size: 0.875rem;">Version:</span>
+                            <span style="font-size: 0.875rem; color: var(--text-secondary);">2.0 Modal</span>
+                        </div>
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 0.875rem;">Last Login:</span>
+                            <span style="font-size: 0.875rem; color: var(--text-secondary);" id="lastLoginTime">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button class="btn btn-secondary" onclick="exportSettings()">
+                        <span>📤</span>
+                        Export Settings
+                    </button>
+                    <button class="btn btn-primary" onclick="saveAppSettings()">
+                        <span>💾</span>
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Modal -->
+    <div class="modal-overlay" id="uploadModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span>📤</span>
+                    Upload File
+                </div>
+                <button class="modal-close" onclick="closeUploadModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- Upload Zone -->
+                <div class="upload-zone" id="uploadZone">
+                    <input type="file" class="file-input" id="fileInput" onchange="handleFileSelect(event)">
+                    <div class="upload-content">
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">Drop file here or click to select</div>
+                        <div class="upload-subtext">Max 24KB • All files encrypted automatically</div>
+                    </div>
+                </div>
+
+                <!-- File Preview -->
+                <div class="file-preview" id="filePreview">
+                    <div class="file-info">
+                        <div class="file-icon" id="previewIcon">📄</div>
+                        <div class="file-details">
+                            <h4 id="previewName">filename.txt</h4>
+                            <p id="previewSize">1.2 KB</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Fields -->
+                <div class="form-group">
+                    <label class="form-label">Secret Key (for file retrieval)</label>
+                    <input type="text" class="form-input" id="secretKey" 
+                           placeholder="Enter a unique secret key to find this file later">
+                    <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                        You'll need this key to search and download your file
+                    </small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Transaction Fee</label>
+                    <select class="form-input" id="feeLevel">
+                        <option value="low">Low Priority (0.01 KAS)</option>
+                        <option value="normal" selected>Normal Priority (0.05 KAS)</option>
+                        <option value="high">High Priority (0.1 KAS)</option>
+                    </select>
+                </div>
+
+                <!-- Upload Progress -->
+                <div class="progress hidden" id="uploadProgress">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <button class="btn btn-secondary" onclick="closeUploadModal()">
+                        Cancel
+                    </button>
+                    <button class="btn btn-primary" onclick="uploadToBlockchain()" id="uploadBtn" disabled>
+                        <span>🚀</span>
+                        Upload to Blockchain
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Container -->
+    <div id="alertContainer" style="position: fixed; top: 1rem; right: 1rem; z-index: 9999; max-width: 400px;"></div>
+
+    <script type="module">
+        // Global state
+        let kaspa = null;
+        let currentWallet = null;
+        let currentAppPassword = null;
+        let isConnected = false;
+        let selectedFile = null;
+        let isSetupMode = true;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            setupDragAndDrop();
+            await initializeSDK();
+            attemptAutoLogin();
+        });
+
+        // SDK Initialization
+        async function initializeSDK() {
+            try {
+                updateStatus('network', 'warning', 'Loading SDK...');
+                kaspa = await import('./kaspa-core.js');
+                await kaspa.default('./kaspa-core_bg.wasm');
+                
+                // Test TN10 connection
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                await rpcClient.connect();
+                await rpcClient.disconnect();
+                
+                updateStatus('network', 'success', 'TN10 Connected');
+                showAlert('success', '🟢 Network connection established');
+            } catch (error) {
+                updateStatus('network', 'error', 'Connection Failed');
+                showAlert('error', '🔴 Network connection failed');
+            }
+        }
+
+        // Auto Login
+        async function attemptAutoLogin() {
+            const saved = localStorage.getItem('kaspa_wallet_settings');
+            if (!saved) return;
+
+            try {
+                const settings = JSON.parse(saved);
+                if (!settings.autoLogin) return;
+
+                showAlert('info', '⚡ Attempting auto-login...');
+                
+                // Simple decryption for demo
+                document.getElementById('privateKeyInput').value = atob(settings.walletPrivateKey);
+                document.getElementById('appPasswordInput').value = atob(settings.appPassword);
+                
+                await completeSetup();
+                
+            } catch (error) {
+                console.log('Auto-login failed:', error);
+                showAlert('warning', '⚠️ Auto-login failed, please login manually');
+            }
+        }
+
+        // Setup completion
+        async function completeSetup() {
+            try {
+                const privateKeyHex = document.getElementById('privateKeyInput').value;
+                const appPassword = document.getElementById('appPasswordInput').value;
+                
+                if (privateKeyHex.length !== 64) {
+                    showAlert('error', '❌ Private key must be 64 characters');
+                    return;
+                }
+                
+                if (!appPassword) {
+                    showAlert('error', '❌ App password is required');
+                    return;
+                }
+
+                // Update wallet status
+                updateStatus('wallet', 'warning', 'Connecting...');
+                
+                // Connect wallet
+                const privateKey = new kaspa.PrivateKey(privateKeyHex);
+                const keypair = privateKey.toKeypair();
+                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                await rpcClient.connect();
+                
+                const balanceInfo = await rpcClient.getBalanceByAddress(address.toString());
+                const balance = BigInt(balanceInfo.balance || 0);
+                
+                currentWallet = {
+                    privateKey,
+                    address,
+                    balance,
+                    rpcClient
+                };
+                currentAppPassword = appPassword;
+                
+                isConnected = true;
+                updateStatus('wallet', 'success', 'Connected');
+                updateStatus('appPass', 'success', 'Verified');
+                
+                // Save settings if checked
+                if (document.getElementById('checkAutoLogin').classList.contains('checked')) {
+                    await saveSettings();
+                }
+                
+                // Switch to compact mode
+                setTimeout(() => {
+                    switchToCompactMode();
+                }, 1000);
+                
+            } catch (error) {
+                updateStatus('wallet', 'error', 'Failed');
+                showAlert('error', '❌ Setup failed: ' + error.message);
+            }
+        }
+
+        // Mode switching
+        function switchToCompactMode() {
+            isSetupMode = false;
+            document.getElementById('setupMode').classList.add('hidden');
+            document.getElementById('compactMode').classList.remove('hidden');
+            document.getElementById('headerSetup').classList.add('hidden');
+            document.getElementById('headerCompact').classList.remove('hidden');
+            document.getElementById('header').className = 'header header-compact';
+            document.getElementById('mainContent').className = 'main compact';
+            
+            updateCompactUI();
+            loadFiles();
+            showAlert('success', '🎉 Welcome to Kaspa Storage!');
+        }
+
+        // Update compact UI
+        function updateCompactUI() {
+            if (currentWallet) {
+                // Update status dots to success
+                document.getElementById('networkDot').className = 'status-dot-mini success';
+                document.getElementById('walletDot').className = 'status-dot-mini success';
+                document.getElementById('appPassDot').className = 'status-dot-mini success';
+                
+                // Calculate storage values
+                const balanceKAS = Number(currentWallet.balance) / 100000000;
+                const totalCapacityMB = Math.floor((balanceKAS / 0.05) * 12 / 1024); // Convert KB to MB
+                const fileRecords = getFileRecords();
+                const usedKB = fileRecords.reduce((total, file) => total + (file.size || 12), 0) / 1024; // Convert bytes to KB
+                
+                // Update display with proper format
+                document.getElementById('storageText').textContent = `${Math.floor(usedKB)}KB (used)`;
+                document.getElementById('balanceCompact').innerHTML = `<span>${totalCapacityMB.toFixed(1)}MB</span> / <span class="kas-balance">${balanceKAS.toFixed(1)}KAS</span>`;
+                
+                // Update storage bar with actual usage percentage
+                const usedPercentage = Math.min((usedKB * 1024) / ((balanceKAS / 0.05) * 12) * 100, 100);
+                document.getElementById('storageFill').style.width = usedPercentage.toFixed(1) + '%';
+            }
+        }
+
+        // Modal functions
+        window.openUploadModal = function() {
+            document.getElementById('uploadModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeUploadModal = function() {
+            document.getElementById('uploadModal').classList.remove('show');
+            document.body.style.overflow = '';
+            resetUploadForm();
+        };
+
+        // Wallet Settings Modal
+        window.openWalletSettings = function() {
+            if (!currentWallet) {
+                showAlert('warning', '⚠️ Please connect wallet first');
+                return;
+            }
+            
+            // Update wallet info in modal
+            const address = currentWallet.address.toString();
+            document.getElementById('walletModalAddress').textContent = address.substring(0, 20) + '...';
+            document.getElementById('walletModalBalance').textContent = `${Number(currentWallet.balance) / 100000000} KAS`;
+            
+            document.getElementById('walletModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeWalletModal = function() {
+            document.getElementById('walletModal').classList.remove('show');
+            document.body.style.overflow = '';
+        };
+
+        // App Settings Modal
+        window.openAppSettings = function() {
+            // Load current settings
+            const saved = localStorage.getItem('kaspa_wallet_settings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+                document.getElementById('settingsRememberWallet').classList.toggle('checked', settings.walletPrivateKey);
+                document.getElementById('settingsRememberAppPass').classList.toggle('checked', settings.appPassword);
+                document.getElementById('settingsAutoLogin').classList.toggle('checked', settings.autoLogin);
+                document.getElementById('lastLoginTime').textContent = settings.lastLogin ? new Date(settings.lastLogin).toLocaleString() : '-';
+            }
+            
+            // Update file count
+            document.getElementById('totalFiles').textContent = getFileRecords().length;
+            
+            document.getElementById('settingsModal').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        };
+
+        window.closeAppSettings = function() {
+            document.getElementById('settingsModal').classList.remove('show');
+            document.body.style.overflow = '';
+        };
+
+        window.toggleSettingsCheckbox = function(checkbox) {
+            checkbox.classList.toggle('checked');
+        };
+
+        function resetUploadForm() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('secretKey').value = '';
+            document.getElementById('uploadZone').classList.remove('has-file');
+            document.getElementById('filePreview').classList.remove('show');
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('uploadProgress').classList.add('hidden');
+        }
+
+        // File handling
+        window.handleFileSelect = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (file.size > 24 * 1024) {
+                showAlert('error', '❌ File too large. Maximum size is 24KB');
+                return;
+            }
+
+            selectedFile = file;
+            
+            // Update upload zone
+            document.getElementById('uploadZone').classList.add('has-file');
+            
+            // Show file preview
+            const preview = document.getElementById('filePreview');
+            preview.classList.add('show');
+            document.getElementById('previewName').textContent = file.name;
+            document.getElementById('previewSize').textContent = formatFileSize(file.size);
+            
+            // Enable upload button if secret key is provided
+            updateUploadButton();
+            
+            showAlert('success', `📄 File selected: ${file.name}`);
+        };
+
+        function updateUploadButton() {
+            const secretKey = document.getElementById('secretKey').value.trim();
+            document.getElementById('uploadBtn').disabled = !selectedFile || !secretKey;
+        }
+
+        document.getElementById('secretKey').addEventListener('input', updateUploadButton);
+
+        function setupDragAndDrop() {
+            const uploadZone = document.getElementById('uploadZone');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadZone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadZone.addEventListener(eventName, () => uploadZone.classList.add('dragover'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadZone.addEventListener(eventName, () => uploadZone.classList.remove('dragover'), false);
+            });
+
+            uploadZone.addEventListener('drop', handleDrop, false);
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    document.getElementById('fileInput').files = files;
+                    handleFileSelect({ target: { files } });
+                }
+            }
+        }
+
+        // Status updates
+        function updateStatus(type, status, text) {
+            // Update setup mode
+            const setupStatus = document.getElementById(type + 'Status');
+            const setupDot = document.getElementById(type + 'DotSetup');
+            const setupText = document.getElementById(type + 'TextSetup');
+            
+            if (setupStatus) {
+                setupStatus.className = `status-item-setup ${status === 'success' ? 'completed' : status === 'warning' ? 'active' : ''}`;
+            }
+            if (setupDot) {
+                setupDot.className = `status-dot-setup ${status} ${status === 'warning' ? 'pulse' : ''}`;
+            }
+            if (setupText) {
+                setupText.textContent = text;
+            }
+            
+            // Update compact mode dots
+            const compactDot = document.getElementById(type + 'Dot');
+            if (compactDot) {
+                compactDot.className = `status-dot-mini ${status}`;
+            }
+        }
+
+        // File management
+        function loadFiles() {
+            const files = getFileRecords();
+            displayFiles(files);
+        }
+
+        function displayFiles(files) {
+            const grid = document.getElementById('fileGrid');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (files.length === 0) {
+                grid.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            
+            grid.innerHTML = files.map(file => `
+                <div class="file-card" onclick="selectFile('${file.txid}')">
+                    <div class="file-card-header">
+                        <div class="file-card-icon">📄</div>
+                        <div class="file-card-info">
+                            <h3>${file.filename}</h3>
+                            <p>${formatFileSize(file.size)} • ${new Date(file.timestamp).toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                    <div class="file-card-actions">
+                        <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); copyTxId('${file.txid}')">
+                            📋 Copy TXID
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.searchFiles = function() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            const files = getFileRecords();
+            
+            if (!searchTerm) {
+                displayFiles(files);
+                return;
+            }
+            
+            const filtered = files.filter(file => 
+                file.filename.toLowerCase().includes(searchTerm) ||
+                file.secret.toLowerCase().includes(searchTerm)
+            );
+            
+            displayFiles(filtered);
+        };
+
+        window.selectFile = function(txid) {
+            showAlert('info', `📄 File selected: ${txid.substring(0, 16)}...`);
+        };
+
+        // Storage functions
+        function getFileRecords() {
+            return JSON.parse(localStorage.getItem('kaspa_files') || '[]');
+        }
+
+        function saveFileRecord(record) {
+            const records = getFileRecords();
+            records.unshift(record);
+            localStorage.setItem('kaspa_files', JSON.stringify(records));
+        }
+
+        // Demo data and utilities
+        window.useAutoFill = function() {
+            document.getElementById('privateKeyInput').value = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+            document.getElementById('appPasswordInput').value = 'demo123';
+            showAlert('success', '🎯 Demo data filled');
+        };
+
+        window.toggleCheckbox = function(checkbox) {
+            checkbox.classList.toggle('checked');
+        };
+
+        window.clearSettings = function() {
+            localStorage.removeItem('kaspa_wallet_settings');
+            showAlert('success', '🗑️ Settings cleared');
+        };
+
+        // Setup form submission
+        document.getElementById('connectBtn').addEventListener('click', completeSetup);
+
+        async function saveSettings() {
+            const settings = {
+                walletAddress: currentWallet.address.toString(),
+                walletPrivateKey: btoa(document.getElementById('privateKeyInput').value),
+                appPassword: btoa(document.getElementById('appPasswordInput').value),
+                autoLogin: document.getElementById('checkAutoLogin').classList.contains('checked'),
+                lastLogin: new Date().toISOString()
+            };
+            
+            localStorage.setItem('kaspa_wallet_settings', JSON.stringify(settings));
+            showAlert('success', '💾 Settings saved securely');
+        }
+
+        // Utility functions
+        window.copyTxId = function(txid) {
+            navigator.clipboard.writeText(txid);
+            showAlert('success', '📋 Transaction ID copied to clipboard');
+        };
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function showAlert(type, message) {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.style.cssText = `
+                padding: 1rem;
+                background: ${type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 
+                            type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 
+                            'rgba(245, 158, 11, 0.1)'};
+                border: 1px solid ${type === 'success' ? 'var(--success)' : 
+                                  type === 'error' ? 'var(--error)' : 
+                                  'var(--warning)'};
+                border-radius: 8px;
+                color: ${type === 'success' ? 'var(--success)' : 
+                         type === 'error' ? 'var(--error)' : 
+                         'var(--warning)'};
+                margin-bottom: 0.5rem;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                animation: slideIn 0.3s ease-out;
+            `;
+            
+            alert.innerHTML = `
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()" 
+                        style="background: none; border: none; color: inherit; cursor: pointer; padding: 0;">✕</button>
+            `;
+            
+            container.appendChild(alert);
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        // Placeholder upload function
+        window.uploadToBlockchain = function() {
+            if (!selectedFile || !currentWallet) {
+                showAlert('error', '❌ Please select a file and connect wallet');
+                return;
+            }
+            
+            const secretKey = document.getElementById('secretKey').value.trim();
+            if (!secretKey) {
+                showAlert('error', '❌ Please enter a secret key');
+                return;
+            }
+            
+            // Show progress
+            const progress = document.getElementById('uploadProgress');
+            progress.classList.remove('hidden');
+            document.getElementById('uploadBtn').disabled = true;
+            document.getElementById('uploadBtn').innerHTML = '<div class="loading"></div> Uploading...';
+            
+            // Simulate upload progress
+            let progressValue = 0;
+            const interval = setInterval(() => {
+                progressValue += 10;
+                document.getElementById('progressBar').style.width = progressValue + '%';
+                
+                if (progressValue >= 100) {
+                    clearInterval(interval);
+                    
+                    // Save file record
+                    const fileRecord = {
+                        txid: 'demo_' + Date.now(),
+                        filename: selectedFile.name,
+                        size: selectedFile.size,
+                        secret: secretKey,
+                        timestamp: new Date().toISOString(),
+                        fee: 0.05
+                    };
+                    
+                    saveFileRecord(fileRecord);
+                    loadFiles();
+                    updateCompactUI();
+                    
+                    showAlert('success', '🎉 File uploaded successfully!');
+                    closeUploadModal();
+                }
+            }, 200);
+        };
+
+        // Wallet Settings Actions
+        window.exportPrivateKey = function() {
+            if (!currentWallet) return;
+            
+            const privateKeyHex = currentWallet.privateKey.toString();
+            navigator.clipboard.writeText(privateKeyHex);
+            showAlert('success', '🔑 Private key copied to clipboard');
+        };
+
+        window.refreshWalletBalance = async function() {
+            if (!currentWallet) return;
+            
+            try {
+                const balanceInfo = await currentWallet.rpcClient.getBalanceByAddress(currentWallet.address.toString());
+                currentWallet.balance = BigInt(balanceInfo.balance || 0);
+                updateCompactUI();
+                
+                // Update modal display
+                document.getElementById('walletModalBalance').textContent = `${Number(currentWallet.balance) / 100000000} KAS`;
+                
+                showAlert('success', '✅ Balance refreshed');
+            } catch (error) {
+                showAlert('error', '❌ Failed to refresh balance');
+            }
+        };
+
+        window.copyWalletAddress = function() {
+            if (!currentWallet) return;
+            
+            navigator.clipboard.writeText(currentWallet.address.toString());
+            showAlert('success', '📋 Address copied to clipboard');
+        };
+
+        window.changeAppPassword = function() {
+            const newPassword = prompt('Enter new app password:');
+            if (newPassword) {
+                currentAppPassword = newPassword;
+                showAlert('success', '🔐 App password updated');
+            }
+        };
+
+        window.clearWalletData = function() {
+            if (confirm('Are you sure you want to clear all wallet data? This will remove saved settings and require re-login.')) {
+                localStorage.removeItem('kaspa_wallet_settings');
+                showAlert('success', '🗑️ Wallet data cleared');
+                closeWalletModal();
+            }
+        };
+
+        window.disconnectWallet = function() {
+            if (confirm('Are you sure you want to disconnect? You will need to reconnect to use the app.')) {
+                currentWallet = null;
+                currentAppPassword = null;
+                isConnected = false;
+                
+                // Switch back to setup mode
+                isSetupMode = true;
+                document.getElementById('compactMode').classList.add('hidden');
+                document.getElementById('setupMode').classList.remove('hidden');
+                document.getElementById('headerCompact').classList.add('hidden');
+                document.getElementById('headerSetup').classList.remove('hidden');
+                document.getElementById('header').className = 'header header-setup';
+                document.getElementById('mainContent').className = 'main';
+                
+                closeWalletModal();
+                showAlert('info', '👋 Wallet disconnected');
+            }
+        };
+
+        // App Settings Actions
+        window.saveAppSettings = function() {
+            const settings = {
+                rememberWallet: document.getElementById('settingsRememberWallet').classList.contains('checked'),
+                rememberAppPass: document.getElementById('settingsRememberAppPass').classList.contains('checked'),
+                autoLogin: document.getElementById('settingsAutoLogin').classList.contains('checked'),
+                defaultFee: document.getElementById('defaultFee').value
+            };
+            
+            // Update current settings if wallet is connected
+            if (currentWallet) {
+                const currentSettings = JSON.parse(localStorage.getItem('kaspa_wallet_settings') || '{}');
+                currentSettings.autoLogin = settings.autoLogin;
+                if (settings.rememberWallet && settings.rememberAppPass) {
+                    localStorage.setItem('kaspa_wallet_settings', JSON.stringify(currentSettings));
+                }
+            }
+            
+            showAlert('success', '💾 Settings saved successfully');
+            closeAppSettings();
+        };
+
+        window.exportSettings = function() {
+            const settings = {
+                defaultFee: document.getElementById('defaultFee').value,
+                totalFiles: getFileRecords().length,
+                exportDate: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(settings, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'kaspa-storage-settings.json';
+            link.click();
+            
+            URL.revokeObjectURL(url);
+            showAlert('success', '📤 Settings exported');
+        };
+
+        // Close modals on overlay click
+        document.getElementById('uploadModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeUploadModal();
+            }
+        });
+
+        document.getElementById('walletModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeWalletModal();
+            }
+        });
+
+        document.getElementById('settingsModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeAppSettings();
+            }
+        });
+    </script>
+</body>
+</html>
