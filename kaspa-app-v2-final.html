@@ -1414,9 +1414,16 @@
                 document.getElementById('walletDot').className = 'status-dot-mini success';
                 document.getElementById('appPassDot').className = 'status-dot-mini success';
                 
-                // Calculate storage values
+                // Calculate storage values with correct fee structure
                 const balanceKAS = Number(currentWallet.balance) / 100000000;
-                const totalCapacityMB = Math.floor((balanceKAS / 0.05) * 12 / 1024); // Convert KB to MB
+                // Correct fee: BaseFee 0.00005 + PayloadFee 0.00001 per KB
+                // For 20KB: 0.00005 + (20 * 0.00001) = 0.00025 KAS total
+                const baseFeeKAS = 0.00005; // Fixed base fee
+                const payloadFeePerKB = 0.00001; // Fee per KB
+                const avgPayloadKB = 20; // Average payload size
+                const avgTotalFee = baseFeeKAS + (avgPayloadKB * payloadFeePerKB); // 0.00025 KAS
+                const totalCapacityKB = Math.floor(balanceKAS / avgTotalFee * avgPayloadKB); // KAS ÷ 0.00025 * 20KB
+                const totalCapacityMB = totalCapacityKB / 1024; // Convert KB to MB
                 const fileRecords = getFileRecords();
                 const usedKB = fileRecords.reduce((total, file) => total + (file.size || 12), 0) / 1024; // Convert bytes to KB
                 
@@ -1425,7 +1432,7 @@
                 document.getElementById('balanceCompact').innerHTML = `<span>${totalCapacityMB.toFixed(1)}MB</span> / <span class="kas-balance">${balanceKAS.toFixed(1)}KAS</span>`;
                 
                 // Update storage bar with actual usage percentage
-                const usedPercentage = Math.min((usedKB * 1024) / ((balanceKAS / 0.05) * 12) * 100, 100);
+                const usedPercentage = Math.min((usedKB * 1024) / totalCapacityKB * 100, 100);
                 document.getElementById('storageFill').style.width = usedPercentage.toFixed(1) + '%';
             }
         }
