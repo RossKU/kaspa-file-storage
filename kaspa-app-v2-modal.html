@@ -255,6 +255,21 @@
             margin-bottom: 2rem;
         }
 
+        .action-bar-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .action-bar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
         .new-button {
             display: flex;
             align-items: center;
@@ -740,6 +755,14 @@
                 padding: 0.75rem 0;
             }
             
+            .action-bar-left {
+                gap: 0.5rem;
+            }
+            
+            .action-bar-right {
+                gap: 0.25rem;
+            }
+            
             .new-button {
                 padding: 0.75rem 0.75rem;
                 min-width: auto;
@@ -794,6 +817,14 @@
             .action-bar {
                 gap: 0.25rem;
                 padding: 0.5rem 0;
+            }
+            
+            .action-bar-left {
+                gap: 0.25rem;
+            }
+            
+            .action-bar-right {
+                gap: 0.125rem;
             }
             
             .new-button {
@@ -948,24 +979,28 @@
             <div id="compactMode" class="hidden">
                 <!-- Google Drive Style Action Bar -->
                 <div class="action-bar">
-                    <button class="new-button" onclick="openUploadModal()">
-                        <span style="font-size: 1.25rem;">+</span>
-                        <span>New</span>
-                    </button>
-                    
-                    <div class="search-box">
-                        <div class="search-icon">🔍</div>
-                        <input type="text" class="search-input" id="searchInput" 
-                               placeholder="Search files by secret key or filename" 
-                               onkeyup="searchFiles()">
+                    <div class="action-bar-left">
+                        <button class="new-button" onclick="openUploadModal()">
+                            <span style="font-size: 1.25rem;">+</span>
+                            <span>New</span>
+                        </button>
+                        
+                        <div class="search-box">
+                            <div class="search-icon">🔍</div>
+                            <input type="text" class="search-input" id="searchInput" 
+                                   placeholder="Search files by secret key or filename" 
+                                   onkeyup="searchFiles()">
+                        </div>
                     </div>
 
-                    <div class="header-settings">
-                        <div class="settings-icon" onclick="openAppSettings()" title="App Settings">
-                            ⚙️
-                        </div>
-                        <div class="settings-icon" onclick="openWalletSettings()" title="Wallet Settings">
-                            👤
+                    <div class="action-bar-right">
+                        <div class="header-settings">
+                            <div class="settings-icon" onclick="openAppSettings()" title="App Settings">
+                                ⚙️
+                            </div>
+                            <div class="settings-icon" onclick="openWalletSettings()" title="Wallet Settings">
+                                👤
+                            </div>
                         </div>
                     </div>
                 </div>
