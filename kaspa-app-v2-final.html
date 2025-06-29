@@ -299,6 +299,14 @@
             flex: 1;
             max-width: 400px;
             position: relative;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .search-input-container {
+            flex: 1;
+            position: relative;
         }
 
         .search-input {
@@ -336,6 +344,87 @@
             color: var(--primary);
             background: rgba(73, 234, 203, 0.1);
             transform: translateY(-50%) scale(1.1);
+        }
+
+        /* Filter Button */
+        .filter-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            color: var(--text-secondary);
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .filter-button:hover {
+            color: var(--primary);
+            background: rgba(73, 234, 203, 0.1);
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        .filter-button.active {
+            color: var(--primary);
+            background: rgba(73, 234, 203, 0.2);
+            border-color: var(--primary);
+        }
+
+        .filter-button.active::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            border: 2px solid var(--bg-primary);
+        }
+
+        /* Filter Chips */
+        .filter-chip {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 0.375rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .filter-chip:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            background: rgba(73, 234, 203, 0.1);
+        }
+
+        .filter-chip.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: var(--bg-primary);
+        }
+
+        /* Filter Animation */
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         /* Modal Overlay */
@@ -802,6 +891,13 @@
                 flex: 1;
                 min-width: 0;
                 max-width: none;
+                gap: 0.25rem;
+            }
+            
+            .filter-button {
+                width: 32px;
+                height: 32px;
+                font-size: 0.875rem;
             }
             
             .search-input {
@@ -1040,10 +1136,18 @@
                         </button>
                         
                         <div class="search-box">
-                            <div class="search-icon" id="searchModeIcon" onclick="toggleSearchMode()" title="Toggle search mode">🔍</div>
-                            <input type="text" class="search-input" id="searchInput" 
-                                   placeholder="TxID / File name / etc" 
-                                   onkeyup="performSearch()">
+                            <div class="search-input-container">
+                                <div class="search-icon" id="searchModeIcon" onclick="toggleSearchMode()" title="Toggle search mode">🔍</div>
+                                <input type="text" class="search-input" id="searchInput" 
+                                       placeholder="TxID / File name / etc" 
+                                       onkeyup="performSearch()">
+                            </div>
+                            <div class="filter-button" id="filterButton" onclick="toggleFilterMenu()" title="Search filters">
+                                <span style="position: relative;">
+                                    ☰
+                                    <span style="position: absolute; top: -4px; right: -6px; font-size: 8px;">●</span>
+                                </span>
+                            </div>
                         </div>
                     </div>
 
@@ -1690,6 +1794,12 @@
 
         // Search mode state
         let isBlockchainSearchMode = false;
+        let isFilterMenuOpen = false;
+        let searchFilters = {
+            fileType: 'all', // 'all', 'image', 'text', 'data'
+            dateRange: 'all', // 'all', 'today', 'week', 'month'
+            sizeRange: 'all'  // 'all', 'small', 'medium', 'large'
+        };
         
         // Toggle between local and blockchain search
         window.toggleSearchMode = function() {
@@ -1711,6 +1821,161 @@
             }
         };
         
+        // Toggle filter menu
+        window.toggleFilterMenu = function() {
+            const filterButton = document.getElementById('filterButton');
+            
+            if (isFilterMenuOpen) {
+                hideFilterMenu();
+            } else {
+                showFilterMenu();
+            }
+        };
+        
+        function showFilterMenu() {
+            if (document.getElementById('filterDropdown')) return;
+            
+            isFilterMenuOpen = true;
+            const filterButton = document.getElementById('filterButton');
+            filterButton.classList.add('active');
+            
+            const dropdown = document.createElement('div');
+            dropdown.id = 'filterDropdown';
+            dropdown.style.cssText = `
+                position: absolute;
+                top: calc(100% + 8px);
+                right: 0;
+                background: var(--bg-secondary);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                box-shadow: var(--shadow-lg);
+                padding: 1rem;
+                min-width: 240px;
+                z-index: 1000;
+                animation: fadeInDown 0.2s ease-out;
+            `;
+            
+            dropdown.innerHTML = `
+                <div style="margin-bottom: 1rem;">
+                    <div style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">File Type</div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="filter-chip ${searchFilters.fileType === 'all' ? 'active' : ''}" onclick="setFilter('fileType', 'all')">All</button>
+                        <button class="filter-chip ${searchFilters.fileType === 'image' ? 'active' : ''}" onclick="setFilter('fileType', 'image')">Image</button>
+                        <button class="filter-chip ${searchFilters.fileType === 'text' ? 'active' : ''}" onclick="setFilter('fileType', 'text')">Text</button>
+                        <button class="filter-chip ${searchFilters.fileType === 'data' ? 'active' : ''}" onclick="setFilter('fileType', 'data')">Data</button>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 1rem;">
+                    <div style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">Date Range</div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="filter-chip ${searchFilters.dateRange === 'all' ? 'active' : ''}" onclick="setFilter('dateRange', 'all')">All</button>
+                        <button class="filter-chip ${searchFilters.dateRange === 'today' ? 'active' : ''}" onclick="setFilter('dateRange', 'today')">Today</button>
+                        <button class="filter-chip ${searchFilters.dateRange === 'week' ? 'active' : ''}" onclick="setFilter('dateRange', 'week')">Week</button>
+                        <button class="filter-chip ${searchFilters.dateRange === 'month' ? 'active' : ''}" onclick="setFilter('dateRange', 'month')">Month</button>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 1rem;">
+                    <div style="font-weight: 500; margin-bottom: 0.5rem; color: var(--text-primary);">File Size</div>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="filter-chip ${searchFilters.sizeRange === 'all' ? 'active' : ''}" onclick="setFilter('sizeRange', 'all')">All</button>
+                        <button class="filter-chip ${searchFilters.sizeRange === 'small' ? 'active' : ''}" onclick="setFilter('sizeRange', 'small')">&lt;1KB</button>
+                        <button class="filter-chip ${searchFilters.sizeRange === 'medium' ? 'active' : ''}" onclick="setFilter('sizeRange', 'medium')">1-10KB</button>
+                        <button class="filter-chip ${searchFilters.sizeRange === 'large' ? 'active' : ''}" onclick="setFilter('sizeRange', 'large')">&gt;10KB</button>
+                    </div>
+                </div>
+                
+                <div style="border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem;">
+                    <button onclick="clearAllFilters()" style="
+                        background: transparent;
+                        border: 1px solid var(--border);
+                        color: var(--text-secondary);
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        font-size: 0.8rem;
+                        cursor: pointer;
+                        width: 100%;
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.borderColor='var(--primary)'; this.style.color='var(--primary)'" 
+                       onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-secondary)'">
+                        Clear All Filters
+                    </button>
+                </div>
+            `;
+            
+            filterButton.style.position = 'relative';
+            filterButton.appendChild(dropdown);
+            
+            setTimeout(() => {
+                document.addEventListener('click', closeMenuOnOutsideClick);
+            }, 100);
+        }
+        
+        function hideFilterMenu() {
+            const dropdown = document.getElementById('filterDropdown');
+            const filterButton = document.getElementById('filterButton');
+            
+            if (dropdown) {
+                dropdown.remove();
+            }
+            
+            if (filterButton) {
+                filterButton.classList.remove('active');
+            }
+            
+            isFilterMenuOpen = false;
+            document.removeEventListener('click', closeMenuOnOutsideClick);
+        }
+        
+        function closeMenuOnOutsideClick(event) {
+            const filterButton = document.getElementById('filterButton');
+            
+            if (filterButton && !filterButton.contains(event.target)) {
+                hideFilterMenu();
+            }
+        }
+        
+        window.setFilter = function(category, value) {
+            searchFilters[category] = value;
+            updateFilterUI();
+            applyFilters();
+        };
+        
+        window.clearAllFilters = function() {
+            searchFilters = {
+                fileType: 'all',
+                dateRange: 'all', 
+                sizeRange: 'all'
+            };
+            updateFilterUI();
+            applyFilters();
+        };
+        
+        function updateFilterUI() {
+            const dropdown = document.getElementById('filterDropdown');
+            if (!dropdown) return;
+            
+            dropdown.querySelectorAll('.filter-chip').forEach(chip => {
+                chip.classList.remove('active');
+            });
+            
+            const activeFilters = Object.values(searchFilters);
+            dropdown.querySelectorAll('.filter-chip').forEach(chip => {
+                const filterValue = chip.textContent.toLowerCase();
+                if (activeFilters.includes(filterValue) || 
+                    (filterValue === 'all' && Object.values(searchFilters).some(f => f === 'all'))) {
+                    chip.classList.add('active');
+                }
+            });
+        }
+        
+        function applyFilters() {
+            if (!isBlockchainSearchMode) {
+                performLocalSearch();
+            }
+        }
+        
         // Unified search function
         window.performSearch = function() {
             if (isBlockchainSearchMode) {
@@ -1720,23 +1985,83 @@
             }
         };
         
-        // Local file search (original function)
+        // Local file search with filters
         function performLocalSearch() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
-            const files = getFileRecords();
+            let files = getFileRecords();
             
-            if (!searchTerm) {
-                displayFiles(files);
-                return;
+            // Apply filters first
+            files = applySearchFilters(files);
+            
+            // Apply search term if provided
+            if (searchTerm) {
+                files = files.filter(file => 
+                    file.filename.toLowerCase().includes(searchTerm) ||
+                    file.secret.toLowerCase().includes(searchTerm) ||
+                    file.txid.toLowerCase().includes(searchTerm)
+                );
             }
             
-            const filtered = files.filter(file => 
-                file.filename.toLowerCase().includes(searchTerm) ||
-                file.secret.toLowerCase().includes(searchTerm) ||
-                file.txid.toLowerCase().includes(searchTerm)
-            );
+            displayFiles(files);
+        }
+        
+        // Apply search filters
+        function applySearchFilters(files) {
+            let filtered = [...files];
             
-            displayFiles(filtered);
+            // File type filter
+            if (searchFilters.fileType !== 'all') {
+                filtered = filtered.filter(file => {
+                    const filename = file.filename.toLowerCase();
+                    switch (searchFilters.fileType) {
+                        case 'image':
+                            return /\.(jpg|jpeg|png|gif|bmp|svg|webp)$/.test(filename);
+                        case 'text':
+                            return /\.(txt|md|json|csv|log|xml|html)$/.test(filename);
+                        case 'data':
+                            return !/\.(jpg|jpeg|png|gif|bmp|svg|webp|txt|md|json|csv|log|xml|html)$/.test(filename);
+                        default:
+                            return true;
+                    }
+                });
+            }
+            
+            // Date filter
+            if (searchFilters.dateRange !== 'all') {
+                const now = Date.now();
+                filtered = filtered.filter(file => {
+                    const fileDate = new Date(file.timestamp).getTime();
+                    switch (searchFilters.dateRange) {
+                        case 'today':
+                            return now - fileDate < 24 * 60 * 60 * 1000;
+                        case 'week':
+                            return now - fileDate < 7 * 24 * 60 * 60 * 1000;
+                        case 'month':
+                            return now - fileDate < 30 * 24 * 60 * 60 * 1000;
+                        default:
+                            return true;
+                    }
+                });
+            }
+            
+            // Size filter
+            if (searchFilters.sizeRange !== 'all') {
+                filtered = filtered.filter(file => {
+                    const sizeKB = file.size / 1024;
+                    switch (searchFilters.sizeRange) {
+                        case 'small':
+                            return sizeKB < 1;
+                        case 'medium':
+                            return sizeKB >= 1 && sizeKB <= 10;
+                        case 'large':
+                            return sizeKB > 10;
+                        default:
+                            return true;
+                    }
+                });
+            }
+            
+            return filtered;
         }
         
         // Blockchain search function
