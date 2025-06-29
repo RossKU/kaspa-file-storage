@@ -339,11 +339,23 @@
                 return;
             }
             
+            // 正しい手数料内訳: BaseFee 0.00005 + PayloadFee 0.0002(20KB) = 0.00025 KAS
+            const baseFeeKAS = 0.00005; // 固定基本手数料
+            const payloadFeePerKB = 0.00001; // 0.0002 KAS ÷ 20KB = 0.00001 KAS per KB
+            const testPayloadKB = 20;
+            const estimatedPayloadFee = testPayloadKB * payloadFeePerKB;
+            const estimatedTotalFee = baseFeeKAS + estimatedPayloadFee;
+            
             // 確認プロンプト
             const confirmed = confirm(
                 '🧪 PAYLOAD SIZE LIMIT TEST 🧪\\n\\n' +
                 'This will send multiple transactions with decreasing payload sizes.\\n' +
                 'Starting from 50KB, decreasing by 1KB each time until success.\\n\\n' +
+                'Fee calculation breakdown:\\n' +
+                `- Base fee: ${baseFeeKAS} KAS (fixed)\\n` +
+                `- Payload fee: ${payloadFeePerKB} KAS per KB\\n` +
+                `- 20KB total: ${baseFeeKAS} + ${estimatedPayloadFee} = ${estimatedTotalFee} KAS\\n` +
+                `- 10KB total: ${baseFeeKAS} + ${(10 * payloadFeePerKB).toFixed(5)} = ${(baseFeeKAS + 10 * payloadFeePerKB).toFixed(5)} KAS\\n\\n` +
                 'Expected behavior:\\n' +
                 '- 50KB: Mass error (too large)\\n' +
                 '- Decreasing until success found\\n' +
@@ -380,6 +392,13 @@
                     
                     logTest(`Testing ${sizeKB}KB payload...`, true, `Generating ${currentSize} bytes`);
                     
+                    // 手数料予測表示
+                    const expectedPayloadKB = Math.ceil(currentSize / 1000);
+                    const expectedBaseFee = 0.00005;
+                    const expectedPayloadFee = expectedPayloadKB * 0.00001;
+                    const expectedTotalFee = expectedBaseFee + expectedPayloadFee;
+                    logTest(`Expected fee breakdown`, true, `Base: ${expectedBaseFee} + Payload: ${expectedPayloadFee.toFixed(5)} = ${expectedTotalFee.toFixed(5)} KAS`);
+                    
                     try {
                         // RPC接続
                         const rpcClient = new kaspa.RpcClient({
@@ -401,7 +420,11 @@
                         
                         // トランザクション設定
                         const transferAmount = 500000000n; // 5 KAS
-                        const lowPriorityFee = 1000000n;   // 0.01 KAS (ゆっくり手数料)
+                        // 正しい手数料計算: BaseFee 0.00005 + PayloadFee 0.00001*KB
+                        const payloadKB = Math.ceil(currentSize / 1000);
+                        const baseFee = 5000n; // 0.00005 KAS基本手数料
+                        const payloadFee = BigInt(Math.floor(payloadKB * 0.00001 * 100000000)); // 0.00001 KAS per KB
+                        const totalFee = baseFee + payloadFee;
                         
                         // UTXO形式変換
                         const formattedUtxos = utxoEntries.map(utxo => ({
@@ -424,7 +447,7 @@
                                 amount: transferAmount
                             }],
                             changeAddress: address.toString(),
-                            priorityFee: lowPriorityFee,
+                            priorityFee: totalFee,
                             networkId: "testnet-10",
                             payload: randomPayload
                         });
@@ -487,7 +510,13 @@
                 
                 if (largestSuccessSize > 0) {
                     const efficiency = Math.round((largestSuccessSize / 100000) * 100);
+                    const payloadFeePerKB = 0.00001; // KAS per KB
+                    const baseFeeKAS = 0.00005; // 固定基本手数料
+                    const maxSizeKB = Math.round(largestSuccessSize / 1000);
+                    const payloadCost = maxSizeKB * payloadFeePerKB;
+                    const totalCost = baseFeeKAS + payloadCost;
                     logTest('Mass efficiency', true, `~${efficiency}% of theoretical 100KB limit`);
+                    logTest('Cost efficiency', true, `${maxSizeKB}KB = ${baseFeeKAS} + ${payloadCost.toFixed(5)} = ${totalCost.toFixed(5)} KAS total`);
                 }
                 
                 let stopReason = '';
