@@ -736,13 +736,44 @@
             }
             
             .action-bar {
-                flex-direction: column;
-                gap: 1rem;
-                align-items: stretch;
+                gap: 0.5rem;
+                padding: 0.75rem 0;
+            }
+            
+            .new-button {
+                padding: 0.75rem 0.75rem;
+                min-width: auto;
+            }
+            
+            .new-button span:last-child {
+                display: none;
             }
             
             .search-box {
+                flex: 1;
+                min-width: 0;
                 max-width: none;
+            }
+            
+            .search-input {
+                padding: 0.75rem 0.75rem 0.75rem 2.25rem;
+                font-size: 0.8rem;
+            }
+            
+            .search-icon {
+                left: 0.5rem;
+                font-size: 0.875rem;
+            }
+            
+            .header-settings {
+                gap: 0.25rem;
+                flex-shrink: 0;
+            }
+            
+            .settings-icon {
+                width: 36px;
+                height: 36px;
+                font-size: 0.8rem;
             }
             
             .file-grid {
@@ -756,6 +787,41 @@
             
             .modal {
                 width: 95%;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .action-bar {
+                gap: 0.25rem;
+                padding: 0.5rem 0;
+            }
+            
+            .new-button {
+                padding: 0.5rem;
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+                font-size: 1.125rem;
+            }
+            
+            .search-input {
+                padding: 0.5rem 0.5rem 0.5rem 2rem;
+                font-size: 0.75rem;
+            }
+            
+            .search-input::placeholder {
+                font-size: 0.75rem;
+            }
+            
+            .search-icon {
+                left: 0.4rem;
+                font-size: 0.8rem;
+            }
+            
+            .settings-icon {
+                width: 32px;
+                height: 32px;
+                font-size: 0.75rem;
             }
         }
     </style>
