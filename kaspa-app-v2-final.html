@@ -1412,6 +1412,60 @@
                             ✗ External reference only (like peer-to-peer networks)
                         </small>
                     </div>
+
+                    <div class="checkbox-group" style="margin: 1rem 0 0.5rem 0;">
+                        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="enableTxIdMining" checked style="margin: 0;" onchange="toggleTxIdMining()">
+                            <span style="color: var(--text-primary); font-size: 0.875rem;">TxID Mining (Enable Search Discovery)</span>
+                        </label>
+                        <small style="color: var(--text-secondary); font-size: 0.75rem; margin-left: 1.25rem; display: block;">
+                            ✓ Embed pattern in TxID for searchability<br>
+                            ✗ Generate random TxID (hidden from search)
+                        </small>
+                        
+                        <div id="txIdMiningOptions" style="margin: 0.75rem 0 0 1.25rem; display: block;">
+                            <div style="margin-bottom: 0.5rem;">
+                                <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">Mining Pattern (10 chars fixed):</label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <button type="button" id="defaultPatternBtn" onclick="setMiningPattern('default')" style="
+                                        padding: 0.25rem 0.5rem;
+                                        background: var(--primary);
+                                        border: 1px solid var(--primary);
+                                        color: var(--bg-primary);
+                                        border-radius: 4px;
+                                        font-size: 0.7rem;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                    ">Default (0000000000)</button>
+                                    <button type="button" id="customPatternBtn" onclick="setMiningPattern('custom')" style="
+                                        padding: 0.25rem 0.5rem;
+                                        background: transparent;
+                                        border: 1px solid var(--border);
+                                        color: var(--text-secondary);
+                                        border-radius: 4px;
+                                        font-size: 0.7rem;
+                                        cursor: pointer;
+                                        transition: all 0.2s ease;
+                                    ">Custom</button>
+                                </div>
+                            </div>
+                            <input type="text" id="customMiningPattern" placeholder="Enter 10 hex chars (0-9, a-f)" 
+                                   maxlength="10" style="
+                                width: 100%;
+                                padding: 0.5rem;
+                                background: var(--bg-tertiary);
+                                border: 1px solid var(--border);
+                                border-radius: 4px;
+                                color: var(--text-primary);
+                                font-size: 0.75rem;
+                                font-family: monospace;
+                                display: none;
+                            " oninput="validateMiningPattern(this)">
+                            <small style="color: var(--text-secondary); font-size: 0.65rem; margin-top: 0.25rem; display: block;">
+                                Pattern will be embedded at positions 8-17 of the TxID for search filtering
+                            </small>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Danger Zone -->
@@ -1738,6 +1792,11 @@
             
             // Reset danger mode UI
             updateDangerModeUI(false);
+            
+            // Reset TxID Mining
+            document.getElementById('enableTxIdMining').checked = true;
+            document.getElementById('txIdMiningOptions').style.display = 'block';
+            setMiningPattern('default');
         }
 
         // File handling
@@ -1820,6 +1879,78 @@
                 uploadBtn.style.borderColor = '';
                 uploadBtn.innerHTML = '<span>🚀</span> Upload to Blockchain';
             }
+        }
+
+        // TxID Mining functions
+        window.toggleTxIdMining = function() {
+            const isEnabled = document.getElementById('enableTxIdMining').checked;
+            const options = document.getElementById('txIdMiningOptions');
+            
+            if (isEnabled) {
+                options.style.display = 'block';
+                showAlert('info', '🔍 TxID Mining enabled - File will be discoverable via search');
+            } else {
+                options.style.display = 'none';
+                showAlert('warning', '🔒 TxID Mining disabled - File will be hidden from search');
+            }
+        };
+
+        window.setMiningPattern = function(mode) {
+            const defaultBtn = document.getElementById('defaultPatternBtn');
+            const customBtn = document.getElementById('customPatternBtn');
+            const customInput = document.getElementById('customMiningPattern');
+            
+            if (mode === 'default') {
+                defaultBtn.style.background = 'var(--primary)';
+                defaultBtn.style.borderColor = 'var(--primary)';
+                defaultBtn.style.color = 'var(--bg-primary)';
+                
+                customBtn.style.background = 'transparent';
+                customBtn.style.borderColor = 'var(--border)';
+                customBtn.style.color = 'var(--text-secondary)';
+                
+                customInput.style.display = 'none';
+                customInput.value = '';
+            } else {
+                customBtn.style.background = 'var(--primary)';
+                customBtn.style.borderColor = 'var(--primary)';
+                customBtn.style.color = 'var(--bg-primary)';
+                
+                defaultBtn.style.background = 'transparent';
+                defaultBtn.style.borderColor = 'var(--border)';
+                defaultBtn.style.color = 'var(--text-secondary)';
+                
+                customInput.style.display = 'block';
+                customInput.focus();
+            }
+        };
+
+        window.validateMiningPattern = function(input) {
+            const value = input.value.toLowerCase();
+            const validHex = /^[0-9a-f]*$/;
+            
+            if (!validHex.test(value)) {
+                // Remove invalid characters
+                input.value = value.replace(/[^0-9a-f]/g, '');
+                showAlert('warning', '⚠️ Only hex characters (0-9, a-f) allowed');
+                return;
+            }
+            
+            if (value.length === 10) {
+                showAlert('success', `✅ Mining pattern set: ${value}`);
+            }
+        };
+
+        function getCurrentMiningPattern() {
+            const isEnabled = document.getElementById('enableTxIdMining').checked;
+            if (!isEnabled) return null;
+            
+            const customInput = document.getElementById('customMiningPattern');
+            if (customInput.style.display === 'block' && customInput.value.length === 10) {
+                return customInput.value.toLowerCase();
+            }
+            
+            return '0000000000'; // Default pattern
         }
 
         function setupDragAndDrop() {
