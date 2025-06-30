@@ -1392,25 +1392,24 @@
 
                 <!-- Form Fields -->
                 <div class="form-group">
-                    <label class="form-label">Access Control</label>
                     <div class="checkbox-group" style="margin: 0.5rem 0;">
                         <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                             <input type="checkbox" id="enablePrivateKey" style="margin: 0;" onchange="togglePrivateKeyInput()">
                             <span style="color: var(--text-primary); font-size: 0.875rem;">Set Private Access Key</span>
                         </label>
                         <small style="color: var(--text-secondary); font-size: 0.75rem; margin-left: 1.25rem; display: block;">
-                            ✓ Custom key for specific users<br>
-                            ✗ Default app password protection
+                            ✓ Custom key for specific users • ✗ Default app password only
                         </small>
-                        
-                        <div id="privateKeyInput" style="margin: 0.75rem 0 0 1.25rem; display: none;">
-                            <input type="text" class="form-input" id="secretKey" 
-                                   placeholder="Enter custom access key for data sharing"
-                                   style="font-size: 0.875rem;">
-                            <small style="color: var(--text-secondary); font-size: 0.7rem; margin-top: 0.25rem; display: block;">
-                                Recipients will need this key along with app password to access the file
-                            </small>
-                        </div>
+                    </div>
+                    
+                    <!-- Original perfect structure - shown when checkbox is checked -->
+                    <div id="privateKeySection" style="display: none;">
+                        <label class="form-label">Private Access Key (for file retrieval)</label>
+                        <input type="text" class="form-input" id="secretKey" 
+                               placeholder="Enter a unique secret key to find this file later">
+                        <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                            You'll need this key to search and download your file
+                        </small>
                     </div>
                 </div>
 
@@ -1814,7 +1813,7 @@
             
             // Reset Private Access Key
             document.getElementById('enablePrivateKey').checked = false;
-            document.getElementById('privateKeyInput').style.display = 'none';
+            document.getElementById('privateKeySection').style.display = 'none';
         }
 
         // File handling
@@ -1971,18 +1970,20 @@
             return '0000000000'; // Default pattern
         }
 
-        // Private Access Key toggle
+        // Private Access Key toggle - restores original perfect structure
         window.togglePrivateKeyInput = function() {
             const isEnabled = document.getElementById('enablePrivateKey').checked;
-            const inputDiv = document.getElementById('privateKeyInput');
+            const privateKeySection = document.getElementById('privateKeySection');
             const secretKeyInput = document.getElementById('secretKey');
             
             if (isEnabled) {
-                inputDiv.style.display = 'block';
+                // Show the original perfect structure
+                privateKeySection.style.display = 'block';
                 secretKeyInput.focus();
-                showAlert('info', '🔑 Private Access Key enabled - Custom key required for access');
+                showAlert('info', '🔑 Private Access Key enabled - Original structure restored');
             } else {
-                inputDiv.style.display = 'none';
+                // Hide and reset
+                privateKeySection.style.display = 'none';
                 secretKeyInput.value = '';
                 showAlert('info', '🔒 Using default app password protection');
             }
