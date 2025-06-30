@@ -1359,8 +1359,24 @@
                     <div class="upload-content">
                         <div class="upload-icon">📁</div>
                         <div class="upload-text">Drop file here or click to select</div>
-                        <div class="upload-subtext">Max 24KB • All files encrypted automatically</div>
+                        <div class="upload-subtext">Cost varies by file size • Encrypted by default</div>
                     </div>
+                </div>
+
+                <!-- Cost Estimation -->
+                <div class="cost-estimate" id="costEstimate" style="
+                    margin: 1rem 0;
+                    padding: 0.75rem;
+                    background: var(--bg-tertiary);
+                    border-radius: 8px;
+                    text-align: center;
+                    font-size: 0.875rem;
+                    color: var(--text-secondary);
+                    display: none;
+                ">
+                    <span style="color: var(--text-primary); font-weight: 500;">Estimated Cost:</span>
+                    <span id="estimatedSize">0 KB</span> / 
+                    <span id="estimatedCost" style="color: var(--primary); font-weight: 600;">0.00005 KAS</span>
                 </div>
 
                 <!-- File Preview -->
@@ -1376,21 +1392,69 @@
 
                 <!-- Form Fields -->
                 <div class="form-group">
-                    <label class="form-label">Secret Key (for file retrieval)</label>
+                    <label class="form-label">個別鍵 (Private Access Key)</label>
                     <input type="text" class="form-input" id="secretKey" 
-                           placeholder="Enter a unique secret key to find this file later">
+                           placeholder="Use when sharing data with specific users">
                     <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
-                        You'll need this key to search and download your file
+                        Leave empty for public access or enter key for private sharing
                     </small>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Transaction Fee</label>
-                    <select class="form-input" id="feeLevel">
-                        <option value="low">Low Priority (0.01 KAS)</option>
-                        <option value="normal" selected>Normal Priority (0.05 KAS)</option>
-                        <option value="high">High Priority (0.1 KAS)</option>
-                    </select>
+                    <label class="form-label">Storage Options</label>
+                    <div class="checkbox-group" style="margin: 0.5rem 0;">
+                        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <input type="checkbox" id="includeMetadata" checked style="margin: 0;">
+                            <span style="color: var(--text-primary); font-size: 0.875rem;">Include metadata in blockchain</span>
+                        </label>
+                        <small style="color: var(--text-secondary); font-size: 0.75rem; margin-left: 1.25rem; display: block;">
+                            ✓ Self-contained distribution (like distributed file systems)<br>
+                            ✗ External reference only (like peer-to-peer networks)
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Danger Zone -->
+                <div class="form-group danger-zone" id="dangerZone" style="
+                    border: 2px solid var(--error);
+                    border-radius: 8px;
+                    padding: 1rem;
+                    background: rgba(239, 68, 68, 0.1);
+                    margin: 1rem 0;
+                    display: none;
+                ">
+                    <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <input type="checkbox" id="rawDataMode" style="margin: 0;" onchange="toggleDangerMode()">
+                        <span style="color: var(--error); font-weight: 600; font-size: 0.875rem;">⚠️ Raw Data Mode (DANGEROUS)</span>
+                    </label>
+                    <div style="background: rgba(239, 68, 68, 0.2); padding: 0.75rem; border-radius: 6px; margin-top: 0.5rem;">
+                        <div style="color: var(--error); font-size: 0.75rem; font-weight: 500; margin-bottom: 0.25rem;">
+                            ⚠️ EXTREME CAUTION REQUIRED
+                        </div>
+                        <div style="color: var(--text-primary); font-size: 0.75rem; line-height: 1.3;">
+                            • No encryption or password protection<br>
+                            • Data permanently visible on blockchain<br>
+                            • Cannot be deleted or modified ever<br>
+                            • Consider privacy implications carefully
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Advanced Options Toggle -->
+                <div class="form-group">
+                    <button type="button" onclick="toggleAdvancedOptions()" style="
+                        background: transparent;
+                        border: 1px solid var(--border);
+                        color: var(--text-secondary);
+                        padding: 0.5rem 1rem;
+                        border-radius: 6px;
+                        font-size: 0.8rem;
+                        cursor: pointer;
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.borderColor='var(--primary)'; this.style.color='var(--primary)'" 
+                       onmouseout="this.style.borderColor='var(--border)'; this.style.color='var(--text-secondary)'">
+                        <span id="advancedToggleText">Show Advanced Options</span>
+                    </button>
                 </div>
 
                 <!-- Upload Progress -->
@@ -1664,17 +1728,22 @@
             document.getElementById('filePreview').classList.remove('show');
             document.getElementById('uploadBtn').disabled = true;
             document.getElementById('uploadProgress').classList.add('hidden');
+            
+            // Reset new elements
+            document.getElementById('costEstimate').style.display = 'none';
+            document.getElementById('includeMetadata').checked = true;
+            document.getElementById('rawDataMode').checked = false;
+            document.getElementById('dangerZone').style.display = 'none';
+            document.getElementById('advancedToggleText').textContent = 'Show Advanced Options';
+            
+            // Reset danger mode UI
+            updateDangerModeUI(false);
         }
 
         // File handling
         window.handleFileSelect = function(event) {
             const file = event.target.files[0];
             if (!file) return;
-
-            if (file.size > 24 * 1024) {
-                showAlert('error', '❌ File too large. Maximum size is 24KB');
-                return;
-            }
 
             selectedFile = file;
             
@@ -1687,18 +1756,71 @@
             document.getElementById('previewName').textContent = file.name;
             document.getElementById('previewSize').textContent = formatFileSize(file.size);
             
-            // Enable upload button if secret key is provided
+            // Show and update cost estimation
+            updateCostEstimation(file.size);
+            
+            // Enable upload button
             updateUploadButton();
             
-            showAlert('success', `📄 File selected: ${file.name}`);
+            showAlert('success', `📄 File selected: ${file.name} (${formatFileSize(file.size)})`);
         };
 
-        function updateUploadButton() {
-            const secretKey = document.getElementById('secretKey').value.trim();
-            document.getElementById('uploadBtn').disabled = !selectedFile || !secretKey;
+        function updateCostEstimation(fileSize) {
+            const sizeKB = Math.ceil(fileSize / 1024);
+            const baseFeeKAS = 0.00005;
+            const payloadFeePerKB = 0.00001;
+            const totalCost = baseFeeKAS + (sizeKB * payloadFeePerKB);
+            
+            document.getElementById('estimatedSize').textContent = formatFileSize(fileSize);
+            document.getElementById('estimatedCost').textContent = totalCost.toFixed(8) + ' KAS';
+            document.getElementById('costEstimate').style.display = 'block';
         }
 
-        document.getElementById('secretKey').addEventListener('input', updateUploadButton);
+        function updateUploadButton() {
+            // File selection is the only requirement now
+            document.getElementById('uploadBtn').disabled = !selectedFile;
+        }
+
+        // Toggle functions for new UI elements
+        window.toggleAdvancedOptions = function() {
+            const dangerZone = document.getElementById('dangerZone');
+            const toggleText = document.getElementById('advancedToggleText');
+            
+            if (dangerZone.style.display === 'none' || !dangerZone.style.display) {
+                dangerZone.style.display = 'block';
+                toggleText.textContent = 'Hide Advanced Options';
+            } else {
+                dangerZone.style.display = 'none';
+                toggleText.textContent = 'Show Advanced Options';
+                // Reset raw data mode when hiding
+                document.getElementById('rawDataMode').checked = false;
+                updateDangerModeUI(false);
+            }
+        };
+
+        window.toggleDangerMode = function() {
+            const isChecked = document.getElementById('rawDataMode').checked;
+            updateDangerModeUI(isChecked);
+        };
+
+        function updateDangerModeUI(isDangerous) {
+            const modalBody = document.querySelector('.modal-body');
+            const uploadBtn = document.getElementById('uploadBtn');
+            
+            if (isDangerous) {
+                modalBody.style.background = 'linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05))';
+                uploadBtn.style.background = 'var(--error)';
+                uploadBtn.style.borderColor = 'var(--error)';
+                uploadBtn.innerHTML = '<span>⚠️</span> UPLOAD RAW DATA (DANGEROUS)';
+                
+                showAlert('warning', '⚠️ Raw Data Mode activated - No encryption will be applied!');
+            } else {
+                modalBody.style.background = '';
+                uploadBtn.style.background = '';
+                uploadBtn.style.borderColor = '';
+                uploadBtn.innerHTML = '<span>🚀</span> Upload to Blockchain';
+            }
+        }
 
         function setupDragAndDrop() {
             const uploadZone = document.getElementById('uploadZone');
