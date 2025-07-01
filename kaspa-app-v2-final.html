@@ -101,6 +101,31 @@
             gap: 0.25rem;
         }
 
+        /* Unified status bar */
+        .status-bar-unified {
+            background: var(--bg-secondary);
+            padding: 0.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 480px) {
+            .status-bar-unified {
+                font-size: 0.75rem !important;
+            }
+            
+            .status-bar-unified select {
+                font-size: 0.75rem !important;
+                padding: 0.125rem 0.25rem !important;
+            }
+            
+            .status-bar-unified .status-dot {
+                width: 8px !important;
+                height: 8px !important;
+            }
+        }
+
         .status-setup {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -1032,35 +1057,34 @@
                 <div class="logo-setup">
                     Kaspa File Storage
                 </div>
-                <div class="network-selector" style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                    <label style="font-size: 0.875rem; color: var(--text-secondary);">Network:</label>
-                    <select id="networkSelect" class="form-select" style="padding: 0.5rem; border-radius: 4px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary);" onchange="switchNetwork()">
-                        <option value="testnet-10" selected>Testnet-10</option>
-                        <option value="mainnet">Mainnet</option>
-                    </select>
-                    <div class="status-dot" id="networkStatusDot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--error);"></div>
-                </div>
-                
-                <div class="status-setup" style="margin-top: 1.5rem;">
-                    <!-- Network Status -->
-                    <div class="status-item-setup" id="networkStatus">
-                        <div class="status-dot-setup error pulse" id="networkDotSetup"></div>
-                        <div class="status-title">Network</div>
-                        <div class="status-desc" id="networkTextSetup">Connecting...</div>
+                <!-- Status Bar - All in one line -->
+                <div class="status-bar-unified" style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.875rem;">
+                    <!-- Network -->
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <label style="color: var(--text-secondary);">Network:</label>
+                        <select id="networkSelect" class="form-select" style="padding: 0.25rem 0.5rem; border-radius: 4px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); font-size: 0.875rem;" onchange="switchNetwork()">
+                            <option value="testnet-10" selected>Testnet-10</option>
+                            <option value="mainnet">Mainnet</option>
+                        </select>
+                        <div class="status-dot" id="networkStatusDot" style="width: 10px; height: 10px; border-radius: 50%; background: var(--error);"></div>
                     </div>
                     
-                    <!-- Wallet Status -->
-                    <div class="status-item-setup" id="walletStatus">
-                        <div class="status-dot-setup error" id="walletDotSetup"></div>
-                        <div class="status-title">Wallet</div>
-                        <div class="status-desc" id="walletTextSetup">Enter Private Key</div>
+                    <!-- Separator -->
+                    <span style="color: var(--border);">|</span>
+                    
+                    <!-- Wallet -->
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <label style="color: var(--text-secondary);">Wallet:</label>
+                        <div class="status-dot" id="walletDotSetup" style="width: 10px; height: 10px; border-radius: 50%; background: var(--error);"></div>
                     </div>
                     
-                    <!-- App Password Status -->
-                    <div class="status-item-setup" id="appPassStatus">
-                        <div class="status-dot-setup error" id="appPassDotSetup"></div>
-                        <div class="status-title">AppPass</div>
-                        <div class="status-desc" id="appPassTextSetup">Enter App Password</div>
+                    <!-- Separator -->
+                    <span style="color: var(--border);">|</span>
+                    
+                    <!-- AppPass -->
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <label style="color: var(--text-secondary);">AppPass:</label>
+                        <div class="status-dot" id="appPassDotSetup" style="width: 10px; height: 10px; border-radius: 50%; background: var(--error);"></div>
                     </div>
                 </div>
             </div>
@@ -2320,19 +2344,31 @@
 
         // Status updates
         function updateStatus(type, status, text) {
-            // Update setup mode
-            const setupStatus = document.getElementById(type + 'Status');
+            // Update setup mode dot
             const setupDot = document.getElementById(type + 'DotSetup');
-            const setupText = document.getElementById(type + 'TextSetup');
-            
-            if (setupStatus) {
-                setupStatus.className = `status-item-setup ${status === 'success' ? 'completed' : status === 'warning' ? 'active' : ''}`;
-            }
             if (setupDot) {
-                setupDot.className = `status-dot-setup ${status} ${status === 'warning' ? 'pulse' : ''}`;
+                let color = 'var(--error)';
+                if (status === 'success') color = 'var(--success)';
+                else if (status === 'warning') color = 'var(--warning)';
+                setupDot.style.background = color;
+                
+                // Add pulse animation for loading states
+                if (status === 'warning') {
+                    setupDot.style.animation = 'pulse 1.5s infinite';
+                } else {
+                    setupDot.style.animation = 'none';
+                }
             }
-            if (setupText) {
-                setupText.textContent = text;
+            
+            // Special handling for network status dot
+            if (type === 'network') {
+                const networkDot = document.getElementById('networkStatusDot');
+                if (networkDot) {
+                    let color = 'var(--error)';
+                    if (status === 'success') color = 'var(--success)';
+                    else if (status === 'warning') color = 'var(--warning)';
+                    networkDot.style.background = color;
+                }
             }
             
             // Update compact mode dots
