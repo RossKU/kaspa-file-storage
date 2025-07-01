@@ -2582,13 +2582,13 @@
                 toastContainer.id = 'toastContainer';
                 toastContainer.style.cssText = `
                     position: fixed;
-                    top: 20px;
+                    top: 5px;
                     left: 50%;
                     transform: translateX(-50%);
                     z-index: 10000;
                     pointer-events: none;
-                    max-width: 400px;
-                    width: 90%;
+                    max-width: 350px;
+                    width: 80%;
                 `;
                 document.body.appendChild(toastContainer);
             }
@@ -2627,9 +2627,9 @@
             toast.style.cssText = `
                 background: ${config.bg};
                 color: ${config.color};
-                padding: 0.5rem 1rem;
-                border-radius: 12px;
-                margin-bottom: 0.5rem;
+                padding: 0.4rem 0.8rem;
+                border-radius: 8px;
+                margin-bottom: 0.3rem;
                 box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2), 0 6px 12px rgba(0, 0, 0, 0.15);
                 transform: translateY(-100%);
                 transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
@@ -2637,11 +2637,11 @@
                 cursor: pointer;
                 backdrop-filter: blur(10px);
                 border: 1px solid rgba(255, 255, 255, 0.2);
-                min-width: 300px;
+                min-width: 280px;
                 max-width: 100%;
                 font-weight: 500;
-                font-size: 0.9rem;
-                min-height: 2.5rem;
+                font-size: 0.85rem;
+                min-height: 2.2rem;
             `;
             
             toast.innerHTML = `
