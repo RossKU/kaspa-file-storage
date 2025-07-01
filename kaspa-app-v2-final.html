@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa Storage - Google Drive Style</title>
+    <title>Kaspa File Storage</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -173,7 +173,7 @@
             color: var(--text-secondary);
         }
 
-        /* Storage Bar - Google Drive Style */
+        /* Storage Bar */
         .storage-section {
             display: flex;
             align-items: center;
@@ -250,7 +250,7 @@
             border-color: var(--primary);
         }
 
-        /* Google Drive Style Action Bar */
+        /* Action Bar */
         .action-bar {
             display: flex;
             align-items: center;
@@ -1033,7 +1033,7 @@
                     Kaspa File Storage
                 </div>
                 <div style="font-size: 0.875rem; color: var(--text-secondary);">
-                    Google Drive Style Storage
+                    Kaspa File Storage
                 </div>
                 
                 <div class="status-setup" style="margin-top: 1.5rem;">
@@ -1143,7 +1143,7 @@
         <div class="container">
             <!-- Compact Mode Content -->
             <div id="compactMode" class="hidden">
-                <!-- Google Drive Style Action Bar -->
+                <!-- Action Bar -->
                 <div class="action-bar">
                     <div class="action-bar-left">
                         <button class="new-button" onclick="openUploadModal()">
@@ -1155,7 +1155,8 @@
                             <div class="search-input-container">
                                 <div class="search-icon" id="searchModeIcon" onclick="toggleSearchMode()" title="Toggle search mode">🔍</div>
                                 <input type="text" class="search-input" id="searchInput" 
-                                       placeholder="TxID / File name / etc" 
+                                       placeholder="Search by filename, TxID, or keyword" 
+                                       title="🔍 Local: Search your saved files by name, TxID, or keyword&#10;🌐 Blockchain: Search external transactions by TxID/BlockID&#10;Click the icon to switch modes"
                                        onkeyup="performSearch()">
                             </div>
                             <div class="filter-button" id="filterButton" onclick="toggleFilterMenu()" title="Search filters">
@@ -2212,13 +2213,15 @@
             
             if (isBlockchainSearchMode) {
                 icon.textContent = '🌐';
-                icon.title = 'Blockchain search mode (click to switch to local)';
-                input.placeholder = 'BlockID / TxID (external blockchain search)';
+                icon.title = '🌐 Blockchain search mode\nSearches external blockchain for transactions\nClick to switch back to local search';
+                input.placeholder = 'Enter 64-char TxID or BlockID';
+                input.title = '🌐 Blockchain Search Mode\nSearch for files stored by others using their transaction ID\nRequires exact 64-character hex string';
                 input.value = '';
             } else {
                 icon.textContent = '🔍';
-                icon.title = 'Local search mode (click to switch to blockchain)';
-                input.placeholder = 'TxID / File name / etc';
+                icon.title = '🔍 Local search mode\nSearches your saved files\nClick to switch to blockchain search';
+                input.placeholder = 'Search by filename, TxID, or keyword';
+                input.title = '🔍 Local Search Mode\nSearch your uploaded files by:\n• Filename\n• Transaction ID (TxID)\n• Search keyword\nClick the icon to search external blockchain';
                 input.value = '';
                 displayFiles(getFileRecords()); // Show all local files
             }
