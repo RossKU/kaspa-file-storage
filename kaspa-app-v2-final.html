@@ -578,11 +578,27 @@
         .file-info {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 1.5rem;
         }
 
         .file-icon {
-            font-size: 2rem;
+            font-size: 3.5rem;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+
+        .file-thumbnail {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
         .file-details h4 {
@@ -1796,6 +1812,9 @@
             document.getElementById('uploadBtn').disabled = true;
             document.getElementById('uploadProgress').classList.add('hidden');
             
+            // Reset preview icon
+            document.getElementById('previewIcon').innerHTML = '📄';
+            
             // Reset new elements
             document.getElementById('costEstimate').style.display = 'none';
             document.getElementById('includeMetadata').checked = true;
@@ -1831,6 +1850,48 @@
             preview.classList.add('show');
             document.getElementById('previewName').textContent = file.name;
             document.getElementById('previewSize').textContent = formatFileSize(file.size);
+            
+            // Update icon/thumbnail
+            const previewIcon = document.getElementById('previewIcon');
+            
+            if (file.type.startsWith('image/')) {
+                // Create thumbnail for images
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewIcon.innerHTML = `<img src="${e.target.result}" class="file-thumbnail" alt="${file.name}">`;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // Use appropriate icon based on file type
+                const fileIcons = {
+                    'application/pdf': '📑',
+                    'application/zip': '🗜️',
+                    'application/x-zip-compressed': '🗜️',
+                    'text/plain': '📝',
+                    'text/html': '🌐',
+                    'text/css': '🎨',
+                    'text/javascript': '📜',
+                    'application/javascript': '📜',
+                    'application/json': '📋',
+                    'video/': '🎬',
+                    'audio/': '🎵',
+                    'application/msword': '📘',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '📘',
+                    'application/vnd.ms-excel': '📊',
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '📊',
+                    'default': '📄'
+                };
+                
+                let icon = fileIcons.default;
+                for (const [type, typeIcon] of Object.entries(fileIcons)) {
+                    if (file.type.startsWith(type)) {
+                        icon = typeIcon;
+                        break;
+                    }
+                }
+                
+                previewIcon.innerHTML = icon;
+            }
             
             // Show and update cost estimation
             updateCostEstimation(file.size);
