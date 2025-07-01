@@ -36,6 +36,8 @@
             color: var(--text-primary);
             min-height: 100vh;
             overflow-x: hidden;
+            margin: 0;
+            padding: 0;
         }
 
         .container {
@@ -1048,7 +1050,7 @@
 </head>
 <body>
     <!-- Unified Setup Container -->
-    <div id="setupMode" style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem;">
+    <div id="setupMode" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; padding: 1rem; overflow-y: auto;">
         <div class="setup-form" style="width: 100%; max-width: 500px;">
             <!-- Header inside the form -->
             <div style="text-align: center; margin-bottom: 2rem;">
@@ -1625,9 +1627,18 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
+            // Reset scroll position
+            window.scrollTo(0, 0);
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+            
             setupDragAndDrop();
             await initializeSDK();
-            attemptAutoLogin();
+            
+            // Delay auto-login to prevent scroll issues
+            setTimeout(() => {
+                attemptAutoLogin();
+            }, 100);
         });
 
         // SDK Initialization
@@ -1674,8 +1685,15 @@
                 showAlert('info', '🔄 Attempting auto-login...');
                 
                 // Simple decryption for demo
-                document.getElementById('privateKeyInput').value = atob(settings.walletPrivateKey);
-                document.getElementById('appPasswordInput').value = atob(settings.appPassword);
+                const privateKeyInput = document.getElementById('privateKeyInput');
+                const appPasswordInput = document.getElementById('appPasswordInput');
+                
+                // Set values without triggering scroll
+                privateKeyInput.value = atob(settings.walletPrivateKey);
+                appPasswordInput.value = atob(settings.appPassword);
+                
+                // Ensure we stay at top
+                window.scrollTo(0, 0);
                 
                 await completeSetup();
                 
