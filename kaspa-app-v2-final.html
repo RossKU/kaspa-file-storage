@@ -89,7 +89,7 @@
         }
 
         .logo-setup::before {
-            content: "⚡";
+            content: "KFS";
             margin-right: 0.5rem;
             font-size: 1.8rem;
         }
@@ -1032,8 +1032,13 @@
                 <div class="logo-setup">
                     Kaspa File Storage
                 </div>
-                <div style="font-size: 0.875rem; color: var(--text-secondary);">
-                    Kaspa File Storage
+                <div class="network-selector" style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <label style="font-size: 0.875rem; color: var(--text-secondary);">Network:</label>
+                    <select id="networkSelect" class="form-select" style="padding: 0.5rem; border-radius: 4px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary);" onchange="switchNetwork()">
+                        <option value="testnet-10" selected>Testnet-10</option>
+                        <option value="mainnet">Mainnet</option>
+                    </select>
+                    <div class="status-dot" id="networkStatusDot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--error);"></div>
                 </div>
                 
                 <div class="status-setup" style="margin-top: 1.5rem;">
@@ -1085,17 +1090,40 @@
     <!-- Setup Form -->
     <div id="setupMode">
         <div class="setup-form">
-            <h2 style="text-align: center; margin-bottom: 2rem; font-size: 1.5rem;">
-                Complete Setup
-            </h2>
+            <!-- Wallet Type Tabs -->
+            <div class="wallet-tabs" style="display: flex; gap: 0; margin-bottom: 2rem; border-bottom: 2px solid var(--border);">
+                <button class="wallet-tab active" id="importTab" onclick="switchWalletTab('import')" style="flex: 1; padding: 1rem; background: transparent; border: none; color: var(--primary); font-weight: 500; cursor: pointer; border-bottom: 2px solid var(--primary); margin-bottom: -2px;">
+                    Import Wallet
+                </button>
+                <button class="wallet-tab" id="newTab" onclick="switchWalletTab('new')" style="flex: 1; padding: 1rem; background: transparent; border: none; color: var(--text-secondary); font-weight: 500; cursor: pointer;">
+                    New Wallet
+                </button>
+            </div>
             
-            <div class="form-group">
-                <label class="form-label">Private Key (64 characters)</label>
-                <input type="password" class="form-input" id="privateKeyInput" 
-                       placeholder="Enter your private key...">
-                <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
-                    Demo key pre-filled for testing (979 KAS available)
-                </small>
+            <!-- Import Wallet Section -->
+            <div class="wallet-section" id="importSection">
+                <div class="form-group">
+                    <label class="form-label">Private Key (64 hex characters)</label>
+                    <input type="password" class="form-input" id="privateKeyInput" 
+                           placeholder="Enter your private key...">
+                    <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
+                        Your existing Kaspa wallet private key
+                    </small>
+                </div>
+            </div>
+            
+            <!-- New Wallet Section -->
+            <div class="wallet-section hidden" id="newSection">
+                <div class="form-group" style="text-align: center;">
+                    <p style="color: var(--text-secondary); margin-bottom: 1rem;">Generate a new Kaspa wallet</p>
+                    <button type="button" class="btn btn-secondary" onclick="generateNewWallet()">
+                        🆕 Generate New Wallet
+                    </button>
+                    <div id="newWalletInfo" class="hidden" style="margin-top: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; text-align: left;">
+                        <p style="color: var(--warning); font-weight: 500; margin-bottom: 0.5rem;">⚠️ Save this private key securely!</p>
+                        <div style="font-family: monospace; font-size: 0.75rem; word-break: break-all; color: var(--text-primary);" id="generatedKey"></div>
+                    </div>
+                </div>
             </div>
             
             <div class="form-group">
@@ -1123,13 +1151,13 @@
             </div>
 
             <button type="submit" class="btn btn-primary btn-block" id="connectBtn">
-                <span id="connectIcon">🔗</span>
-                <span id="connectText">Connect & Setup</span>
+                <span id="connectIcon">📦</span>
+                <span id="connectText">Start Using Storage</span>
             </button>
 
             <div style="text-align: center; margin-top: 1rem;">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="useAutoFill()">
-                    🚀 Use Demo Setup
+                    🧪 Use Demo Wallet
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="clearSettings()">
                     🗑️ Clear Saved Settings
@@ -1571,6 +1599,7 @@
         let isConnected = false;
         let selectedFile = null;
         let isSetupMode = true;
+        let currentNetwork = 'testnet-10';
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
@@ -1611,7 +1640,7 @@
                 const settings = JSON.parse(saved);
                 if (!settings.autoLogin) return;
 
-                showAlert('info', '⚡ Attempting auto-login...');
+                showAlert('info', '🔄 Attempting auto-login...');
                 
                 // Simple decryption for demo
                 document.getElementById('privateKeyInput').value = atob(settings.walletPrivateKey);
