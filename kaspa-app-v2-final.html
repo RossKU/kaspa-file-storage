@@ -1445,16 +1445,16 @@
                     <div class="checkbox-group" style="margin: 1rem 0 0.5rem 0;">
                         <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                             <input type="checkbox" id="enableTxIdMining" checked style="margin: 0;" onchange="toggleTxIdMining()">
-                            <span style="color: var(--text-primary); font-size: 0.875rem;">TxID Mining (Enable Search Discovery)</span>
+                            <span style="color: var(--text-primary); font-size: 0.875rem;">🔍 Make file discoverable (Recommended)</span>
+                            <span style="color: var(--text-secondary); font-size: 0.875rem; cursor: help; margin-left: 0.25rem;" onclick="showTxIdMiningHelp()" title="Click for details">ℹ️</span>
                         </label>
                         <small style="color: var(--text-secondary); font-size: 0.75rem; margin-left: 1.25rem; display: block;">
-                            ✓ Embed pattern in TxID for searchability<br>
-                            ✗ Generate random TxID (hidden from search)
+                            Allows recovery even if your device is lost or damaged
                         </small>
                         
                         <div id="txIdMiningOptions" style="margin: 0.75rem 0 0 1.25rem; display: block;">
                             <div style="margin-bottom: 0.5rem;">
-                                <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">Mining Pattern (10 chars fixed):</label>
+                                <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.25rem; display: block;">Search Pattern (10 chars fixed):</label>
                                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                                     <button type="button" id="defaultPatternBtn" onclick="setMiningPattern('default')" style="
                                         padding: 0.25rem 0.5rem;
@@ -1998,10 +1998,10 @@
             
             if (isEnabled) {
                 options.style.display = 'block';
-                showAlert('info', '🔍 TxID Mining enabled - File will be discoverable via search');
+                showAlert('info', '🔍 File is now discoverable and recoverable');
             } else {
                 options.style.display = 'none';
-                showAlert('warning', '🔒 TxID Mining disabled - File will be hidden from search');
+                showAlert('warning', '⚠️ File will be hidden and recovery will be difficult');
             }
         };
 
@@ -2062,6 +2062,27 @@
             
             return '0000000000'; // Default pattern
         }
+
+        // Show help information for TxID Mining
+        window.showTxIdMiningHelp = function() {
+            const helpMessage = `
+ℹ️ About This Setting
+
+✅ When ENABLED:
+• Your files can be recovered if your device fails
+• You can access files from other devices
+• Files may be discoverable through public search
+• Recommended for most files
+
+❌ When DISABLED:
+• Files are completely private (no access without TxID)
+• Recovery becomes extremely difficult
+• Not recommended unless absolutely necessary
+
+💡 Tip: Keep this enabled unless dealing with highly sensitive data
+            `;
+            alert(helpMessage);
+        };
 
         // Private Access Key toggle - restores original perfect structure
         window.togglePrivateKeyInput = function() {
