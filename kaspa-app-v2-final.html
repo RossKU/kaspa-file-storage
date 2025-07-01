@@ -2559,8 +2559,22 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
+        // Alert Queue System
+        const alertQueue = [];
+        let isShowingAlert = false;
+
         // BOX-style toast notification system
         function showAlert(type, message) {
+            alertQueue.push({ type, message });
+            processAlertQueue();
+        }
+
+        function processAlertQueue() {
+            if (isShowingAlert || alertQueue.length === 0) return;
+            
+            isShowingAlert = true;
+            const { type, message } = alertQueue.shift();
+            
             // Create toast container if it doesn't exist
             let toastContainer = document.getElementById('toastContainer');
             if (!toastContainer) {
@@ -2569,10 +2583,12 @@
                 toastContainer.style.cssText = `
                     position: fixed;
                     top: 20px;
-                    right: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
                     z-index: 10000;
                     pointer-events: none;
                     max-width: 400px;
+                    width: 90%;
                 `;
                 document.body.appendChild(toastContainer);
             }
@@ -2611,11 +2627,11 @@
             toast.style.cssText = `
                 background: ${config.bg};
                 color: ${config.color};
-                padding: 1rem 1.25rem;
+                padding: 0.5rem 1rem;
                 border-radius: 12px;
-                margin-bottom: 0.75rem;
+                margin-bottom: 0.5rem;
                 box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2), 0 6px 12px rgba(0, 0, 0, 0.15);
-                transform: translateX(100%);
+                transform: translateY(-100%);
                 transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
                 pointer-events: auto;
                 cursor: pointer;
@@ -2625,6 +2641,7 @@
                 max-width: 100%;
                 font-weight: 500;
                 font-size: 0.9rem;
+                min-height: 2.5rem;
             `;
             
             toast.innerHTML = `
@@ -2644,7 +2661,7 @@
             
             // Trigger slide-in animation
             setTimeout(() => {
-                toast.style.transform = 'translateX(0)';
+                toast.style.transform = 'translateY(0)';
             }, 10);
             
             // Auto-remove after 5 seconds
@@ -2659,12 +2676,14 @@
         function removeToast(toastId) {
             const toast = document.getElementById(toastId);
             if (toast) {
-                toast.style.transform = 'translateX(100%)';
+                toast.style.transform = 'translateY(-100%)';
                 toast.style.opacity = '0';
                 setTimeout(() => {
                     if (toast.parentNode) {
                         toast.parentNode.removeChild(toast);
                     }
+                    isShowingAlert = false;
+                    processAlertQueue();
                 }, 300);
             }
         }
