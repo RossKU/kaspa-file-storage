@@ -1129,10 +1129,26 @@
             <div class="form-group">
                 <label class="form-label">App Password (for file encryption)</label>
                 <input type="password" class="form-input" id="appPasswordInput" 
-                       placeholder="Enter password for encrypting your files">
+                       placeholder="Example: MyP@ssw0rd123"
+                       oninput="validatePasswordStrength()">
                 <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem; display: block;">
                     Used to encrypt/decrypt all uploaded files
                 </small>
+                
+                <!-- Password Requirements -->
+                <div id="passwordRequirements" style="margin-top: 0.5rem; font-size: 0.75rem;">
+                    <div style="color: var(--text-secondary); margin-bottom: 0.25rem;">Password requirements:</div>
+                    <div id="req-length" style="color: var(--error);">✗ 8+ characters</div>
+                    <div id="req-uppercase" style="color: var(--error);">✗ Uppercase (A-Z)</div>
+                    <div id="req-lowercase" style="color: var(--error);">✗ Lowercase (a-z)</div>
+                    <div id="req-number" style="color: var(--error);">✗ Numbers (0-9)</div>
+                    <div id="req-symbol" style="color: var(--error);">✗ Symbols (!@#$...)</div>
+                </div>
+                
+                <!-- Success message (hidden by default) -->
+                <div id="passwordSuccess" style="display: none; margin-top: 0.5rem; color: var(--success); font-size: 0.875rem;">
+                    ✓ Strong password
+                </div>
             </div>
 
             <div class="checkbox-group">
@@ -1790,6 +1806,58 @@
             }).catch(() => {
                 showAlert('error', '❌ Failed to copy to clipboard');
             });
+        };
+
+        // Password strength validation
+        window.validatePasswordStrength = function() {
+            const password = document.getElementById('appPasswordInput').value;
+            const requirements = {
+                length: password.length >= 8,
+                uppercase: /[A-Z]/.test(password),
+                lowercase: /[a-z]/.test(password),
+                number: /[0-9]/.test(password),
+                symbol: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)
+            };
+            
+            // Update UI for each requirement
+            const updateRequirement = (id, met) => {
+                const elem = document.getElementById(id);
+                if (met) {
+                    elem.style.color = 'var(--success)';
+                    elem.innerHTML = elem.innerHTML.replace('✗', '✓');
+                } else {
+                    elem.style.color = 'var(--error)';
+                    elem.innerHTML = elem.innerHTML.replace('✓', '✗');
+                }
+            };
+            
+            updateRequirement('req-length', requirements.length);
+            updateRequirement('req-uppercase', requirements.uppercase);
+            updateRequirement('req-lowercase', requirements.lowercase);
+            updateRequirement('req-number', requirements.number);
+            updateRequirement('req-symbol', requirements.symbol);
+            
+            // Check if all requirements are met
+            const allMet = Object.values(requirements).every(v => v === true);
+            
+            if (allMet) {
+                // Fade out requirements, show success
+                const reqDiv = document.getElementById('passwordRequirements');
+                const successDiv = document.getElementById('passwordSuccess');
+                
+                reqDiv.style.transition = 'opacity 0.3s ease';
+                reqDiv.style.opacity = '0';
+                
+                setTimeout(() => {
+                    reqDiv.style.display = 'none';
+                    successDiv.style.display = 'block';
+                }, 300);
+            } else {
+                // Show requirements
+                document.getElementById('passwordRequirements').style.display = 'block';
+                document.getElementById('passwordRequirements').style.opacity = '1';
+                document.getElementById('passwordSuccess').style.display = 'none';
+            }
         };
 
         // Network switching
@@ -2866,7 +2934,7 @@
         // Demo data and utilities
         window.useAutoFill = function() {
             document.getElementById('privateKeyInput').value = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
-            document.getElementById('appPasswordInput').value = 'demo123';
+            document.getElementById('appPasswordInput').value = 'Demo@Pass123';
             showAlert('success', '🎯 Demo data filled');
         };
 

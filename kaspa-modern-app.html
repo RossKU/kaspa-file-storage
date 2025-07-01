@@ -371,12 +371,14 @@
 
         /* Alerts */
         .alert {
-            padding: 1rem;
+            padding: 0.5rem 1rem;
             border-radius: 8px;
-            margin-bottom: 1rem;
+            margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            min-height: 2.5rem;
         }
 
         .alert-success {
@@ -401,11 +403,22 @@
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(-100%);
             }
             to {
                 opacity: 1;
                 transform: translateY(0);
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(-100%);
             }
         }
 
@@ -619,7 +632,7 @@
     </main>
 
     <!-- Alert Container -->
-    <div id="alertContainer" style="position: fixed; top: 1rem; right: 1rem; z-index: 9999; max-width: 400px;"></div>
+    <div id="alertContainer" style="position: fixed; top: 1rem; left: 50%; transform: translateX(-50%); z-index: 9999; max-width: 400px; width: 90%; pointer-events: none;"></div>
 
     <script type="module">
         // Global state
@@ -905,18 +918,43 @@
             statusText.textContent = text;
         }
 
+        // Alert Queue System
+        const alertQueue = [];
+        let isShowingAlert = false;
+
         // Utility Functions
         function showAlert(type, message) {
+            alertQueue.push({ type, message });
+            processAlertQueue();
+        }
+
+        function processAlertQueue() {
+            if (isShowingAlert || alertQueue.length === 0) return;
+            
+            isShowingAlert = true;
+            const { type, message } = alertQueue.shift();
             const container = document.getElementById('alertContainer');
             const alert = document.createElement('div');
             alert.className = `alert alert-${type} animate-slide-in`;
+            alert.style.pointerEvents = 'auto';
             alert.innerHTML = `
                 <span>${message}</span>
-                <button onclick="this.parentElement.remove()" style="background: none; border: none; color: inherit; cursor: pointer; margin-left: auto; padding: 0;">✕</button>
+                <button onclick="removeAlert(this.parentElement)" style="background: none; border: none; color: inherit; cursor: pointer; margin-left: auto; padding: 0;">✕</button>
             `;
             container.appendChild(alert);
             
-            setTimeout(() => alert.remove(), 5000);
+            setTimeout(() => removeAlert(alert), 5000);
+        }
+
+        function removeAlert(alert) {
+            if (!alert || !alert.parentElement) return;
+            
+            alert.style.animation = 'slideOut 0.3s ease-out';
+            setTimeout(() => {
+                alert.remove();
+                isShowingAlert = false;
+                processAlertQueue();
+            }, 300);
         }
 
         function showProgress(percent) {
