@@ -2935,6 +2935,10 @@
         window.useAutoFill = function() {
             document.getElementById('privateKeyInput').value = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
             document.getElementById('appPasswordInput').value = 'Demo@Pass123';
+            
+            // Trigger password validation
+            validatePasswordStrength();
+            
             showAlert('success', '🎯 Demo data filled');
         };
 
