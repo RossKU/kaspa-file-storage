@@ -676,8 +676,6 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 2rem;
-            margin: 2rem auto;
-            max-width: 500px;
             box-shadow: var(--shadow-lg);
         }
 
@@ -1049,16 +1047,17 @@
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <header class="header" id="header">
-        <div class="container">
-            <!-- Setup Mode Header -->
-            <div class="header-content-setup" id="headerSetup" style="text-align: center;">
-                <div class="logo-setup">
+    <!-- Unified Setup Container -->
+    <div id="setupMode" style="display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem;">
+        <div class="setup-form" style="width: 100%; max-width: 500px;">
+            <!-- Header inside the form -->
+            <div style="text-align: center; margin-bottom: 2rem;">
+                <h1 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem; color: var(--text-primary);">
                     Kaspa File Storage
-                </div>
+                </h1>
+                
                 <!-- Status Bar - All in one line -->
-                <div class="status-bar-unified" style="margin-top: 1rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.875rem;">
+                <div class="status-bar-unified" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.875rem;">
                     <!-- Network -->
                     <div style="display: flex; align-items: center; gap: 0.25rem;">
                         <label style="color: var(--text-secondary);">Network:</label>
@@ -1089,31 +1088,6 @@
                 </div>
             </div>
 
-            <!-- Compact Mode Header -->
-            <div class="header-content-compact hidden" id="headerCompact">
-                <div class="logo-compact">Kaspa Storage</div>
-                
-                <div class="status-compact">
-                    <div class="status-dot-mini error" id="networkDot"></div>
-                    <div class="status-dot-mini error" id="walletDot"></div>
-                    <div class="status-dot-mini error" id="appPassDot"></div>
-                </div>
-
-                <div class="storage-section">
-                    <span class="storage-text" id="storageText">0KB (used)</span>
-                    <div class="storage-bar">
-                        <div class="storage-fill" id="storageFill" style="width: 0%;"></div>
-                    </div>
-                </div>
-
-                <div class="balance-compact" id="balanceCompact">0 KAS</div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Setup Form -->
-    <div id="setupMode">
-        <div class="setup-form">
             <!-- Wallet Type Tabs -->
             <div class="wallet-tabs" style="display: flex; gap: 0; margin-bottom: 2rem; border-bottom: 2px solid var(--border);">
                 <button class="wallet-tab active" id="importTab" onclick="switchWalletTab('import')" style="flex: 1; padding: 1rem; background: transparent; border: none; color: var(--primary); font-weight: 500; cursor: pointer; border-bottom: 2px solid var(--primary); margin-bottom: -2px;">
@@ -1189,6 +1163,30 @@
             </div>
         </div>
     </div>
+
+    <!-- Header for Compact Mode -->
+    <header class="header header-compact hidden" id="header">
+        <div class="container">
+            <div class="header-content-compact" id="headerCompact">
+                <div class="logo-compact">Kaspa Storage</div>
+                
+                <div class="status-compact">
+                    <div class="status-dot-mini error" id="networkDot"></div>
+                    <div class="status-dot-mini error" id="walletDot"></div>
+                    <div class="status-dot-mini error" id="appPassDot"></div>
+                </div>
+
+                <div class="storage-section">
+                    <span class="storage-text" id="storageText">0KB (used)</span>
+                    <div class="storage-bar">
+                        <div class="storage-fill" id="storageFill" style="width: 0%;"></div>
+                    </div>
+                </div>
+
+                <div class="balance-compact" id="balanceCompact">0 KAS</div>
+            </div>
+        </div>
+    </header>
 
     <!-- Main Content -->
     <main class="main" id="mainContent">
@@ -1896,10 +1894,9 @@
         function switchToCompactMode() {
             isSetupMode = false;
             document.getElementById('setupMode').classList.add('hidden');
+            document.getElementById('setupMode').style.display = 'none';
             document.getElementById('compactMode').classList.remove('hidden');
-            document.getElementById('headerSetup').classList.add('hidden');
-            document.getElementById('headerCompact').classList.remove('hidden');
-            document.getElementById('header').className = 'header header-compact';
+            document.getElementById('header').classList.remove('hidden');
             document.getElementById('mainContent').className = 'main compact';
             
             updateCompactUI();
