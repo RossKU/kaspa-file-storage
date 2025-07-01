@@ -1618,16 +1618,25 @@
                 // Test TN10 connection
                 const rpcClient = new kaspa.RpcClient({
                     resolver: new kaspa.Resolver(),
-                    networkId: 'testnet-10'
+                    networkId: currentNetwork === 'mainnet' ? 'mainnet' : 'testnet-10'
                 });
                 await rpcClient.connect();
                 await rpcClient.disconnect();
                 
-                updateStatus('network', 'success', 'TN10 Connected');
-                showAlert('success', '🟢 Network connection established');
+                const networkName = currentNetwork === 'mainnet' ? 'Mainnet' : 'Testnet-10';
+                updateStatus('network', 'success', `${networkName} Connected`);
+                showAlert('success', `🟢 Connected to ${networkName}`);
+                
+                // Update network status dot
+                const networkDot = document.getElementById('networkStatusDot');
+                if (networkDot) networkDot.style.background = 'var(--success)';
             } catch (error) {
                 updateStatus('network', 'error', 'Connection Failed');
                 showAlert('error', '🔴 Network connection failed');
+                
+                // Update network status dot
+                const networkDot = document.getElementById('networkStatusDot');
+                if (networkDot) networkDot.style.background = 'var(--error)';
             }
         }
 
@@ -1654,6 +1663,149 @@
             }
         }
 
+        // Wallet tab switching
+        window.switchWalletTab = function(tab) {
+            const importTab = document.getElementById('importTab');
+            const newTab = document.getElementById('newTab');
+            const importSection = document.getElementById('importSection');
+            const newSection = document.getElementById('newSection');
+            
+            if (tab === 'import') {
+                importTab.classList.add('active');
+                importTab.style.color = 'var(--primary)';
+                importTab.style.borderBottom = '2px solid var(--primary)';
+                newTab.classList.remove('active');
+                newTab.style.color = 'var(--text-secondary)';
+                newTab.style.borderBottom = 'none';
+                importSection.classList.remove('hidden');
+                newSection.classList.add('hidden');
+            } else {
+                newTab.classList.add('active');
+                newTab.style.color = 'var(--primary)';
+                newTab.style.borderBottom = '2px solid var(--primary)';
+                importTab.classList.remove('active');
+                importTab.style.color = 'var(--text-secondary)';
+                importTab.style.borderBottom = 'none';
+                newSection.classList.remove('hidden');
+                importSection.classList.add('hidden');
+            }
+        };
+
+        // Generate new wallet
+        window.generateNewWallet = async function() {
+            try {
+                // Generate mnemonic (12 words)
+                const mnemonic = kaspa.Mnemonic.random();
+                const phrase = mnemonic.phrase;
+                
+                // Derive private key from mnemonic
+                const seed = mnemonic.toSeed();
+                const xprv = kaspa.XPrv.fromSeed(seed);
+                const derivationPath = new kaspa.DerivationPath("m/44'/111111'/0'/0/0");
+                const derivedKey = xprv.derivePath(derivationPath);
+                const privateKey = derivedKey.toPrivateKey();
+                const privateKeyHex = privateKey.toString();
+                
+                // Display the generated wallet info
+                const infoDiv = document.getElementById('newWalletInfo');
+                infoDiv.classList.remove('hidden');
+                infoDiv.innerHTML = `
+                    <p style="color: var(--warning); font-weight: 500; margin-bottom: 1rem;">⚠️ Save this information securely!</p>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <label style="font-size: 0.875rem; color: var(--text-secondary);">🔐 Recovery Phrase (12 words):</label>
+                            <button onclick="copyToClipboard('${phrase}', 'phrase')" style="background: none; border: none; cursor: pointer; color: var(--primary);" title="Copy phrase">📋</button>
+                        </div>
+                        <div style="font-family: monospace; font-size: 0.875rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 4px; word-break: break-word; line-height: 1.6;">
+                            ${phrase}
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                            <label style="font-size: 0.875rem; color: var(--text-secondary);">🔑 Private Key:</label>
+                            <button onclick="copyToClipboard('${privateKeyHex}', 'key')" style="background: none; border: none; cursor: pointer; color: var(--primary);" title="Copy key">📋</button>
+                        </div>
+                        <div style="font-family: monospace; font-size: 0.75rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 4px; word-break: break-all;">
+                            ${privateKeyHex}
+                        </div>
+                    </div>
+                `;
+                
+                // Auto-fill the private key in import section
+                document.getElementById('privateKeyInput').value = privateKeyHex;
+                
+                showAlert('success', '🆕 New wallet generated successfully!');
+                
+            } catch (error) {
+                showAlert('error', '❌ Failed to generate wallet: ' + error.message);
+            }
+        };
+
+        // Copy to clipboard helper
+        window.copyToClipboard = function(text, type) {
+            navigator.clipboard.writeText(text).then(() => {
+                showAlert('success', `📋 ${type === 'phrase' ? 'Recovery phrase' : 'Private key'} copied to clipboard!`);
+            }).catch(() => {
+                showAlert('error', '❌ Failed to copy to clipboard');
+            });
+        };
+
+        // Network switching
+        window.switchNetwork = async function() {
+            const networkSelect = document.getElementById('networkSelect');
+            const selectedNetwork = networkSelect.value;
+            
+            // Show warning if wallet is connected
+            if (currentWallet) {
+                const confirmed = confirm('Network change will clear current wallet information. Continue?');
+                if (!confirmed) {
+                    // Revert selection
+                    networkSelect.value = currentNetwork || 'testnet-10';
+                    return;
+                }
+            }
+            
+            // Update network status
+            const networkDot = document.getElementById('networkStatusDot');
+            if (networkDot) networkDot.style.background = 'var(--warning)';
+            
+            try {
+                // Disconnect current RPC if exists
+                if (currentWallet?.rpcClient) {
+                    await currentWallet.rpcClient.disconnect();
+                }
+                
+                // Clear wallet info
+                currentWallet = null;
+                currentNetwork = selectedNetwork;
+                
+                // Re-initialize SDK with new network
+                await initializeSDK();
+                
+                // Update UI
+                updateStatus('wallet', 'error', 'Enter Private Key');
+                updateStatus('appPass', 'error', 'Enter App Password');
+                
+                // Clear form
+                document.getElementById('privateKeyInput').value = '';
+                document.getElementById('appPasswordInput').value = '';
+                
+                // Hide/show demo button based on network
+                const demoButton = document.querySelector('button[onclick="useAutoFill()"]');
+                if (demoButton) {
+                    demoButton.style.display = selectedNetwork === 'mainnet' ? 'none' : 'inline-block';
+                }
+                
+                showAlert('info', `Switched to ${selectedNetwork}`);
+                
+            } catch (error) {
+                if (networkDot) networkDot.style.background = 'var(--error)';
+                showAlert('error', '❌ Network switch failed: ' + error.message);
+            }
+        };
+
         // Setup completion
         async function completeSetup() {
             try {
@@ -1676,11 +1828,12 @@
                 // Connect wallet
                 const privateKey = new kaspa.PrivateKey(privateKeyHex);
                 const keypair = privateKey.toKeypair();
-                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                const networkType = currentNetwork === 'mainnet' ? kaspa.NetworkType.Mainnet : kaspa.NetworkType.Testnet;
+                const address = keypair.toAddress(networkType);
                 
                 const rpcClient = new kaspa.RpcClient({
                     resolver: new kaspa.Resolver(),
-                    networkId: 'testnet-10'
+                    networkId: currentNetwork === 'mainnet' ? 'mainnet' : 'testnet-10'
                 });
                 await rpcClient.connect();
                 
@@ -2531,7 +2684,7 @@
                 
                 const rpcClient = new kaspa.RpcClient({
                     resolver: new kaspa.Resolver(),
-                    networkId: 'testnet-10'
+                    networkId: currentNetwork === 'mainnet' ? 'mainnet' : 'testnet-10'
                 });
                 
                 await rpcClient.connect();
