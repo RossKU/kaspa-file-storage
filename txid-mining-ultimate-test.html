@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa TxID Mining Ultimate Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        h1 { color: #49EACB; }
+        input, button, select {
+            padding: 10px;
+            margin: 5px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        button {
+            background: #49EACB;
+            color: #000;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #3BC9A8; }
+        button:disabled {
+            background: #666;
+            color: #999;
+            cursor: not-allowed;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .test-card {
+            background: #333;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #555;
+        }
+        .test-card h3 {
+            color: #49EACB;
+            margin-top: 0;
+        }
+        .result {
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 11px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .success { color: #44ff44; }
+        .error { color: #ff4444; }
+        .warning { color: #ffaa44; }
+        .info { color: #49EACB; }
+        .perf { color: #ff88ff; }
+        .version {
+            background: #ff00ff; 
+            color: #000; 
+            padding: 5px 10px; 
+            border-radius: 4px; 
+            display: inline-block; 
+            font-size: 11px; 
+            font-weight: bold;
+            margin-bottom: 10px;
+            animation: rainbow 3s infinite;
+        }
+        @keyframes rainbow {
+            0% { background: #ff00ff; }
+            33% { background: #00ffff; }
+            66% { background: #ffff00; }
+            100% { background: #ff00ff; }
+        }
+        .quick-test-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin: 15px 0;
+        }
+        .quick-test-buttons button {
+            flex: 1;
+            min-width: 150px;
+        }
+        .test-summary {
+            background: #1a1a2a;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 15px 0;
+            border: 2px solid #4444ff;
+        }
+        .metric {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 5px 10px;
+            background: #2a2a3a;
+            border-radius: 3px;
+        }
+        .metric-value {
+            color: #00ff00;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Kaspa TxID Mining ULTIMATE Test</h1>
+        <p>Test all configurations to find the fastest settings</p>
+        <div class="version">
+            Version 4.0.0 | Ultimate Speed Test | 2025-07-02 20:45 JST
+        </div>
+        
+        <div class="test-summary" id="testSummary">
+            <h3>📊 Test Summary</h3>
+            <div id="summaryContent">
+                <span class="metric">Best Config: <span class="metric-value" id="bestConfig">-</span></span>
+                <span class="metric">Max Speed: <span class="metric-value" id="maxSpeed">0 H/s</span></span>
+                <span class="metric">Best Time: <span class="metric-value" id="bestTime">-</span></span>
+                <span class="metric">Target 2s: <span class="metric-value" id="target2s">❌</span></span>
+            </div>
+        </div>
+        
+        <div class="quick-test-buttons">
+            <button onclick="runQuickTest('speed')">⚡ Speed Test (Find Max H/s)</button>
+            <button onclick="runQuickTest('2sec')">⏱️ 2-Second Challenge</button>
+            <button onclick="runQuickTest('efficiency')">📈 Efficiency Test</button>
+            <button onclick="runQuickTest('stress')">💪 Stress Test (Max Load)</button>
+            <button onclick="runAllTests()">🔥 RUN ALL TESTS</button>
+            <button onclick="stopAllTests()" style="background: #ff4444;">🛑 STOP ALL</button>
+        </div>
+        
+        <div class="test-grid" id="testGrid">
+            <!-- Test 1: Worker Count -->
+            <div class="test-card">
+                <h3>👥 Worker Count Test</h3>
+                <select id="test1Workers">
+                    <option value="1">1 Worker</option>
+                    <option value="2">2 Workers</option>
+                    <option value="4">4 Workers</option>
+                    <option value="8" selected>8 Workers</option>
+                    <option value="16">16 Workers</option>
+                    <option value="32">32 Workers</option>
+                </select>
+                <button onclick="runTest(1)">Run Test</button>
+                <div class="result" id="result1"></div>
+            </div>
+            
+            <!-- Test 2: Batch Size -->
+            <div class="test-card">
+                <h3>📦 Batch Size Test</h3>
+                <select id="test2Batch">
+                    <option value="100">100</option>
+                    <option value="500">500</option>
+                    <option value="1000">1,000</option>
+                    <option value="5000" selected>5,000</option>
+                    <option value="10000">10,000</option>
+                    <option value="50000">50,000</option>
+                </select>
+                <button onclick="runTest(2)">Run Test</button>
+                <div class="result" id="result2"></div>
+            </div>
+            
+            <!-- Test 3: Pattern Difficulty -->
+            <div class="test-card">
+                <h3>🎯 Pattern Test</h3>
+                <select id="test3Pattern">
+                    <option value="0">*0 (Easy)</option>
+                    <option value="00">*00</option>
+                    <option value="000" selected>*000</option>
+                    <option value="0000">*0000</option>
+                    <option value="00000">*00000 (Hard)</option>
+                </select>
+                <button onclick="runTest(3)">Run Test</button>
+                <div class="result" id="result3"></div>
+            </div>
+            
+            <!-- Test 4: Algorithm -->
+            <div class="test-card">
+                <h3>🧮 Algorithm Test</h3>
+                <select id="test4Algo">
+                    <option value="wasm" selected>WASM Full</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="sha256">SHA256 Only</option>
+                    <option value="cached">Cached Template</option>
+                </select>
+                <button onclick="runTest(4)">Run Test</button>
+                <div class="result" id="result4"></div>
+            </div>
+            
+            <!-- Test 5: Memory Mode -->
+            <div class="test-card">
+                <h3>💾 Memory Mode</h3>
+                <select id="test5Memory">
+                    <option value="normal" selected>Normal</option>
+                    <option value="lowmem">Low Memory</option>
+                    <option value="highmem">High Memory</option>
+                    <option value="extreme">Extreme (64GB)</option>
+                </select>
+                <button onclick="runTest(5)">Run Test</button>
+                <div class="result" id="result5"></div>
+            </div>
+            
+            <!-- Test 6: Priority -->
+            <div class="test-card">
+                <h3>⚡ Thread Priority</h3>
+                <select id="test6Priority">
+                    <option value="low">Low</option>
+                    <option value="normal" selected>Normal</option>
+                    <option value="high">High</option>
+                    <option value="realtime">Realtime</option>
+                </select>
+                <button onclick="runTest(6)">Run Test</button>
+                <div class="result" id="result6"></div>
+            </div>
+        </div>
+        
+        <div style="background: #333; padding: 15px; border-radius: 4px; margin: 15px 0;">
+            <h3>📊 Live Performance Monitor</h3>
+            <canvas id="perfChart" width="800" height="200" style="width: 100%; background: #000; border-radius: 4px;"></canvas>
+        </div>
+        
+        <div class="result" id="mainLog" style="height: 300px;">
+            <div class="info">⚡ WASM SDK initializing...</div>
+            <div style="color: #ff00ff; font-size: 10px;">Version 4.0.0 - Ultimate Speed Testing Suite</div>
+        </div>
+    </div>
+
+    <script type="module">
+        let kaspa = null;
+        let workers = [];
+        let isRunning = false;
+        let testResults = {};
+        let chartData = [];
+        let chartInterval = null;
+        
+        // Performance tracking
+        let bestConfig = null;
+        let maxSpeedAchieved = 0;
+        let bestTimeFor1000 = Infinity;
+        
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', async () => {
+            await initializeWasm();
+            initChart();
+        });
+        
+        async function initializeWasm() {
+            try {
+                log('🚀 Initializing Kaspa WASM SDK Ultimate v4.0.0...', 'info');
+                kaspa = await import('./kaspa-core.js');
+                await kaspa.default('./kaspa-core_bg.wasm');
+                
+                // Test
+                const testKey = new kaspa.PrivateKey('b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef');
+                log('✅ WASM SDK initialized - ULTIMATE MODE READY', 'success');
+                
+                // Pre-warm
+                await preWarmWorkers();
+                
+            } catch (error) {
+                log(`❌ WASM init failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function preWarmWorkers() {
+            log('🔥 Pre-warming worker threads...', 'warning');
+            // Create and destroy workers to pre-compile WASM
+            const warmupWorker = new Worker('txid-miner-worker.js');
+            setTimeout(() => warmupWorker.terminate(), 1000);
+        }
+        
+        function log(message, type = 'info') {
+            const mainLog = document.getElementById('mainLog');
+            const time = new Date().toTimeString().substr(0, 8);
+            mainLog.innerHTML += `<div class="${type}">[${time}] ${message}</div>`;
+            mainLog.scrollTop = mainLog.scrollHeight;
+        }
+        
+        function logTest(testId, message, type = 'info') {
+            const resultDiv = document.getElementById(`result${testId}`);
+            const time = new Date().toTimeString().substr(0, 8);
+            resultDiv.innerHTML += `<div class="${type}">[${time}] ${message}</div>`;
+            resultDiv.scrollTop = resultDiv.scrollHeight;
+        }
+        
+        window.runTest = async function(testId) {
+            const configs = {
+                1: { workers: parseInt(document.getElementById('test1Workers').value), batch: 1000, pattern: '000' },
+                2: { workers: 8, batch: parseInt(document.getElementById('test2Batch').value), pattern: '000' },
+                3: { workers: 8, batch: 5000, pattern: document.getElementById('test3Pattern').value },
+                4: { workers: 8, batch: 5000, pattern: '000', algo: document.getElementById('test4Algo').value },
+                5: { workers: 8, batch: 5000, pattern: '000', memory: document.getElementById('test5Memory').value },
+                6: { workers: 8, batch: 5000, pattern: '000', priority: document.getElementById('test6Priority').value }
+            };
+            
+            const config = configs[testId];
+            const testName = ['', 'Worker Count', 'Batch Size', 'Pattern', 'Algorithm', 'Memory', 'Priority'][testId];
+            
+            logTest(testId, `🏁 Starting ${testName} test...`, 'info');
+            log(`📊 Test ${testId}: ${testName} - ${JSON.stringify(config)}`, 'info');
+            
+            const startTime = Date.now();
+            const result = await runMiningTest(config, testId);
+            const elapsed = (Date.now() - startTime) / 1000;
+            
+            logTest(testId, `✅ Complete: ${result.hashRate.toLocaleString()} H/s`, 'success');
+            logTest(testId, `Found: ${result.found} patterns in ${elapsed.toFixed(1)}s`, 'info');
+            
+            // Update best config
+            if (result.hashRate > maxSpeedAchieved) {
+                maxSpeedAchieved = result.hashRate;
+                bestConfig = { test: testName, config, hashRate: result.hashRate };
+                updateSummary();
+            }
+            
+            // Check 2-second target
+            if (config.pattern === '000' && result.found >= 100 && elapsed <= 2) {
+                document.getElementById('target2s').textContent = '✅';
+                log('🎉 2-SECOND TARGET ACHIEVED!', 'success');
+            }
+            
+            testResults[testId] = result;
+        };
+        
+        async function runMiningTest(config, testId) {
+            return new Promise((resolve) => {
+                let localWorkers = [];
+                let totalAttempts = 0;
+                let patternsFound = 0;
+                let startTime = Date.now();
+                
+                // Create workers
+                for (let i = 0; i < config.workers; i++) {
+                    const worker = new Worker('txid-miner-worker.js');
+                    
+                    worker.onmessage = (e) => {
+                        switch (e.data.type) {
+                            case 'progress':
+                                totalAttempts += e.data.batchSize;
+                                break;
+                            case 'found':
+                                patternsFound++;
+                                logTest(testId, `💎 Found: ${e.data.txid.slice(-8)}`, 'success');
+                                break;
+                        }
+                    };
+                    
+                    // Start worker
+                    worker.postMessage({
+                        cmd: 'start',
+                        config: {
+                            targetPattern: config.pattern,
+                            startNonce: i * 100000,
+                            endNonce: (i + 1) * 100000,
+                            batchSize: config.batch,
+                            workerId: i,
+                            algo: config.algo,
+                            memory: config.memory,
+                            priority: config.priority,
+                            privateKeyHex: 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef'
+                        }
+                    });
+                    
+                    localWorkers.push(worker);
+                }
+                
+                // Run for 2 seconds then stop
+                setTimeout(() => {
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    const hashRate = Math.floor(totalAttempts / elapsed);
+                    
+                    // Stop workers
+                    localWorkers.forEach(w => {
+                        w.postMessage({ cmd: 'stop' });
+                        w.terminate();
+                    });
+                    
+                    resolve({
+                        hashRate,
+                        found: patternsFound,
+                        attempts: totalAttempts,
+                        elapsed
+                    });
+                }, 2000);
+            });
+        }
+        
+        window.runQuickTest = async function(type) {
+            log(`🚀 Running ${type.toUpperCase()} quick test...`, 'perf');
+            
+            const configs = {
+                'speed': [
+                    { workers: 16, batch: 10000, pattern: '0' },
+                    { workers: 32, batch: 5000, pattern: '0' },
+                    { workers: 8, batch: 50000, pattern: '0' }
+                ],
+                '2sec': [
+                    { workers: 16, batch: 5000, pattern: '000' },
+                    { workers: 32, batch: 10000, pattern: '000' },
+                    { workers: 64, batch: 1000, pattern: '000' }
+                ],
+                'efficiency': [
+                    { workers: 4, batch: 10000, pattern: '00' },
+                    { workers: 8, batch: 5000, pattern: '00' },
+                    { workers: 16, batch: 2500, pattern: '00' }
+                ],
+                'stress': [
+                    { workers: 64, batch: 50000, pattern: '0000' },
+                    { workers: 128, batch: 10000, pattern: '0000' }
+                ]
+            };
+            
+            const tests = configs[type];
+            let bestResult = null;
+            
+            for (let i = 0; i < tests.length; i++) {
+                const config = tests[i];
+                log(`Test ${i+1}/${tests.length}: ${JSON.stringify(config)}`, 'info');
+                
+                const result = await runMiningTest(config, 0);
+                log(`Result: ${result.hashRate.toLocaleString()} H/s, ${result.found} found`, 'info');
+                
+                if (!bestResult || result.hashRate > bestResult.hashRate) {
+                    bestResult = { ...result, config };
+                }
+            }
+            
+            log(`🏆 Best ${type}: ${bestResult.hashRate.toLocaleString()} H/s with config:`, 'success');
+            log(JSON.stringify(bestResult.config), 'success');
+            
+            if (bestResult.hashRate > maxSpeedAchieved) {
+                maxSpeedAchieved = bestResult.hashRate;
+                bestConfig = { test: type, ...bestResult };
+                updateSummary();
+            }
+        };
+        
+        window.runAllTests = async function() {
+            log('🔥 RUNNING ALL TESTS - FINDING OPTIMAL CONFIGURATION...', 'perf');
+            
+            for (let i = 1; i <= 6; i++) {
+                await runTest(i);
+                await new Promise(resolve => setTimeout(resolve, 500)); // Brief pause
+            }
+            
+            log('🏁 ALL TESTS COMPLETE!', 'success');
+            log(`🏆 BEST CONFIG: ${JSON.stringify(bestConfig)}`, 'success');
+        };
+        
+        window.stopAllTests = function() {
+            workers.forEach(w => {
+                w.postMessage({ cmd: 'stop' });
+                w.terminate();
+            });
+            workers = [];
+            isRunning = false;
+            log('🛑 All tests stopped', 'warning');
+        };
+        
+        function updateSummary() {
+            document.getElementById('bestConfig').textContent = bestConfig ? 
+                `${bestConfig.test} (${bestConfig.config.workers}w/${bestConfig.config.batch}b)` : '-';
+            document.getElementById('maxSpeed').textContent = maxSpeedAchieved.toLocaleString() + ' H/s';
+            document.getElementById('bestTime').textContent = bestTimeFor1000 < Infinity ? 
+                bestTimeFor1000.toFixed(2) + 's' : '-';
+        }
+        
+        function initChart() {
+            const canvas = document.getElementById('perfChart');
+            const ctx = canvas.getContext('2d');
+            
+            chartInterval = setInterval(() => {
+                // Draw performance chart
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Add chart drawing logic here
+            }, 100);
+        }
+    </script>
+</body>
+</html>
