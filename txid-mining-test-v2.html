@@ -106,7 +106,7 @@
         <h1>⛏️ Kaspa TxID Mining Test v2</h1>
         <p>Generate transactions with specific TxID patterns for enhanced searchability</p>
         <div class="version">
-            Version 2.1.0 | Removed WASM init call | 2025-07-02 19:35 JST
+            Version 2.2.0 | Restored WASM init | 2025-07-02 19:50 JST
         </div>
         
         <div style="background: #333; padding: 15px; border-radius: 4px; margin: 15px 0;">
@@ -160,7 +160,7 @@
         
         <div class="output" id="output">
             <div class="info">⚡ WASM SDK initializing...</div>
-            <div style="color: #ff6666; font-size: 10px;">Version 2.1.0 - Removed kaspa.default() call to match working test</div>
+            <div style="color: #ff6666; font-size: 10px;">Version 2.2.0 - Restored WASM init, using kaspa-wallet-test.html as reference</div>
         </div>
     </div>
 
@@ -181,9 +181,9 @@
                 log('Initializing Kaspa WASM SDK v2.0.0...', 'info');
                 kaspa = await import('./kaspa-core.js');
                 
-                // Note: kaspa-transaction-test.html doesn't call kaspa.default()
-                // Commenting out to match working version
-                // await kaspa.default('./kaspa-core_bg.wasm');
+                // Initialize WASM binary - this is required!
+                log('Loading WASM binary...', 'info');
+                await kaspa.default('./kaspa-core_bg.wasm');
                 
                 // Test basic functionality
                 const testKey = new kaspa.PrivateKey('b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef');
