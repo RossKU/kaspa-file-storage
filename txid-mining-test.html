@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa TxID Mining Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        h1 { color: #49EACB; }
+        input, button, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        button {
+            background: #49EACB;
+            color: #000;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #3BC9A8; }
+        button:disabled {
+            background: #666;
+            color: #999;
+            cursor: not-allowed;
+        }
+        .output {
+            background: #000;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            font-size: 12px;
+            border: 1px solid #333;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .info { color: #49EACB; }
+        .success { color: #44ff44; }
+        .error { color: #ff4444; }
+        .warning { color: #ffaa44; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .stat-box {
+            background: #333;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #49EACB;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+        }
+        .pattern-display {
+            font-size: 18px;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+            color: #49EACB;
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⛏️ Kaspa TxID Mining Test</h1>
+        <p>Generate transactions with specific TxID patterns for enhanced searchability</p>
+        
+        <div style="background: #333; padding: 15px; border-radius: 4px; margin: 15px 0;">
+            <h3>🎯 Mining Configuration</h3>
+            <label>Target Pattern (end of TxID):</label>
+            <input type="text" id="targetPattern" value="00000" placeholder="e.g., 00000, fffff, etc.">
+            
+            <label>Network:</label>
+            <select id="network">
+                <option value="testnet-10">Testnet-10</option>
+                <option value="mainnet" disabled>Mainnet (Coming Soon)</option>
+            </select>
+            
+            <label>Mining Strategy:</label>
+            <select id="strategy">
+                <option value="nonce">Nonce Mining (Fast)</option>
+                <option value="timestamp">Timestamp Variation</option>
+                <option value="amount">Amount Variation</option>
+                <option value="hybrid">Hybrid (All Methods)</option>
+            </select>
+            
+            <label>Max Attempts:</label>
+            <input type="number" id="maxAttempts" value="100000" min="1000" max="10000000">
+        </div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="attempts">0</div>
+                <div class="stat-label">Attempts</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="hashRate">0</div>
+                <div class="stat-label">Hash/sec</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="elapsedTime">0s</div>
+                <div class="stat-label">Elapsed Time</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="foundCount">0</div>
+                <div class="stat-label">Found</div>
+            </div>
+        </div>
+        
+        <button id="startMining" onclick="startMining()">⛏️ Start Mining</button>
+        <button id="stopMining" onclick="stopMining()" disabled>⏹️ Stop Mining</button>
+        
+        <div style="margin-top: 20px; padding: 15px; background: #3a2a2a; border-radius: 4px;">
+            <h3>💸 Send Real Transaction (Optional)</h3>
+            <p style="color: #ffaa44; font-size: 12px;">⚠️ This will send actual KAS on testnet</p>
+            <button id="sendTx" onclick="sendRealTransaction()" style="background: #ff6666;">Send Test Transaction</button>
+        </div>
+        
+        <div id="currentTxId" class="pattern-display" style="display:none;">
+            Current Best: <span id="bestPattern"></span>
+        </div>
+        
+        <div class="output" id="output">
+            <div class="info">⚡ WASM SDK initializing...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        let kaspa = null;
+        let isMining = false;
+        let miningWorker = null;
+        let startTime = null;
+        let attempts = 0;
+        let foundPatterns = [];
+        
+        // Auto-initialize WASM on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            await initializeWasm();
+        });
+        
+        async function initializeWasm() {
+            try {
+                log('Initializing Kaspa WASM SDK...', 'info');
+                kaspa = await import('./kaspa-core.js');
+                
+                if (!kaspa.PrivateKey || !kaspa.PublicKey || !kaspa.NetworkType) {
+                    throw new Error('Essential SDK functions not available');
+                }
+                
+                log('✅ WASM SDK initialized successfully', 'success');
+                log('Ready to start TxID mining', 'info');
+                document.getElementById('startMining').disabled = false;
+                
+            } catch (error) {
+                log('❌ WASM initialization failed: ' + error.message, 'error');
+                document.getElementById('startMining').disabled = true;
+            }
+        }
+        
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const time = new Date().toTimeString().substr(0, 8);
+            const className = type;
+            output.innerHTML += `<div class="${className}">[${time}] ${message}</div>`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        window.startMining = async function() {
+            if (!kaspa) {
+                log('WASM not initialized', 'error');
+                return;
+            }
+            
+            const targetPattern = document.getElementById('targetPattern').value.toLowerCase();
+            const strategy = document.getElementById('strategy').value;
+            const maxAttempts = parseInt(document.getElementById('maxAttempts').value);
+            
+            if (!targetPattern || !/^[0-9a-f]+$/.test(targetPattern)) {
+                log('Invalid pattern. Use hexadecimal characters only (0-9, a-f)', 'error');
+                return;
+            }
+            
+            log(`Starting TxID mining for pattern: *${targetPattern}`, 'info');
+            log(`Strategy: ${strategy}, Max attempts: ${maxAttempts.toLocaleString()}`, 'info');
+            
+            // Update UI
+            document.getElementById('startMining').disabled = true;
+            document.getElementById('stopMining').disabled = false;
+            document.getElementById('currentTxId').style.display = 'block';
+            
+            // Reset stats
+            attempts = 0;
+            startTime = Date.now();
+            isMining = true;
+            foundPatterns = [];
+            
+            // Start mining
+            await minePattern(targetPattern, strategy, maxAttempts);
+        };
+        
+        window.stopMining = function() {
+            isMining = false;
+            document.getElementById('startMining').disabled = false;
+            document.getElementById('stopMining').disabled = true;
+            log('Mining stopped by user', 'warning');
+        };
+        
+        async function minePattern(targetPattern, strategy, maxAttempts) {
+            // Use existing testnet wallet with balance
+            const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+            const testPrivateKey = new kaspa.PrivateKey(testKeyHex);
+            const publicKey = testPrivateKey.toPublicKey();
+            const address = publicKey.toAddress(kaspa.NetworkType.Testnet);
+            
+            log(`Mining address: ${address.toString()}`, 'info');
+            log(`Note: Using existing testnet wallet with balance`, 'info');
+            
+            let bestMatch = '';
+            let bestMatchLength = 0;
+            
+            const updateInterval = setInterval(() => {
+                if (!isMining) {
+                    clearInterval(updateInterval);
+                    return;
+                }
+                updateStats();
+            }, 100);
+            
+            // Mining loop
+            for (let i = 0; i < maxAttempts && isMining; i++) {
+                attempts++;
+                
+                // Generate transaction based on strategy
+                let txid = '';
+                
+                switch (strategy) {
+                    case 'nonce':
+                        txid = await generateWithNonce(i, testPrivateKey);
+                        break;
+                    case 'timestamp':
+                        txid = await generateWithTimestamp(i, testPrivateKey);
+                        break;
+                    case 'amount':
+                        txid = await generateWithAmount(i, testPrivateKey);
+                        break;
+                    case 'hybrid':
+                        txid = await generateHybrid(i, testPrivateKey);
+                        break;
+                }
+                
+                // Check if pattern matches
+                if (txid.endsWith(targetPattern)) {
+                    foundPatterns.push(txid);
+                    document.getElementById('foundCount').textContent = foundPatterns.length;
+                    log(`🎉 FOUND! TxID: ${txid}`, 'success');
+                    document.getElementById('bestPattern').textContent = txid;
+                    
+                    if (strategy !== 'hybrid') {
+                        isMining = false;
+                        break;
+                    }
+                }
+                
+                // Update best partial match
+                const matchLength = getMatchLength(txid, targetPattern);
+                if (matchLength > bestMatchLength) {
+                    bestMatchLength = matchLength;
+                    bestMatch = txid;
+                    document.getElementById('bestPattern').textContent = 
+                        txid.substring(0, txid.length - matchLength) + 
+                        '<span style="color: #44ff44">' + txid.substring(txid.length - matchLength) + '</span>';
+                }
+                
+                // Update UI periodically
+                if (attempts % 1000 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1));
+                }
+            }
+            
+            clearInterval(updateInterval);
+            
+            // Final results
+            if (foundPatterns.length > 0) {
+                log(`Mining complete! Found ${foundPatterns.length} matching TxIDs`, 'success');
+                foundPatterns.forEach((txid, i) => {
+                    log(`Match ${i + 1}: ${txid}`, 'success');
+                });
+            } else {
+                log(`Mining complete. No exact matches found after ${attempts.toLocaleString()} attempts`, 'warning');
+                log(`Best partial match: ${bestMatch} (${bestMatchLength}/${targetPattern.length} chars)`, 'info');
+            }
+            
+            document.getElementById('startMining').disabled = false;
+            document.getElementById('stopMining').disabled = true;
+        }
+        
+        async function generateWithNonce(nonce, privateKey) {
+            // Simulate transaction with nonce in payload
+            const data = new Uint8Array([...new TextEncoder().encode('nonce:'), ...numberToBytes(nonce)]);
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            return bytesToHex(new Uint8Array(hash));
+        }
+        
+        async function generateWithTimestamp(iteration, privateKey) {
+            // Vary timestamp slightly
+            const timestamp = Date.now() + iteration;
+            const data = new Uint8Array([...new TextEncoder().encode('ts:'), ...numberToBytes(timestamp)]);
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            return bytesToHex(new Uint8Array(hash));
+        }
+        
+        async function generateWithAmount(iteration, privateKey) {
+            // Vary amount in smallest unit
+            const amount = 100000000 + iteration; // 1 KAS + iteration sompis
+            const data = new Uint8Array([...new TextEncoder().encode('amt:'), ...numberToBytes(amount)]);
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            return bytesToHex(new Uint8Array(hash));
+        }
+        
+        async function generateHybrid(iteration, privateKey) {
+            // Combine all strategies
+            const nonce = iteration;
+            const timestamp = Date.now() + (iteration % 1000);
+            const amount = 100000000 + (iteration % 10000);
+            
+            const data = new Uint8Array([
+                ...new TextEncoder().encode('hybrid:'),
+                ...numberToBytes(nonce),
+                ...numberToBytes(timestamp),
+                ...numberToBytes(amount)
+            ]);
+            
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            return bytesToHex(new Uint8Array(hash));
+        }
+        
+        function numberToBytes(num) {
+            const buffer = new ArrayBuffer(8);
+            const view = new DataView(buffer);
+            view.setBigUint64(0, BigInt(num), true);
+            return new Uint8Array(buffer);
+        }
+        
+        function bytesToHex(bytes) {
+            return Array.from(bytes)
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function getMatchLength(txid, pattern) {
+            let matches = 0;
+            for (let i = 0; i < pattern.length; i++) {
+                if (txid[txid.length - 1 - i] === pattern[pattern.length - 1 - i]) {
+                    matches++;
+                } else {
+                    break;
+                }
+            }
+            return matches;
+        }
+        
+        function updateStats() {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const hashRate = Math.floor(attempts / elapsed);
+            
+            document.getElementById('attempts').textContent = attempts.toLocaleString();
+            document.getElementById('hashRate').textContent = hashRate.toLocaleString();
+            document.getElementById('elapsedTime').textContent = elapsed.toFixed(1) + 's';
+        }
+        
+        // Send real transaction function
+        window.sendRealTransaction = async function() {
+            if (!kaspa) {
+                log('WASM not initialized', 'error');
+                return;
+            }
+            
+            try {
+                log('Preparing real transaction...', 'info');
+                
+                // Initialize wallet
+                const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                const privateKey = new kaspa.PrivateKey(testKeyHex);
+                const publicKey = privateKey.toPublicKey();
+                const address = publicKey.toAddress(kaspa.NetworkType.Testnet);
+                
+                // Connect to RPC
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                log('Connecting to Kaspa testnet...', 'info');
+                await rpcClient.connect();
+                
+                // Get UTXOs
+                const utxoContext = new kaspa.UtxoContext({ rpcClient });
+                await utxoContext.trackAddresses([address]);
+                const balance = await utxoContext.getBalance();
+                
+                log(`Current balance: ${(balance.mature / 100000000).toFixed(8)} KAS`, 'info');
+                
+                // Create transaction with small amount
+                const toAddress = address; // Send to self
+                const amount = BigInt(10000000); // 0.1 KAS
+                const priorityFee = BigInt(1000); // Small priority fee
+                
+                log('Creating transaction...', 'info');
+                const { transactions } = await kaspa.createTransactions({
+                    entries: [{
+                        address: toAddress.toString(),
+                        amount: amount,
+                        priorityFee: priorityFee
+                    }],
+                    utxoContext: utxoContext,
+                    changeAddress: address.toString(),
+                    priorityFee: priorityFee
+                });
+                
+                if (!transactions || transactions.length === 0) {
+                    throw new Error('Failed to create transaction');
+                }
+                
+                const tx = transactions[0];
+                
+                // Sign transaction
+                log('Signing transaction...', 'info');
+                const signedTx = await tx.sign([privateKey]);
+                
+                // Get transaction ID before submission
+                const txid = await signedTx.id();
+                log(`Transaction ID: ${txid}`, 'info');
+                
+                // Check if it matches any pattern
+                const targetPattern = document.getElementById('targetPattern').value.toLowerCase();
+                if (txid.endsWith(targetPattern)) {
+                    log(`🎉 LUCKY! TxID matches pattern: ${targetPattern}`, 'success');
+                }
+                
+                // Submit transaction
+                log('Submitting transaction...', 'warning');
+                const submitResult = await signedTx.submit(rpcClient);
+                
+                log(`✅ Transaction submitted successfully!`, 'success');
+                log(`TxID: ${txid}`, 'success');
+                log(`Explorer: https://explorer-tn10.kaspa.org/txs/${txid}`, 'info');
+                
+                await rpcClient.disconnect();
+                
+            } catch (error) {
+                log(`❌ Transaction failed: ${error.message}`, 'error');
+                console.error(error);
+            }
+        };
+    </script>
+</body>
+</html>
