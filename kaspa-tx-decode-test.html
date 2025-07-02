@@ -113,18 +113,24 @@
     <div class="container">
         <h1>Kaspa Transaction Decode Test</h1>
         <div style="text-align: center; color: #888; margin-top: -10px; margin-bottom: 20px;">
-            Version: 1.0.3 (Debug)
+            Version: 1.0.4 (Debug)
         </div>
         
         <div class="input-group">
             <label for="txId">Transaction ID:</label>
             <input type="text" id="txId" value="0cd6b4b8cd551e59f5ed7180c989507d3df88dc9151121851d11a17b00cadfbf" placeholder="Enter Transaction ID">
         </div>
+        
+        <div class="input-group">
+            <label for="address">Or Address (to find UTXOs):</label>
+            <input type="text" id="address" placeholder="Enter Kaspa address (optional)">
+        </div>
 
         <div>
             <button onclick="initializeWASM()">1. Initialize WASM</button>
             <button onclick="connectToNetwork()" id="connectBtn" disabled>2. Connect to Network</button>
             <button onclick="fetchTransaction()" id="fetchBtn" disabled>3. Fetch Transaction</button>
+            <button onclick="fetchFromExplorer()" style="background: #2196F3;">3b. Fetch from Explorer API</button>
             <button onclick="decodePayload()" id="decodeBtn" disabled>4. Decode Payload</button>
         </div>
         
@@ -165,7 +171,7 @@
         let decodedFileData = null;
 
         // Version info for debugging
-        const APP_VERSION = '1.0.3';
+        const APP_VERSION = '1.0.4';
         console.log(`=== Kaspa Transaction Decode Test v${APP_VERSION} ===`);
         console.log('Debug mode enabled - All operations will be logged');
         console.log('Page loaded at:', new Date().toISOString());
@@ -559,6 +565,77 @@
             console.log(`=== Kaspa Transaction Decode Test v${APP_VERSION} ===`);
             console.log('Console cleared at:', new Date().toISOString());
             updateStatus('Console cleared', 'success');
+        };
+        
+        window.fetchFromExplorer = async function() {
+            try {
+                const txId = document.getElementById('txId').value.trim();
+                if (!txId) {
+                    throw new Error('Please enter a transaction ID');
+                }
+                
+                console.log(`\n[${APP_VERSION}] === Fetching from Explorer API ===`);
+                console.log('Transaction ID:', txId);
+                updateStatus('Fetching from Kaspa Explorer API...', 'loading');
+                
+                // Try Kaspa Explorer API
+                const explorerUrl = `https://api.kaspa.org/transactions/${txId}`;
+                console.log('Fetching from:', explorerUrl);
+                
+                try {
+                    const response = await fetch(explorerUrl);
+                    console.log('Explorer response status:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Explorer API returned ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Explorer data:', data);
+                    
+                    // Process the explorer data
+                    if (data && data.payload) {
+                        currentTransaction = {
+                            transaction: {
+                                payload: data.payload
+                            }
+                        };
+                        processTransactionData(currentTransaction);
+                    } else {
+                        throw new Error('No payload found in explorer response');
+                    }
+                    
+                } catch (fetchError) {
+                    console.error('Explorer API error:', fetchError);
+                    
+                    // Alternative: Try testnet explorer
+                    const testnetUrl = `https://explorer-tn10.kaspa.org/api/transactions/${txId}`;
+                    console.log('Trying testnet explorer:', testnetUrl);
+                    
+                    const testnetResponse = await fetch(testnetUrl);
+                    if (testnetResponse.ok) {
+                        const testnetData = await testnetResponse.json();
+                        console.log('Testnet explorer data:', testnetData);
+                        
+                        if (testnetData && testnetData.payload) {
+                            currentTransaction = {
+                                transaction: {
+                                    payload: testnetData.payload
+                                }
+                            };
+                            processTransactionData(currentTransaction);
+                        } else {
+                            throw new Error('No payload found in testnet explorer');
+                        }
+                    } else {
+                        throw new Error('Both explorer APIs failed');
+                    }
+                }
+                
+            } catch (error) {
+                updateStatus(`Failed to fetch from explorer: ${error.message}`, 'error');
+                console.error('Explorer fetch error:', error);
+            }
         };
         
         window.exploreWASM = function() {
