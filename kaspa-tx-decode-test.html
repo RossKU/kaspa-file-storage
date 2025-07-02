@@ -112,6 +112,9 @@
 <body>
     <div class="container">
         <h1>Kaspa Transaction Decode Test</h1>
+        <div style="text-align: center; color: #888; margin-top: -10px; margin-bottom: 20px;">
+            Version: 1.0.1 (Debug)
+        </div>
         
         <div class="input-group">
             <label for="txId">Transaction ID:</label>
@@ -123,6 +126,11 @@
             <button onclick="connectToNetwork()" id="connectBtn" disabled>2. Connect to Network</button>
             <button onclick="fetchTransaction()" id="fetchBtn" disabled>3. Fetch Transaction</button>
             <button onclick="decodePayload()" id="decodeBtn" disabled>4. Decode Payload</button>
+        </div>
+        
+        <div style="margin-top: 10px;">
+            <button onclick="copyDebugLog()" style="background: #666;">Copy Debug Log</button>
+            <button onclick="clearLog()" style="background: #666;">Clear Console</button>
         </div>
 
         <div id="status" class="status"></div>
@@ -155,10 +163,18 @@
         let currentTransaction = null;
         let decodedFileData = null;
 
+        // Version info for debugging
+        const APP_VERSION = '1.0.1';
+        console.log(`=== Kaspa Transaction Decode Test v${APP_VERSION} ===`);
+        console.log('Debug mode enabled - All operations will be logged');
+        console.log('Page loaded at:', new Date().toISOString());
+        console.log('User Agent:', navigator.userAgent);
+        console.log('=====================================\n');
+
         window.initializeWASM = async function() {
             try {
                 updateStatus('Initializing WASM SDK...', 'loading');
-                console.log('=== Starting WASM initialization ===');
+                console.log(`\n[${APP_VERSION}] === Starting WASM initialization ===`);
                 
                 console.log('Importing kaspa-core.js...');
                 kaspa = await import('./kaspa-core.js');
@@ -195,7 +211,7 @@
         window.connectToNetwork = async function() {
             try {
                 updateStatus('Connecting to Kaspa Testnet-10...', 'loading');
-                console.log('=== Starting connection process ===');
+                console.log(`\n[${APP_VERSION}] === Starting connection process ===`);
                 
                 // Debug: Check available kaspa objects
                 console.log('Available kaspa objects:', Object.keys(kaspa));
@@ -276,7 +292,7 @@
                     throw new Error('Please enter a transaction ID');
                 }
                 
-                console.log('=== Fetching transaction ===');
+                console.log(`\n[${APP_VERSION}] === Fetching transaction ===`);
                 console.log('Transaction ID:', txId);
                 updateStatus('Fetching transaction from blockchain...', 'loading');
                 
@@ -479,6 +495,44 @@
                 statusEl.innerHTML = message + '<span class="loading"></span>';
             }
         }
+
+        // Debug log collection
+        let debugLog = [];
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        
+        console.log = function(...args) {
+            debugLog.push(`[LOG] ${args.join(' ')}`);
+            originalLog.apply(console, args);
+        };
+        
+        console.error = function(...args) {
+            debugLog.push(`[ERROR] ${args.join(' ')}`);
+            originalError.apply(console, args);
+        };
+        
+        console.warn = function(...args) {
+            debugLog.push(`[WARN] ${args.join(' ')}`);
+            originalWarn.apply(console, args);
+        };
+        
+        window.copyDebugLog = function() {
+            const logText = debugLog.join('\n');
+            navigator.clipboard.writeText(logText).then(() => {
+                updateStatus('Debug log copied to clipboard!', 'success');
+            }).catch(err => {
+                updateStatus('Failed to copy log: ' + err.message, 'error');
+            });
+        };
+        
+        window.clearLog = function() {
+            debugLog = [];
+            console.clear();
+            console.log(`=== Kaspa Transaction Decode Test v${APP_VERSION} ===`);
+            console.log('Console cleared at:', new Date().toISOString());
+            updateStatus('Console cleared', 'success');
+        };
 
         // Initialize on page load
         updateStatus('Ready to start. Click "1. Initialize WASM" to begin.');
