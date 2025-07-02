@@ -113,7 +113,7 @@
     <div class="container">
         <h1>Kaspa Transaction Decode Test</h1>
         <div style="text-align: center; color: #888; margin-top: -10px; margin-bottom: 20px;">
-            Version: 1.0.1 (Debug)
+            Version: 1.0.2 (Debug)
         </div>
         
         <div class="input-group">
@@ -164,7 +164,7 @@
         let decodedFileData = null;
 
         // Version info for debugging
-        const APP_VERSION = '1.0.1';
+        const APP_VERSION = '1.0.2';
         console.log(`=== Kaspa Transaction Decode Test v${APP_VERSION} ===`);
         console.log('Debug mode enabled - All operations will be logged');
         console.log('Page loaded at:', new Date().toISOString());
@@ -216,43 +216,76 @@
                 // Debug: Check available kaspa objects
                 console.log('Available kaspa objects:', Object.keys(kaspa));
                 
-                // Try creating NetworkId
-                console.log('Creating NetworkId...');
-                const networkId = new kaspa.NetworkId('testnet-10');
-                console.log('NetworkId created:', networkId);
+                // Create RPC client with resolver (based on SDK analysis)
+                console.log('Creating RPC client with resolver...');
                 
-                // Try creating Resolver
-                console.log('Creating Resolver...');
-                const resolver = new kaspa.Resolver();
-                console.log('Resolver created:', resolver);
-                
-                // Try getting URLs
-                console.log('Getting URLs from resolver...');
-                const urls = await resolver.urls(networkId);
-                console.log('URLs received:', urls);
-                
-                if (!urls || urls.length === 0) {
-                    throw new Error('No available nodes found');
+                // Method 1: Try with Resolver first
+                try {
+                    const resolver = new kaspa.Resolver();
+                    console.log('Resolver created:', resolver);
+                    
+                    rpcClient = new kaspa.RpcClient({
+                        resolver: resolver,
+                        networkId: 'testnet-10',
+                        encoding: kaspa.Encoding?.Borsh || undefined  // Use Borsh encoding if available
+                    });
+                    
+                    console.log('RPC client created with resolver');
+                } catch (e) {
+                    console.error('Resolver method failed:', e);
+                    
+                    // Method 2: Fallback to direct URL
+                    console.log('Trying direct URL connection...');
+                    const workingNodes = [
+                        'wss://testnet-10.kaspa.red:17210',
+                        'wss://tn10-1.kaspa.red:17210',
+                        'wss://testnet-10.kaspa.ws'
+                    ];
+                    
+                    // Try each node
+                    for (const url of workingNodes) {
+                        try {
+                            console.log(`Trying node: ${url}`);
+                            rpcClient = new kaspa.RpcClient({
+                                url: url,
+                                networkId: 'testnet-10'
+                            });
+                            console.log('RPC client created with direct URL');
+                            break;
+                        } catch (nodeError) {
+                            console.error(`Failed with ${url}:`, nodeError);
+                        }
+                    }
                 }
                 
-                // Try creating RPC client
-                console.log('Creating RPC client with config:', {
-                    resolver: resolver,
-                    networkId: networkId.toString()
-                });
+                if (!rpcClient) {
+                    throw new Error('Failed to create RPC client with any method');
+                }
                 
-                rpcClient = new kaspa.RpcClient({
-                    resolver,
-                    networkId: networkId
-                });
                 console.log('RPC client created:', rpcClient);
+                console.log('RPC client properties:', {
+                    isConnected: rpcClient.isConnected,
+                    url: rpcClient.url,
+                    networkId: rpcClient.networkId
+                });
                 
-                // Try connecting
+                // Try connecting with timeout
                 console.log('Attempting to connect...');
                 console.log('RPC client methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(rpcClient)));
                 
-                await rpcClient.connect();
-                console.log('Connect method completed');
+                // Set connection timeout to 30 seconds
+                const connectPromise = rpcClient.connect();
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Connection timeout after 30 seconds')), 30000)
+                );
+                
+                try {
+                    await Promise.race([connectPromise, timeoutPromise]);
+                    console.log('Connect method completed');
+                } catch (timeoutError) {
+                    console.error('Connection timeout or error:', timeoutError);
+                    throw timeoutError;
+                }
                 
                 // Check connection status
                 console.log('Checking connection status...');
