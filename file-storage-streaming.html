@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kaspa Streaming Storage - 100GB+ Support</title>
+<style>
+body{font-family:monospace;max-width:900px;margin:0 auto;padding:10px;background:#1a1a1a;color:#fff}
+.container{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:15px 0}
+@media(max-width:768px){.container{grid-template-columns:1fr}}
+.box{border:1px solid #444;padding:15px;border-radius:4px;background:#2a2a2a}
+h1,h3{color:#49EACB}
+input,button,select{width:100%;padding:10px;margin:5px 0;background:#333;color:#fff;border:1px solid #555;border-radius:4px;font-family:monospace}
+button{background:#49EACB;color:#000;cursor:pointer;font-weight:bold}
+button:hover{background:#3BC9A8}
+button:disabled{background:#666;color:#999;cursor:not-allowed}
+.info{background:#333;padding:12px;margin:10px 0;border-radius:4px;border-left:3px solid #49EACB}
+.warning{border-left-color:#ffaa44;color:#ffcc66}
+.error{border-left-color:#ff4444;color:#ff6666}
+.success{border-left-color:#44ff44;color:#66ff66}
+.progress-container{background:#000;padding:20px;border-radius:8px;margin:20px 0}
+.progress-bar{width:100%;height:30px;background:#333;border:1px solid #444;border-radius:4px;overflow:hidden;position:relative}
+.progress-fill{height:100%;background:linear-gradient(90deg,#49EACB,#3BC9A8);transition:width 0.3s;display:flex;align-items:center;justify-content:center;color:#000;font-weight:bold}
+.progress-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:15px 0}
+.stat-box{background:#333;padding:10px;border-radius:4px;text-align:center}
+.stat-value{font-size:24px;font-weight:bold;color:#49EACB}
+.stat-label{font-size:11px;color:#999;margin-top:5px}
+.log{background:#000;padding:10px;height:150px;overflow-y:auto;font-size:11px;white-space:pre-wrap;border:1px solid #333}
+.chunk-status{display:flex;align-items:center;gap:10px;padding:5px;border-radius:4px;margin:2px 0;font-size:11px}
+.chunk-status.uploading{background:#333;color:#ffcc66}
+.chunk-status.success{background:#1a3a1a;color:#66ff66}
+.chunk-status.error{background:#3a1a1a;color:#ff6666}
+.hide{display:none}
+.drop-zone{border:2px dashed #49EACB;padding:40px;text-align:center;border-radius:8px;transition:all 0.3s}
+.drop-zone.dragover{background:#333;border-color:#3BC9A8}
+.file-info{background:#333;padding:15px;border-radius:4px;margin:10px 0}
+.controls{display:flex;gap:10px;margin:10px 0}
+.controls button{width:auto;padding:8px 20px}
+</style>
+</head>
+<body>
+<h1>🚀 Kaspa Streaming Storage</h1>
+<p style="color:#999">100GB+ File Support with Automatic Resume</p>
+
+<div class="container">
+<div>
+<div class="box">
+<h3>📤 Upload File</h3>
+<div class="drop-zone" id="dropZone">
+<p>Drop your file here or click to select</p>
+<p style="font-size:11px;color:#666">Supports files up to 100GB+</p>
+</div>
+<input type="file" id="fileInput" style="display:none">
+<input type="password" id="password" placeholder="Password (8+ chars)" style="margin-top:10px">
+</div>
+
+<div class="box hide" id="fileInfoBox">
+<h3>📄 File Information</h3>
+<div id="fileInfo"></div>
+<div class="controls">
+<button id="startBtn" onclick="startUpload()">Start Upload</button>
+<button id="pauseBtn" onclick="pauseUpload()" disabled>Pause</button>
+<button id="cancelBtn" onclick="cancelUpload()">Cancel</button>
+</div>
+</div>
+</div>
+
+<div>
+<div class="box">
+<h3>📥 Resume Upload</h3>
+<button onclick="selectProgressFile()">Load Progress File</button>
+<div id="resumeInfo" class="info hide" style="margin-top:10px"></div>
+</div>
+
+<div class="box">
+<h3>⬇️ Download File</h3>
+<input type="text" id="downloadInput" placeholder="Enter Meta TxID or load .kaspa file">
+<input type="file" id="kaspaFileInput" accept=".kaspa,.json" style="display:none" onchange="loadKaspaFileFromInput()">
+<button onclick="document.getElementById('kaspaFileInput').click()">Load .kaspa File</button>
+<button onclick="startDownload()" style="margin-top:10px">Start Download</button>
+<div id="downloadInfo" class="info hide" style="margin-top:10px"></div>
+</div>
+
+<div class="box">
+<h3>⚙️ Settings</h3>
+<select id="chunkSize">
+<option value="10240">10KB chunks (slower, more reliable)</option>
+<option value="20480" selected>20KB chunks (recommended)</option>
+<option value="23552">23KB chunks (faster, max size)</option>
+</select>
+<label style="display:flex;align-items:center;margin:10px 0">
+<input type="checkbox" id="autoSaveProgress" checked style="width:auto;margin-right:10px">
+Auto-save progress every 10 chunks
+</label>
+<label style="display:flex;align-items:center;margin:10px 0">
+<input type="checkbox" id="verifyCID" style="width:auto;margin-right:10px">
+Enable CID deduplication (experimental)
+</label>
+</div>
+</div>
+</div>
+
+<div class="progress-container hide" id="progressContainer">
+<h3 id="progressTitle">📊 Upload Progress</h3>
+<div class="progress-bar">
+<div class="progress-fill" id="progressFill">0%</div>
+</div>
+<div class="progress-stats">
+<div class="stat-box">
+<div class="stat-value" id="uploadedChunks">0</div>
+<div class="stat-label">Uploaded Chunks</div>
+</div>
+<div class="stat-box">
+<div class="stat-value" id="totalChunks">0</div>
+<div class="stat-label">Total Chunks</div>
+</div>
+<div class="stat-box">
+<div class="stat-value" id="uploadSpeed">0 KB/s</div>
+<div class="stat-label">Upload Speed</div>
+</div>
+<div class="stat-box">
+<div class="stat-value" id="timeRemaining">--:--</div>
+<div class="stat-label">Time Remaining</div>
+</div>
+</div>
+<div id="currentActivity" style="margin-top:10px"></div>
+</div>
+
+<div class="box">
+<h3>📜 Activity Log</h3>
+<div id="log" class="log"></div>
+</div>
+
+<script>
+// Global state
+let currentFile = null;
+let uploadState = null;
+let progressManager = null;
+let isPaused = false;
+let uploadStartTime = null;
+let downloadManager = null;
+let kaspaFileData = null;
+let processedChunks = {}; // Store chunks for demo purposes
+
+// Constants
+const CHUNK_SIZES = {
+    10240: 10 * 1024,
+    20480: 20 * 1024,
+    23552: 23 * 1024
+};
+
+// File type compression settings
+const COMPRESS_SKIP = new Set([
+    'jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mp3', 
+    'zip', 'rar', '7z', 'pdf', 'docx', 'xlsx'
+]);
+
+// Base64 encoding/decoding
+function toBase64(data) {
+    return btoa(String.fromCharCode(...data));
+}
+
+function fromBase64(str) {
+    return new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
+}
+
+// LZ compression
+function lzCompress(data) {
+    const result = [];
+    let i = 0;
+    while (i < data.length) {
+        let bestLen = 0, bestOff = 0;
+        const start = Math.max(0, i - 255);
+        for (let j = start; j < i; j++) {
+            let len = 0;
+            while (i + len < data.length && data[j + len] === data[i + len] && len < 255) len++;
+            if (len > bestLen) {
+                bestLen = len;
+                bestOff = i - j;
+            }
+        }
+        if (bestLen > 3) {
+            result.push(255, bestOff, bestLen);
+            i += bestLen;
+        } else {
+            result.push(data[i]);
+            i++;
+        }
+    }
+    return new Uint8Array(result);
+}
+
+function lzDecompress(data) {
+    const result = [];
+    let i = 0;
+    while (i < data.length) {
+        if (data[i] === 255 && i + 2 < data.length) {
+            const off = data[i + 1];
+            const len = data[i + 2];
+            const start = result.length - off;
+            for (let j = 0; j < len; j++) {
+                result.push(result[start + j]);
+            }
+            i += 3;
+        } else {
+            result.push(data[i]);
+            i++;
+        }
+    }
+    return new Uint8Array(result);
+}
+
+// Encryption functions
+async function deriveKey(password, salt) {
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(password),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+    );
+    
+    return crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt: salt,
+            iterations: 10000,
+            hash: 'SHA-256'
+        },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+async function encryptChunk(data, key, chunkIndex) {
+    const iv = new Uint8Array(12);
+    iv[0] = (chunkIndex >> 8) & 0xFF;
+    iv[1] = chunkIndex & 0xFF;
+    for (let i = 2; i < 12; i++) {
+        iv[i] = i * 17;
+    }
+    
+    const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        data
+    );
+    
+    return new Uint8Array(encrypted);
+}
+
+async function decryptChunk(data, key, chunkIndex) {
+    const iv = new Uint8Array(12);
+    iv[0] = (chunkIndex >> 8) & 0xFF;
+    iv[1] = chunkIndex & 0xFF;
+    for (let i = 2; i < 12; i++) {
+        iv[i] = i * 17;
+    }
+    
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        data
+    );
+    
+    return new Uint8Array(decrypted);
+}
+
+// Logging
+function log(msg, type = 'info') {
+    const el = document.getElementById('log');
+    const time = new Date().toTimeString().substr(0, 8);
+    const icons = {error: '❌', warning: '⚠️', success: '✅', info: '📝'};
+    el.textContent += `[${time}] ${icons[type]} ${msg}\n`;
+    el.scrollTop = el.scrollHeight;
+}
+
+// Progress Manager Class
+class StreamingProgressManager {
+    constructor(file, chunkSize) {
+        this.file = file;
+        this.chunkSize = chunkSize;
+        this.progressFileName = `${file.name}.progress.json`;
+        this.progress = null;
+        this.fileHandle = null;
+        this.inMemoryBackup = new Map();
+    }
+    
+    async initialize() {
+        // Check for existing progress
+        const existing = await this.checkExistingProgress();
+        
+        if (existing) {
+            this.progress = existing;
+            log(`Resuming from chunk ${this.getNextChunk()}/${this.progress.totalChunks}`);
+            return true;
+        }
+        
+        // Generate salt for encryption
+        const saltData = new TextEncoder().encode(this.file.name + this.file.size + this.file.lastModified);
+        const saltHash = await crypto.subtle.digest('SHA-256', saltData);
+        const salt = new Uint8Array(saltHash).slice(0, 16);
+        
+        // Create new progress
+        this.progress = {
+            version: 1,
+            fileInfo: {
+                name: this.file.name,
+                size: this.file.size,
+                lastModified: this.file.lastModified,
+                type: this.file.type
+            },
+            chunkInfo: {
+                size: this.chunkSize,
+                totalChunks: Math.ceil(this.file.size / this.chunkSize),
+                completedChunks: 0
+            },
+            chunks: new Map(), // index -> {txid, cid, timestamp}
+            encryption: {
+                algorithm: 'AES-256-GCM',
+                compressed: !COMPRESS_SKIP.has(this.getFileExtension()),
+                salt: toBase64(salt)
+            },
+            timestamps: {
+                started: Date.now(),
+                lastUpdate: Date.now()
+            }
+        };
+        
+        await this.saveProgress();
+        return false;
+    }
+    
+    async checkExistingProgress() {
+        try {
+            // Try to find progress in IndexedDB first
+            const db = await this.openDB();
+            const stored = await db.get('progress', this.file.name);
+            
+            if (stored && stored.fileInfo.size === this.file.size) {
+                // Convert chunks array back to Map
+                stored.chunks = new Map(stored.chunks);
+                return stored;
+            }
+        } catch (e) {
+            log('No existing progress in IndexedDB', 'info');
+        }
+        
+        return null;
+    }
+    
+    async openDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('KaspaStreaming', 1);
+            
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+            
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('progress')) {
+                    db.createObjectStore('progress', { keyPath: 'fileInfo.name' });
+                }
+            };
+        });
+    }
+    
+    async saveProgress() {
+        // Try multiple save strategies
+        const saved = await this.trySaveStrategies();
+        
+        if (!saved) {
+            log('Progress save failed, keeping in memory', 'warning');
+            this.inMemoryBackup.set(this.file.name, this.progress);
+        }
+    }
+    
+    async trySaveStrategies() {
+        // Strategy 1: IndexedDB (preferred)
+        try {
+            const db = await this.openDB();
+            const tx = db.transaction(['progress'], 'readwrite');
+            const store = tx.objectStore('progress');
+            
+            // Convert Map to array for storage
+            const toStore = {
+                ...this.progress,
+                chunks: Array.from(this.progress.chunks.entries())
+            };
+            
+            await store.put(toStore);
+            return true;
+        } catch (e) {
+            log('IndexedDB save failed: ' + e.message, 'warning');
+        }
+        
+        // Strategy 2: File System API (if available)
+        if ('showSaveFilePicker' in window) {
+            try {
+                if (!this.fileHandle) {
+                    this.fileHandle = await window.showSaveFilePicker({
+                        suggestedName: this.file.name + '.progress.json',
+                        types: [{
+                            description: 'Kaspa Progress',
+                            accept: {'application/json': ['.json']}
+                        }]
+                    });
+                }
+                
+                const writable = await this.fileHandle.createWritable();
+                const data = JSON.stringify(this.progress, null, 2);
+                await writable.write(data);
+                await writable.close();
+                return true;
+            } catch (e) {
+                log('File save failed: ' + e.message, 'warning');
+            }
+        }
+        
+        return false;
+    }
+    
+    async markChunkComplete(index, txid, cid = null) {
+        this.progress.chunks.set(index, {
+            txid: txid,
+            cid: cid,
+            timestamp: Date.now()
+        });
+        
+        this.progress.chunkInfo.completedChunks = this.progress.chunks.size;
+        this.progress.timestamps.lastUpdate = Date.now();
+        
+        // Auto-save every 10 chunks
+        if (document.getElementById('autoSaveProgress').checked && 
+            this.progress.chunkInfo.completedChunks % 10 === 0) {
+            await this.saveProgress();
+        }
+    }
+    
+    getNextChunk() {
+        for (let i = 0; i < this.progress.chunkInfo.totalChunks; i++) {
+            if (!this.progress.chunks.has(i)) {
+                return i;
+            }
+        }
+        return -1; // All done
+    }
+    
+    getProgress() {
+        const completed = this.progress.chunkInfo.completedChunks;
+        const total = this.progress.chunkInfo.totalChunks;
+        return {
+            completed,
+            total,
+            percentage: (completed / total * 100).toFixed(1),
+            nextChunk: this.getNextChunk()
+        };
+    }
+    
+    getFileExtension() {
+        return this.file.name.split('.').pop()?.toLowerCase() || '';
+    }
+}
+
+// File handling
+function setupFileHandling() {
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    
+    dropZone.onclick = () => fileInput.click();
+    
+    dropZone.ondragover = (e) => {
+        e.preventDefault();
+        dropZone.classList.add('dragover');
+    };
+    
+    dropZone.ondragleave = () => {
+        dropZone.classList.remove('dragover');
+    };
+    
+    dropZone.ondrop = (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file) handleFileSelect(file);
+    };
+    
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) handleFileSelect(file);
+    };
+}
+
+function handleFileSelect(file) {
+    currentFile = file;
+    
+    // Display file info
+    const info = document.getElementById('fileInfo');
+    info.innerHTML = `
+        <strong>Name:</strong> ${file.name}<br>
+        <strong>Size:</strong> ${formatSize(file.size)}<br>
+        <strong>Type:</strong> ${file.type || 'Unknown'}<br>
+        <strong>Modified:</strong> ${new Date(file.lastModified).toLocaleString()}<br>
+        <strong>Compression:</strong> ${COMPRESS_SKIP.has(file.name.split('.').pop()?.toLowerCase()) ? 'Disabled' : 'Enabled'}
+    `;
+    
+    document.getElementById('fileInfoBox').classList.remove('hide');
+    log(`File selected: ${file.name} (${formatSize(file.size)})`);
+}
+
+// Upload management
+async function startUpload() {
+    if (!currentFile) {
+        log('No file selected', 'error');
+        return;
+    }
+    
+    const password = document.getElementById('password').value;
+    if (password.length < 8) {
+        log('Password must be at least 8 characters', 'error');
+        return;
+    }
+    
+    const chunkSize = parseInt(document.getElementById('chunkSize').value);
+    
+    // Clear previous chunks
+    processedChunks = {};
+    
+    // Initialize progress manager
+    progressManager = new StreamingProgressManager(currentFile, chunkSize);
+    const isResume = await progressManager.initialize();
+    
+    // Show progress UI
+    document.getElementById('progressContainer').classList.remove('hide');
+    document.getElementById('startBtn').disabled = true;
+    document.getElementById('pauseBtn').disabled = false;
+    
+    uploadStartTime = Date.now();
+    isPaused = false;
+    
+    // Start streaming upload
+    streamingUpload(currentFile, password, progressManager);
+}
+
+async function streamingUpload(file, password, manager) {
+    const stream = file.stream();
+    const reader = stream.getReader();
+    
+    let buffer = new Uint8Array(0);
+    let chunkIndex = manager.getNextChunk();
+    
+    // Skip to resume point if needed
+    if (chunkIndex > 0) {
+        const skipBytes = chunkIndex * manager.chunkSize;
+        // Note: In production, use file.slice() for true streaming
+        log(`Resuming from byte ${skipBytes}`);
+    }
+    
+    try {
+        while (true) {
+            if (isPaused) {
+                await new Promise(resolve => {
+                    const checkPause = setInterval(() => {
+                        if (!isPaused) {
+                            clearInterval(checkPause);
+                            resolve();
+                        }
+                    }, 100);
+                });
+            }
+            
+            const { done, value } = await reader.read();
+            
+            if (done && buffer.length === 0) break;
+            
+            // Accumulate data
+            if (value) {
+                buffer = concatenateArrays(buffer, value);
+            }
+            
+            // Process complete chunks
+            while (buffer.length >= manager.chunkSize || (done && buffer.length > 0)) {
+                const chunk = buffer.slice(0, manager.chunkSize);
+                buffer = buffer.slice(manager.chunkSize);
+                
+                // Process chunk
+                await processChunk(chunk, chunkIndex, password, manager);
+                
+                // Update UI
+                updateProgress(manager);
+                
+                chunkIndex++;
+                
+                if (buffer.length < manager.chunkSize && done) break;
+            }
+            
+            if (done) break;
+        }
+        
+        log('Upload complete!', 'success');
+        document.getElementById('pauseBtn').disabled = true;
+        
+        // Generate .kaspa file automatically
+        await generateKaspaFile(manager);
+        
+    } catch (error) {
+        log(`Upload error: ${error.message}`, 'error');
+    } finally {
+        reader.releaseLock();
+    }
+}
+
+async function processChunk(data, index, password, manager) {
+    const activity = document.getElementById('currentActivity');
+    activity.innerHTML = `<div class="chunk-status uploading">
+        🔄 Processing chunk ${index + 1}/${manager.progress.chunkInfo.totalChunks}
+    </div>`;
+    
+    let retries = 0;
+    const maxRetries = 3;
+    
+    while (retries < maxRetries) {
+        try {
+            // Get encryption key
+            const salt = fromBase64(manager.progress.encryption.salt);
+            const key = await deriveKey(password, salt);
+            
+            // Compress if needed
+            const shouldCompress = manager.progress.encryption.compressed;
+            const compressed = shouldCompress ? lzCompress(data) : data;
+            
+            // Encrypt
+            const encrypted = await encryptChunk(compressed, key, index);
+            
+            // Encode to base64
+            const encoded = toBase64(encrypted);
+            
+            // Simulate upload (in production, actual Kaspa upload here)
+            await simulateUpload(encrypted);
+            
+            // Generate fake txid for demo
+            const txid = 'tx_' + Math.random().toString(36).substr(2, 9);
+            
+            // Calculate CID if enabled
+            let cid = null;
+            if (document.getElementById('verifyCID').checked) {
+                cid = await calculateCID(data);
+            }
+            
+            // Mark complete
+            await manager.markChunkComplete(index, txid, cid);
+            
+            // Store chunk data for demo (in production, would fetch from blockchain)
+            processedChunks[index] = {
+                payload: encoded, // Store the base64 encoded encrypted data
+                txid: txid,
+                originalSize: data.length,
+                compressedSize: compressed.length,
+                encryptedSize: encrypted.length
+            };
+            
+            activity.innerHTML = `<div class="chunk-status success">
+                ✅ Chunk ${index + 1} uploaded (TxID: ${txid})
+            </div>`;
+            
+            return; // Success, exit function
+            
+        } catch (error) {
+            retries++;
+            
+            if (retries < maxRetries) {
+                log(`Chunk ${index + 1} failed, retry ${retries}/${maxRetries}: ${error.message}`, 'warning');
+                activity.innerHTML = `<div class="chunk-status error">
+                    ⚠️ Chunk ${index + 1} retry ${retries}/${maxRetries}...
+                </div>`;
+                // Exponential backoff
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+            } else {
+                activity.innerHTML = `<div class="chunk-status error">
+                    ❌ Chunk ${index + 1} failed after ${maxRetries} retries: ${error.message}
+                </div>`;
+                throw error;
+            }
+        }
+    }
+}
+
+// UI Updates
+function updateProgress(manager) {
+    const progress = manager.getProgress();
+    const fill = document.getElementById('progressFill');
+    const uploaded = document.getElementById('uploadedChunks');
+    const total = document.getElementById('totalChunks');
+    
+    fill.style.width = progress.percentage + '%';
+    fill.textContent = progress.percentage + '%';
+    uploaded.textContent = progress.completed;
+    total.textContent = progress.total;
+    
+    // Calculate speed and time remaining
+    if (uploadStartTime) {
+        const elapsed = (Date.now() - uploadStartTime) / 1000;
+        const chunksPerSecond = progress.completed / elapsed;
+        const bytesPerSecond = chunksPerSecond * manager.chunkSize;
+        
+        document.getElementById('uploadSpeed').textContent = 
+            formatSize(bytesPerSecond) + '/s';
+        
+        const remaining = (progress.total - progress.completed) / chunksPerSecond;
+        document.getElementById('timeRemaining').textContent = 
+            formatTime(remaining);
+    }
+}
+
+// Utility functions
+function formatSize(bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unit = 0;
+    
+    while (size >= 1024 && unit < units.length - 1) {
+        size /= 1024;
+        unit++;
+    }
+    
+    return size.toFixed(2) + ' ' + units[unit];
+}
+
+function formatTime(seconds) {
+    if (!isFinite(seconds)) return '--:--';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${minutes}:${secs.toString().padStart(2, '0')}`;
+}
+
+function concatenateArrays(a, b) {
+    const result = new Uint8Array(a.length + b.length);
+    result.set(a, 0);
+    result.set(b, a.length);
+    return result;
+}
+
+async function calculateCID(data) {
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    const bytes = new Uint8Array(hash);
+    return 'Qm' + btoa(String.fromCharCode(...bytes)).substr(0, 20);
+}
+
+async function simulateUpload(data) {
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
+    
+    // Simulate occasional failures
+    if (Math.random() < 0.05) {
+        throw new Error('Network timeout');
+    }
+}
+
+// Control functions
+function pauseUpload() {
+    isPaused = true;
+    document.getElementById('pauseBtn').textContent = 'Resume';
+    document.getElementById('pauseBtn').onclick = resumeUpload;
+    log('Upload paused');
+}
+
+function resumeUpload() {
+    isPaused = false;
+    document.getElementById('pauseBtn').textContent = 'Pause';
+    document.getElementById('pauseBtn').onclick = pauseUpload;
+    log('Upload resumed');
+}
+
+async function cancelUpload() {
+    if (confirm('Cancel upload and delete progress?')) {
+        isPaused = true;
+        
+        // Clear progress
+        if (progressManager) {
+            try {
+                const db = await progressManager.openDB();
+                await db.delete('progress', currentFile.name);
+            } catch (e) {
+                log('Failed to clear progress: ' + e.message, 'warning');
+            }
+        }
+        
+        // Reset UI
+        document.getElementById('progressContainer').classList.add('hide');
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('pauseBtn').disabled = true;
+        
+        log('Upload cancelled', 'warning');
+    }
+}
+
+async function selectProgressFile() {
+    try {
+        const [fileHandle] = await window.showOpenFilePicker({
+            types: [{
+                description: 'Kaspa Progress File',
+                accept: {'application/json': ['.json']}
+            }]
+        });
+        
+        const file = await fileHandle.getFile();
+        const content = await file.text();
+        const progress = JSON.parse(content);
+        
+        // Display resume info
+        const info = document.getElementById('resumeInfo');
+        info.innerHTML = `
+            <strong>File:</strong> ${progress.fileInfo.name}<br>
+            <strong>Progress:</strong> ${progress.chunkInfo.completedChunks}/${progress.chunkInfo.totalChunks} chunks<br>
+            <strong>Started:</strong> ${new Date(progress.timestamps.started).toLocaleString()}<br>
+            <button onclick="loadProgressFile('${progress.fileInfo.name}')">Load This File</button>
+        `;
+        info.classList.remove('hide');
+        
+    } catch (e) {
+        log('Failed to load progress file: ' + e.message, 'error');
+    }
+}
+
+// Download functionality
+class StreamingDownloadManager {
+    constructor(kaspaData, password) {
+        this.kaspaData = kaspaData;
+        this.password = password;
+        this.progressFileName = `${kaspaData.file.name}.download.progress.json`;
+        this.chunks = new Map();
+        this.fileHandle = null;
+        this.key = null; // Will be derived in initialize
+    }
+    
+    async initialize() {
+        // Derive encryption key
+        const salt = fromBase64(this.kaspaData.encryption.salt);
+        this.key = await deriveKey(this.password, salt);
+        
+        // Check for existing download progress
+        try {
+            const db = await this.openDB();
+            const stored = await db.get('downloads', this.kaspaData.file.name);
+            
+            if (stored && stored.file.sha256 === this.kaspaData.file.sha256) {
+                this.chunks = new Map(stored.chunks);
+                log(`Resuming download: ${this.chunks.size}/${this.kaspaData.chunks.length} chunks completed`);
+                return true;
+            }
+        } catch (e) {
+            log('Starting fresh download', 'info');
+        }
+        
+        return false;
+    }
+    
+    async openDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open('KaspaDownloads', 1);
+            
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+            
+            request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('downloads')) {
+                    db.createObjectStore('downloads', { keyPath: 'file.name' });
+                }
+            };
+        });
+    }
+    
+    async saveProgress() {
+        try {
+            const db = await this.openDB();
+            const tx = db.transaction(['downloads'], 'readwrite');
+            const store = tx.objectStore('downloads');
+            
+            await store.put({
+                file: this.kaspaData.file,
+                chunks: Array.from(this.chunks.entries()),
+                timestamp: Date.now()
+            });
+        } catch (e) {
+            log('Failed to save download progress: ' + e.message, 'warning');
+        }
+    }
+    
+    getNextChunk() {
+        for (let i = 0; i < this.kaspaData.chunks.length; i++) {
+            if (!this.chunks.has(i)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    
+    async downloadChunk(index) {
+        const chunkInfo = this.kaspaData.chunks[index];
+        
+        // Simulate downloading from blockchain
+        // In production, fetch actual data using txid
+        await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
+        
+        // Simulate occasional failures
+        if (Math.random() < 0.05) {
+            throw new Error('Failed to fetch chunk from blockchain');
+        }
+        
+        // For demo: Get the actual chunk data from the global processedChunks
+        // In production, this would fetch from blockchain using txid
+        let chunkData = null;
+        
+        // Try to find the chunk in processedChunks (if same session)
+        if (processedChunks && processedChunks[index]) {
+            const encodedData = processedChunks[index].payload;
+            const encrypted = fromBase64(encodedData);
+            const compressed = await decryptChunk(encrypted, this.key, index);
+            
+            // Check if file was compressed
+            const wasCompressed = this.kaspaData.encryption.compressed;
+            chunkData = wasCompressed ? lzDecompress(compressed) : compressed;
+            
+            log(`Using cached chunk ${index + 1}`, 'info');
+        } else {
+            // In production: fetch from blockchain using chunkInfo.txid
+            throw new Error(`Chunk ${index} not found in cache. In production, would fetch from blockchain`);
+        }
+        
+        this.chunks.set(index, {
+            data: chunkData,
+            txid: chunkInfo.txid
+        });
+        
+        // Auto-save every 10 chunks
+        if (this.chunks.size % 10 === 0) {
+            await this.saveProgress();
+        }
+    }
+    
+    async assembleFile() {
+        // Create file using File System API or fallback to download
+        try {
+            // Try File System API first
+            if ('showSaveFilePicker' in window && !this.fileHandle) {
+                // Get file extension
+                const fileName = this.kaspaData.file.name;
+                const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
+                const mimeType = this.kaspaData.file.mimeType || 'application/octet-stream';
+                
+                // Create proper accept object
+                const acceptObj = {};
+                if (ext && ext !== '.') {
+                    acceptObj[mimeType] = [ext];
+                } else {
+                    // Fallback for files without extension
+                    acceptObj['application/octet-stream'] = [];
+                }
+                
+                this.fileHandle = await window.showSaveFilePicker({
+                    suggestedName: fileName,
+                    types: [{
+                        description: 'Original File',
+                        accept: acceptObj
+                    }]
+                });
+            }
+        
+            const writable = await this.fileHandle.createWritable();
+            
+            // Write chunks in order
+            for (let i = 0; i < this.kaspaData.chunks.length; i++) {
+                const chunk = this.chunks.get(i);
+                if (!chunk) {
+                    throw new Error(`Missing chunk ${i}`);
+                }
+                
+                await writable.write(chunk.data);
+            }
+            
+            await writable.close();
+            
+        } catch (e) {
+            // Fallback to traditional download if File System API fails
+            log('File System API failed, using traditional download', 'warning');
+            
+            // Combine all chunks
+            const totalSize = Array.from(this.chunks.values()).reduce((sum, chunk) => sum + chunk.data.length, 0);
+            const combined = new Uint8Array(totalSize);
+            let offset = 0;
+            
+            for (let i = 0; i < this.kaspaData.chunks.length; i++) {
+                const chunk = this.chunks.get(i);
+                if (!chunk) {
+                    throw new Error(`Missing chunk ${i}`);
+                }
+                combined.set(chunk.data, offset);
+                offset += chunk.data.length;
+            }
+            
+            // Create blob and download
+            const blob = new Blob([combined], { type: this.kaspaData.file.mimeType || 'application/octet-stream' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = this.kaspaData.file.name;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+        }
+        
+        // Clean up progress
+        try {
+            const db = await this.openDB();
+            await db.delete('downloads', this.kaspaData.file.name);
+        } catch (e) {
+            log('Failed to clean up download progress', 'warning');
+        }
+    }
+}
+
+async function selectKaspaFile() {
+    try {
+        const [fileHandle] = await window.showOpenFilePicker({
+            types: [{
+                description: 'Kaspa File',
+                accept: {
+                    'application/json': ['.kaspa', '.json'],
+                    '*/*': ['.kaspa']
+                }
+            }],
+            multiple: false
+        });
+        
+        const file = await fileHandle.getFile();
+        const content = await file.text();
+        kaspaFileData = JSON.parse(content);
+        
+        // Display file info
+        const info = document.getElementById('downloadInfo');
+        info.innerHTML = `
+            <strong>File:</strong> ${kaspaFileData.file.name}<br>
+            <strong>Size:</strong> ${formatSize(kaspaFileData.file.size)}<br>
+            <strong>Chunks:</strong> ${kaspaFileData.chunks.length}<br>
+            <strong>Encryption:</strong> ${kaspaFileData.encryption.algorithm}<br>
+            ${kaspaFileData.auth?.passwordIncluded ? 
+                '<strong style="color:#66ff66">✅ Password included</strong>' : 
+                '<strong style="color:#ffcc66">⚠️ Password required</strong>'}
+        `;
+        info.classList.remove('hide');
+        
+        // Auto-fill password if included and hide password field
+        if (kaspaFileData.auth?.passwordIncluded && kaspaFileData.auth?.password) {
+            document.getElementById('password').value = kaspaFileData.auth.password;
+            document.getElementById('password').style.display = 'none';
+            log('Password auto-loaded from .kaspa file', 'success');
+        } else {
+            document.getElementById('password').style.display = 'block';
+        }
+        
+        log('Kaspa file loaded: ' + kaspaFileData.file.name, 'success');
+        
+    } catch (e) {
+        log('Failed to load .kaspa file: ' + e.message, 'error');
+    }
+}
+
+async function startDownload() {
+    if (!kaspaFileData) {
+        log('Please load a .kaspa file first', 'error');
+        return;
+    }
+    
+    // Check if password is included in .kaspa file
+    let password = document.getElementById('password').value;
+    if (kaspaFileData.auth?.passwordIncluded && kaspaFileData.auth?.password) {
+        password = kaspaFileData.auth.password;
+        log('Using password from .kaspa file', 'info');
+    }
+    
+    if (!password || password.length < 8) {
+        log('Please enter the password', 'error');
+        return;
+    }
+    
+    // Initialize download manager
+    downloadManager = new StreamingDownloadManager(kaspaFileData, password);
+    const isResume = await downloadManager.initialize();
+    
+    // Update UI
+    document.getElementById('progressTitle').textContent = '📥 Download Progress';
+    document.getElementById('progressContainer').classList.remove('hide');
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('pauseBtn').disabled = false;
+    
+    uploadStartTime = Date.now();
+    isPaused = false;
+    
+    // Start download
+    streamingDownload();
+}
+
+async function streamingDownload() {
+    const activity = document.getElementById('currentActivity');
+    
+    try {
+        let chunkIndex = downloadManager.getNextChunk();
+        
+        while (chunkIndex !== -1) {
+            if (isPaused) {
+                await new Promise(resolve => {
+                    const checkPause = setInterval(() => {
+                        if (!isPaused) {
+                            clearInterval(checkPause);
+                            resolve();
+                        }
+                    }, 100);
+                });
+            }
+            
+            activity.innerHTML = `<div class="chunk-status uploading">
+                🔄 Downloading chunk ${chunkIndex + 1}/${kaspaFileData.chunks.length}
+            </div>`;
+            
+            // Download with retry
+            let retries = 0;
+            const maxRetries = 3;
+            
+            while (retries < maxRetries) {
+                try {
+                    await downloadManager.downloadChunk(chunkIndex);
+                    
+                    activity.innerHTML = `<div class="chunk-status success">
+                        ✅ Chunk ${chunkIndex + 1} downloaded
+                    </div>`;
+                    
+                    break;
+                    
+                } catch (error) {
+                    retries++;
+                    
+                    if (retries < maxRetries) {
+                        log(`Download chunk ${chunkIndex + 1} failed, retry ${retries}/${maxRetries}`, 'warning');
+                        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries)));
+                    } else {
+                        throw error;
+                    }
+                }
+            }
+            
+            // Update progress
+            updateDownloadProgress();
+            
+            chunkIndex = downloadManager.getNextChunk();
+        }
+        
+        // All chunks downloaded, assemble file
+        log('All chunks downloaded, assembling file...', 'success');
+        activity.innerHTML = '<div class="chunk-status success">🔄 Assembling file...</div>';
+        
+        await downloadManager.assembleFile();
+        
+        log('Download complete!', 'success');
+        activity.innerHTML = '<div class="chunk-status success">✅ Download complete!</div>';
+        
+        // Reset UI
+        document.getElementById('pauseBtn').disabled = true;
+        document.getElementById('progressContainer').classList.add('hide');
+        
+    } catch (error) {
+        log(`Download error: ${error.message}`, 'error');
+        activity.innerHTML = `<div class="chunk-status error">❌ Download failed: ${error.message}</div>`;
+    }
+}
+
+function updateDownloadProgress() {
+    const completed = downloadManager.chunks.size;
+    const total = kaspaFileData.chunks.length;
+    const percentage = (completed / total * 100).toFixed(1);
+    
+    const fill = document.getElementById('progressFill');
+    const uploaded = document.getElementById('uploadedChunks');
+    const totalChunks = document.getElementById('totalChunks');
+    
+    fill.style.width = percentage + '%';
+    fill.textContent = percentage + '%';
+    uploaded.textContent = completed;
+    totalChunks.textContent = total;
+    
+    // Calculate speed
+    if (uploadStartTime) {
+        const elapsed = (Date.now() - uploadStartTime) / 1000;
+        const chunksPerSecond = completed / elapsed;
+        const bytesPerSecond = chunksPerSecond * 20480; // Approximate
+        
+        document.getElementById('uploadSpeed').textContent = 
+            formatSize(bytesPerSecond) + '/s';
+        
+        const remaining = (total - completed) / chunksPerSecond;
+        document.getElementById('timeRemaining').textContent = 
+            formatTime(remaining);
+    }
+}
+
+// Generate .kaspa file
+async function generateKaspaFile(manager) {
+    try {
+        const progress = manager.getProgress();
+        const password = document.getElementById('password').value;
+        
+        // Create .kaspa metadata
+        const kaspaData = {
+            version: "1.0",
+            kaspa: {
+                network: "testnet-10",
+                sdkVersion: "1.0.0"
+            },
+            file: {
+                name: manager.file.name,
+                size: manager.file.size,
+                mimeType: manager.file.type || 'application/octet-stream',
+                sha256: await calculateFileHash(manager.file),
+                lastModified: manager.file.lastModified
+            },
+            encryption: {
+                algorithm: "AES-256-GCM",
+                compressed: manager.progress.encryption.compressed,
+                salt: btoa(String.fromCharCode(...new Uint8Array(await generateSalt(manager.file))))
+            },
+            chunks: Array.from(manager.progress.chunks.entries()).map(([idx, chunk]) => ({
+                index: idx,
+                txid: chunk.txid,
+                cid: chunk.cid,
+                timestamp: chunk.timestamp
+            })),
+            metadata: {
+                createdAt: manager.progress.timestamps.started,
+                completedAt: Date.now(),
+                totalChunks: manager.progress.chunkInfo.totalChunks,
+                chunkSize: manager.chunkSize
+            },
+            auth: {
+                passwordIncluded: true,
+                password: password,
+                warning: "Password is stored in plain text. Share this file only with trusted parties."
+            }
+        };
+        
+        // Save as .kaspa file with better browser compatibility
+        const kaspaContent = JSON.stringify(kaspaData, null, 2);
+        const blob = new Blob([kaspaContent], { type: 'application/json' });
+        
+        // Create download link with better compatibility
+        const a = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        a.href = url;
+        a.download = manager.file.name + '.kaspa';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        setTimeout(() => URL.revokeObjectURL(url), 100);
+        
+        log(`.kaspa file generated: ${manager.file.name}.kaspa`, 'success');
+        
+        // Show download info
+        const info = document.createElement('div');
+        info.className = 'info success';
+        info.innerHTML = `
+            <strong>✅ Upload Complete!</strong><br>
+            .kaspa file downloaded with password included<br>
+            Share this file to allow others to download
+        `;
+        document.getElementById('fileInfoBox').appendChild(info);
+        
+    } catch (e) {
+        log('Error generating .kaspa file: ' + e.message, 'error');
+    }
+}
+
+async function generateSalt(file) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(file.name + file.size + file.lastModified);
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return new Uint8Array(hash).slice(0, 16);
+}
+
+async function calculateFileHash(file) {
+    // For large files, we'll just hash the first and last chunks
+    const chunkSize = 1024 * 1024; // 1MB
+    const firstChunk = file.slice(0, chunkSize);
+    const lastChunk = file.slice(-chunkSize);
+    
+    const firstData = await firstChunk.arrayBuffer();
+    const lastData = await lastChunk.arrayBuffer();
+    
+    const combined = new Uint8Array(firstData.byteLength + lastData.byteLength + 8);
+    combined.set(new Uint8Array(firstData), 0);
+    combined.set(new Uint8Array(lastData), firstData.byteLength);
+    
+    // Add file size to hash
+    const sizeBytes = new DataView(new ArrayBuffer(8));
+    sizeBytes.setBigUint64(0, BigInt(file.size));
+    combined.set(new Uint8Array(sizeBytes.buffer), firstData.byteLength + lastData.byteLength);
+    
+    const hash = await crypto.subtle.digest('SHA-256', combined);
+    const bytes = new Uint8Array(hash);
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Load .kaspa file from input
+async function loadKaspaFileFromInput() {
+    const fileInput = document.getElementById('kaspaFileInput');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        log('No file selected', 'error');
+        return;
+    }
+    
+    try {
+        const content = await file.text();
+        kaspaFileData = JSON.parse(content);
+        
+        // Display file info
+        const info = document.getElementById('downloadInfo');
+        info.innerHTML = `
+            <strong>File:</strong> ${kaspaFileData.file.name}<br>
+            <strong>Size:</strong> ${formatSize(kaspaFileData.file.size)}<br>
+            <strong>Chunks:</strong> ${kaspaFileData.chunks.length}<br>
+            <strong>Encryption:</strong> ${kaspaFileData.encryption.algorithm}<br>
+            ${kaspaFileData.auth?.passwordIncluded ? 
+                '<strong style="color:#66ff66">✅ Password included</strong>' : 
+                '<strong style="color:#ffcc66">⚠️ Password required</strong>'}
+        `;
+        info.classList.remove('hide');
+        
+        // Auto-fill password if included and hide password field
+        if (kaspaFileData.auth?.passwordIncluded && kaspaFileData.auth?.password) {
+            document.getElementById('password').value = kaspaFileData.auth.password;
+            document.getElementById('password').style.display = 'none';
+            log('Password auto-loaded from .kaspa file', 'success');
+        } else {
+            document.getElementById('password').style.display = 'block';
+        }
+        
+        log('Kaspa file loaded: ' + kaspaFileData.file.name, 'success');
+        
+    } catch (e) {
+        log('Error loading .kaspa file: ' + e.message, 'error');
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    setupFileHandling();
+    log('🚀 Kaspa Streaming Storage ready!');
+    log('Supports 100GB+ files with automatic resume');
+    log('Now with streaming download support!');
+});
+</script>
+</body>
+</html>

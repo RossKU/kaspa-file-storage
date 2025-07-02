@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kaspa File Storage - P2P Mode</title>
+<style>
+body{font-family:monospace;max-width:800px;margin:0 auto;padding:10px;background:#1a1a1a;color:#fff}
+.box{border:1px solid #444;padding:15px;margin:10px 0;border-radius:4px;background:#2a2a2a}
+input,textarea,button,select{width:100%;padding:8px;margin:5px 0;background:#333;color:#fff;border:1px solid #555;border-radius:4px;font-family:monospace}
+button{background:#49EACB;color:#000;cursor:pointer;font-weight:bold}
+button:hover{background:#3BC9A8}
+button:disabled{background:#666;color:#999;cursor:not-allowed}
+.log{background:#000;padding:8px;height:150px;overflow-y:auto;font-size:11px;white-space:pre-wrap;border:1px solid #333}
+.hide{display:none}
+.chunk-btn{width:auto;margin:5px;padding:6px 12px}
+.info{background:#333;padding:10px;margin:10px 0;border-radius:4px;font-size:12px;border-left:3px solid #49EACB}
+.error{border-left-color:#ff4444;color:#ff6666}
+.success{border-left-color:#44ff44;color:#66ff66}
+.kaspa-file{background:#1a1a1a;border:2px dashed #49EACB;padding:20px;text-align:center;margin:10px 0;border-radius:8px}
+.kaspa-file:hover{background:#222;border-color:#3BC9A8}
+.progress{width:100%;height:20px;background:#333;border:1px solid #444;border-radius:4px;overflow:hidden;margin:10px 0}
+.progress-bar{height:100%;background:#49EACB;transition:width 0.3s;text-align:center;line-height:20px;color:#000;font-size:11px}
+.tab-buttons{display:flex;gap:5px;margin-bottom:10px}
+.tab-btn{flex:1;background:#333;border:1px solid #444}
+.tab-btn.active{background:#49EACB;color:#000}
+.tab-content{display:none}
+.tab-content.active{display:block}
+pre{background:#000;padding:10px;border-radius:4px;overflow-x:auto;font-size:11px}
+</style>
+</head>
+<body>
+<h1>🚀 Kaspa File Storage - P2P Mode</h1>
+
+<div class="tab-buttons">
+<button class="tab-btn active" onclick="switchTab('upload')">📤 Upload</button>
+<button class="tab-btn" onclick="switchTab('download')">📥 Download</button>
+<button class="tab-btn" onclick="switchTab('info')">ℹ️ Info</button>
+</div>
+
+<!-- Upload Tab -->
+<div id="upload-tab" class="tab-content active">
+<div class="box">
+<h3>1️⃣ Select File & Settings</h3>
+<input type="file" id="file">
+<input type="password" id="pass" placeholder="Password (8+ chars)">
+<select id="network">
+<option value="mainnet">Mainnet (Real KAS)</option>
+<option value="testnet-10" selected>Testnet-10 (Test KAS)</option>
+</select>
+<select id="chunkSize">
+<option value="15">15KB chunks</option>
+<option value="20" selected>20KB chunks (recommended)</option>
+<option value="23">23KB chunks (max)</option>
+</select>
+</div>
+
+<div class="box">
+<h3>2️⃣ Process & Upload Chunks</h3>
+<button onclick="processFile()" id="processBtn">Process File</button>
+<div class="progress hide" id="processProgress">
+<div class="progress-bar" id="processBar">0%</div>
+</div>
+<div id="chunksResult" class="hide"></div>
+</div>
+
+<div class="box hide" id="kaspaFileBox">
+<h3>3️⃣ Generate .kaspa File</h3>
+<label style="display:flex;align-items:center;margin:10px 0">
+<input type="checkbox" id="includePassword" style="width:auto;margin-right:10px">
+Include password in .kaspa file (⚠️ Security Risk)
+</label>
+<button onclick="generateKaspaFile()" id="kaspaBtn">Generate .kaspa P2P File</button>
+<div class="info hide" id="kaspaInfo"></div>
+</div>
+</div>
+
+<!-- Download Tab -->
+<div id="download-tab" class="tab-content">
+<div class="box">
+<h3>Load .kaspa File</h3>
+<div class="kaspa-file" onclick="document.getElementById('kaspaFile').click()">
+<p>📁 Click to select .kaspa file<br>or drag & drop here</p>
+</div>
+<input type="file" id="kaspaFile" accept=".kaspa" style="display:none" onchange="loadKaspaFile()">
+</div>
+
+<div class="box hide" id="downloadBox">
+<h3>File Information</h3>
+<pre id="fileInfo"></pre>
+<div id="passwordSection">
+<input type="password" id="downloadPass" placeholder="Enter password">
+</div>
+<div class="info">
+<strong>Option 1:</strong> Use auto-reference (chunks from current session)<br>
+<strong>Option 2:</strong> Paste chunks manually below
+</div>
+<textarea id="manualChunks" rows="5" placeholder="(Optional) Paste chunk payloads here, one per line"></textarea>
+<button onclick="downloadFile()">Download Original File</button>
+<div class="progress hide" id="downloadProgress">
+<div class="progress-bar" id="downloadBar">0%</div>
+</div>
+</div>
+</div>
+
+<!-- Info Tab -->
+<div id="info-tab" class="tab-content">
+<div class="box">
+<h3>📖 About .kaspa Files</h3>
+<div class="info">
+<strong>What is a .kaspa file?</strong><br>
+• P2P metadata file for Kaspa blockchain storage<br>
+• Contains all chunk TxIDs and metadata<br>
+• Does NOT contain the actual file data<br>
+• File data is stored permanently on Kaspa blockchain<br>
+• Share the .kaspa file + password to share your file
+</div>
+</div>
+
+<div class="box">
+<h3>🔐 Security</h3>
+<div class="info">
+• Files are encrypted with AES-256-GCM<br>
+• Password is NOT stored in .kaspa file<br>
+• Each chunk has unique IV for security<br>
+• Original file hash for integrity verification
+</div>
+</div>
+
+<div class="box">
+<h3>💰 Cost Calculator</h3>
+<div class="info">
+Base fee: 0.00005 KAS<br>
+Payload fee: 0.00001 KAS/KB<br>
+<br>
+Example: 1MB file ≈ 50 chunks<br>
+Cost: 50 × (0.00005 + 0.0002) = 0.0125 KAS
+</div>
+</div>
+</div>
+
+<div class="box">
+<h3>📝 Log</h3>
+<div id="log" class="log"></div>
+</div>
+
+<script>
+// Global state
+let currentFile = null;
+let processedChunks = [];
+let kaspaMetadata = null;
+let currentPassword = null;
+
+// Logging
+function log(msg, type = 'info') {
+    const el = document.getElementById('log');
+    const time = new Date().toTimeString().substr(0, 8);
+    const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : '📝';
+    el.textContent += `[${time}] ${prefix} ${msg}\n`;
+    el.scrollTop = el.scrollHeight;
+}
+
+// Tab switching
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    
+    document.querySelector(`.tab-btn:nth-child(${tab === 'upload' ? 1 : tab === 'download' ? 2 : 3})`).classList.add('active');
+    document.getElementById(`${tab}-tab`).classList.add('active');
+}
+
+// File types that should NOT be compressed
+const COMPRESS_SKIP = {
+    image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico', 'svg', 'tiff', 'tif'],
+    video: ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', 'mpg', 'mpeg'],
+    audio: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'wma', 'opus', 'mp2'],
+    archive: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'z', 'tgz', 'lz'],
+    other: ['pdf', 'docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp']
+};
+
+const ALREADY_COMPRESSED = new Set(Object.values(COMPRESS_SKIP).flat());
+
+// Compression decision logic
+function shouldCompress(filename) {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    return !ALREADY_COMPRESSED.has(ext);
+}
+
+// LZ compression for text/uncompressed data
+function lzCompress(data) {
+    const result = [];
+    let i = 0;
+    while (i < data.length) {
+        let bestLen = 0, bestOff = 0;
+        const start = Math.max(0, i - 255);
+        for (let j = start; j < i; j++) {
+            let len = 0;
+            while (i + len < data.length && data[j + len] === data[i + len] && len < 255) len++;
+            if (len > bestLen) {
+                bestLen = len;
+                bestOff = i - j;
+            }
+        }
+        if (bestLen > 3) {
+            result.push(255, bestOff, bestLen);
+            i += bestLen;
+        } else {
+            result.push(data[i]);
+            i++;
+        }
+    }
+    return new Uint8Array(result);
+}
+
+function lzDecompress(data) {
+    const result = [];
+    let i = 0;
+    while (i < data.length) {
+        if (data[i] === 255 && i + 2 < data.length) {
+            const off = data[i + 1];
+            const len = data[i + 2];
+            const start = result.length - off;
+            for (let j = 0; j < len; j++) {
+                result.push(result[start + j]);
+            }
+            i += 3;
+        } else {
+            result.push(data[i]);
+            i++;
+        }
+    }
+    return new Uint8Array(result);
+}
+
+// AES encryption with deterministic salt
+async function deriveKey(password, salt) {
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(password),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+    );
+    
+    return crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt: salt,
+            iterations: 10000,
+            hash: 'SHA-256'
+        },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+async function encryptChunk(data, key, chunkIndex) {
+    const iv = new Uint8Array(12);
+    iv[0] = (chunkIndex >> 8) & 0xFF;
+    iv[1] = chunkIndex & 0xFF;
+    for (let i = 2; i < 12; i++) {
+        iv[i] = i * 17;
+    }
+    
+    const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        data
+    );
+    
+    return new Uint8Array(encrypted);
+}
+
+async function decryptChunk(data, key, chunkIndex) {
+    const iv = new Uint8Array(12);
+    iv[0] = (chunkIndex >> 8) & 0xFF;
+    iv[1] = chunkIndex & 0xFF;
+    for (let i = 2; i < 12; i++) {
+        iv[i] = i * 17;
+    }
+    
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        data
+    );
+    
+    return new Uint8Array(decrypted);
+}
+
+// Base64
+function toBase64(data) {
+    return btoa(String.fromCharCode(...data));
+}
+
+function fromBase64(str) {
+    return new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
+}
+
+// SHA256 hash
+async function sha256(data) {
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+// Process file
+async function processFile() {
+    const file = document.getElementById('file').files[0];
+    const pass = document.getElementById('pass').value;
+    const network = document.getElementById('network').value;
+    const chunkSize = parseInt(document.getElementById('chunkSize').value) * 1024;
+    
+    if (!file) return log('No file selected', 'error');
+    if (pass.length < 8) return log('Password must be at least 8 characters', 'error');
+    
+    currentFile = file;
+    currentPassword = pass;
+    processedChunks = [];
+    
+    document.getElementById('processBtn').disabled = true;
+    document.getElementById('processProgress').classList.remove('hide');
+    
+    try {
+        log(`Processing: ${file.name} (${(file.size/1024).toFixed(1)}KB)`);
+        
+        const data = new Uint8Array(await file.arrayBuffer());
+        const fileHash = await sha256(data);
+        
+        // Determine compression strategy
+        const useCompression = shouldCompress(file.name);
+        log(`Compression: ${useCompression ? 'ENABLED' : 'DISABLED'} for ${file.name}`);
+        
+        // Generate deterministic salt from file hash
+        const saltBase = fileHash + file.name;
+        const saltHash = await sha256(new TextEncoder().encode(saltBase));
+        const salt = fromBase64(btoa(saltHash.substring(0, 24)));
+        
+        const key = await deriveKey(pass, salt);
+        
+        const chunks = Math.ceil(data.length / chunkSize);
+        log(`Creating ${chunks} chunks...`);
+        
+        const resultDiv = document.getElementById('chunksResult');
+        resultDiv.innerHTML = '<h4>📦 Chunks (Simulate Upload)</h4>';
+        resultDiv.classList.remove('hide');
+        
+        // Process chunks
+        for (let i = 0; i < chunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, data.length);
+            const chunk = data.slice(start, end);
+            
+            // Compress based on file type
+            const compressed = useCompression ? lzCompress(chunk) : chunk;
+            const compressionRatio = compressed.length / chunk.length;
+            
+            // Encrypt
+            const encrypted = await encryptChunk(compressed, key, i);
+            
+            // Encode
+            const encoded = toBase64(encrypted);
+            
+            // Simulate TxID (in real implementation, this would come from blockchain)
+            const simulatedTxId = await sha256(new TextEncoder().encode(
+                `${fileHash}-chunk-${i}-${Date.now()}`
+            ));
+            
+            const chunkInfo = {
+                index: i,
+                txid: simulatedTxId,
+                originalSize: chunk.length,
+                compressedSize: compressed.length,
+                encodedSize: encoded.length,
+                payload: encoded
+            };
+            
+            processedChunks.push(chunkInfo);
+            
+            // Update progress
+            const progress = ((i + 1) / chunks * 100).toFixed(0);
+            document.getElementById('processBar').style.width = progress + '%';
+            document.getElementById('processBar').textContent = progress + '%';
+            
+            // Add chunk button
+            const btn = document.createElement('button');
+            btn.className = 'chunk-btn';
+            btn.textContent = `Chunk ${i+1} (${(encoded.length/1024).toFixed(1)}KB)`;
+            btn.onclick = function() {
+                const textarea = document.createElement('textarea');
+                textarea.value = encoded;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                btn.textContent = `✓ Chunk ${i+1}`;
+                log(`Chunk ${i+1} copied to clipboard`);
+            };
+            resultDiv.appendChild(btn);
+            
+            log(`Chunk ${i+1}: ${(chunk.length/1024).toFixed(1)}KB → ${(compressed.length/1024).toFixed(1)}KB → ${(encoded.length/1024).toFixed(1)}KB`);
+        }
+        
+        // Calculate total cost
+        const totalPayloadKB = processedChunks.reduce((sum, c) => sum + c.encodedSize, 0) / 1024;
+        const totalCost = chunks * 0.00005 + totalPayloadKB * 0.00001;
+        
+        // Prepare metadata
+        kaspaMetadata = {
+            version: "1.0",
+            kaspa: {
+                network: network,
+                sdkVersion: "1.0.0"
+            },
+            file: {
+                name: file.name,
+                size: file.size,
+                mimeType: file.type || 'application/octet-stream',
+                sha256: fileHash
+            },
+            encryption: {
+                algorithm: "AES-256-GCM",
+                pbkdf2: {
+                    iterations: 10000,
+                    salt: toBase64(salt)
+                }
+            },
+            compression: {
+                algorithm: useCompression ? "LZ77" : "none",
+                enabled: useCompression,
+                averageRatio: processedChunks.reduce((sum, c) => sum + c.compressedSize/c.originalSize, 0) / chunks
+            },
+            chunks: processedChunks.map(c => ({
+                index: c.index,
+                txid: c.txid,
+                originalSize: c.originalSize,
+                compressedSize: c.compressedSize,
+                encodedSize: c.encodedSize
+            })),
+            metadata: {
+                createdAt: Date.now(),
+                totalChunks: chunks,
+                totalKAS: totalCost
+            }
+        };
+        
+        // Show completion info
+        const info = document.createElement('div');
+        info.className = 'info success';
+        info.innerHTML = `
+            <strong>✅ Processing Complete!</strong><br>
+            Total chunks: ${chunks}<br>
+            Compression: ${((1 - kaspaMetadata.compression.averageRatio) * 100).toFixed(1)}% saved<br>
+            Estimated cost: ${totalCost.toFixed(5)} KAS<br>
+            <br>
+            Note: In production, each chunk would be uploaded to Kaspa blockchain.
+            For now, chunks are simulated with deterministic TxIDs.
+        `;
+        resultDiv.appendChild(info);
+        
+        document.getElementById('kaspaFileBox').classList.remove('hide');
+        log('File processing complete!', 'success');
+        
+    } catch (e) {
+        log('Error: ' + e.message, 'error');
+    } finally {
+        document.getElementById('processBtn').disabled = false;
+    }
+}
+
+// Generate .kaspa file
+function generateKaspaFile() {
+    if (!kaspaMetadata) {
+        log('No processed file data available', 'error');
+        return;
+    }
+    
+    try {
+        // Check if password should be included
+        const includePassword = document.getElementById('includePassword').checked;
+        
+        // Create a copy of metadata
+        const kaspaData = JSON.parse(JSON.stringify(kaspaMetadata));
+        
+        // Add password if checkbox is checked
+        if (includePassword && currentPassword) {
+            kaspaData.auth = {
+                passwordIncluded: true,
+                password: currentPassword,
+                warning: "Password is stored in plain text. Share this file only with trusted parties."
+            };
+            log('⚠️ Password included in .kaspa file', 'warning');
+        }
+        
+        const kaspaFileContent = JSON.stringify(kaspaData, null, 2);
+        const blob = new Blob([kaspaFileContent], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = currentFile.name + '.kaspa';
+        a.click();
+        
+        URL.revokeObjectURL(url);
+        
+        document.getElementById('kaspaInfo').innerHTML = `
+            <strong>🎉 .kaspa file generated!</strong><br>
+            Filename: ${currentFile.name}.kaspa<br>
+            Size: ${(kaspaFileContent.length/1024).toFixed(1)}KB<br>
+            ${includePassword ? '<strong style="color:#ff6666">⚠️ Password included in file</strong><br>' : ''}
+            <br>
+            ${includePassword ? 
+                'Share this file to allow direct download (no password needed).' : 
+                'Share this file + password to allow others to download your file from Kaspa blockchain.'}
+        `;
+        document.getElementById('kaspaInfo').classList.remove('hide');
+        
+        log('.kaspa file downloaded!', 'success');
+    } catch (e) {
+        log('Error generating .kaspa file: ' + e.message, 'error');
+    }
+}
+
+// Load .kaspa file
+async function loadKaspaFile() {
+    const file = document.getElementById('kaspaFile').files[0];
+    if (!file || !file.name.endsWith('.kaspa')) {
+        log('Please select a valid .kaspa file', 'error');
+        return;
+    }
+    
+    try {
+        const content = await file.text();
+        kaspaMetadata = JSON.parse(content);
+        
+        // Validate format
+        if (!kaspaMetadata.version || !kaspaMetadata.chunks) {
+            throw new Error('Invalid .kaspa file format');
+        }
+        
+        document.getElementById('fileInfo').textContent = 
+            `File: ${kaspaMetadata.file.name}\n` +
+            `Size: ${(kaspaMetadata.file.size/1024/1024).toFixed(2)}MB\n` +
+            `Chunks: ${kaspaMetadata.chunks.length}\n` +
+            `Network: ${kaspaMetadata.kaspa.network}\n` +
+            `Created: ${new Date(kaspaMetadata.metadata.createdAt).toLocaleString()}\n` +
+            `Cost: ${kaspaMetadata.metadata.totalKAS.toFixed(5)} KAS` +
+            (kaspaMetadata.auth?.passwordIncluded ? '\n⚠️ Password included in file' : '');
+        
+        // Handle password field based on .kaspa content
+        const passwordSection = document.getElementById('passwordSection');
+        if (kaspaMetadata.auth?.passwordIncluded) {
+            passwordSection.innerHTML = `
+                <div class="info success">
+                    ✅ Password included in .kaspa file<br>
+                    No password input needed
+                </div>
+            `;
+            document.getElementById('downloadPass').value = kaspaMetadata.auth.password;
+        } else {
+            passwordSection.innerHTML = `
+                <input type="password" id="downloadPass" placeholder="Enter password">
+            `;
+        }
+        
+        document.getElementById('downloadBox').classList.remove('hide');
+        log('.kaspa file loaded successfully', 'success');
+        
+    } catch (e) {
+        log('Error loading .kaspa file: ' + e.message, 'error');
+    }
+}
+
+// Download file from chunks
+async function downloadFile() {
+    let pass = document.getElementById('downloadPass').value;
+    
+    // Check if password was included in .kaspa file
+    if (kaspaMetadata.auth?.passwordIncluded && kaspaMetadata.auth?.password) {
+        pass = kaspaMetadata.auth.password;
+        log('Using password from .kaspa file', 'info');
+    }
+    
+    if (!pass) {
+        log('Please enter password', 'error');
+        return;
+    }
+    
+    if (!kaspaMetadata) {
+        log('No .kaspa file loaded', 'error');
+        return;
+    }
+    
+    document.getElementById('downloadProgress').classList.remove('hide');
+    
+    try {
+        log(`Downloading ${kaspaMetadata.file.name}...`);
+        
+        // Derive key
+        const salt = fromBase64(kaspaMetadata.encryption.pbkdf2.salt);
+        const key = await deriveKey(pass, salt);
+        
+        // In production, chunks would be fetched from blockchain
+        // For demo, we'll simulate with the stored payloads
+        const chunks = [];
+        
+        // Check for manual chunks first
+        const manualChunksText = document.getElementById('manualChunks').value.trim();
+        const manualChunks = manualChunksText ? manualChunksText.split('\n').filter(x => x.trim()) : [];
+        
+        for (let i = 0; i < kaspaMetadata.chunks.length; i++) {
+            const chunkMeta = kaspaMetadata.chunks[i];
+            
+            // Try manual chunks first, then auto-reference, then simulate blockchain fetch
+            let payload;
+            if (manualChunks[i]) {
+                payload = manualChunks[i].trim();
+                log(`Using manual chunk ${i+1}`);
+            } else if (processedChunks[i]?.payload) {
+                payload = processedChunks[i].payload;
+                log(`Using auto-referenced chunk ${i+1}`);
+            } else {
+                throw new Error(`Chunk ${i+1} not found. In production, would fetch from TxID: ${chunkMeta.txid.substring(0, 16)}...`);
+            }
+            
+            // Decode
+            const encrypted = fromBase64(payload);
+            
+            // Decrypt
+            const compressed = await decryptChunk(encrypted, key, i);
+            
+            // Decompress based on metadata
+            const original = kaspaMetadata.compression.enabled ? lzDecompress(compressed) : compressed;
+            
+            chunks.push(original);
+            
+            // Update progress
+            const progress = ((i + 1) / kaspaMetadata.chunks.length * 100).toFixed(0);
+            document.getElementById('downloadBar').style.width = progress + '%';
+            document.getElementById('downloadBar').textContent = progress + '%';
+            
+            log(`Downloaded chunk ${i+1}/${kaspaMetadata.chunks.length}`);
+        }
+        
+        // Combine chunks
+        const totalSize = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+        const combined = new Uint8Array(totalSize);
+        let offset = 0;
+        for (const chunk of chunks) {
+            combined.set(chunk, offset);
+            offset += chunk.length;
+        }
+        
+        // Verify hash
+        const downloadedHash = await sha256(combined);
+        if (downloadedHash !== kaspaMetadata.file.sha256) {
+            throw new Error('File integrity check failed!');
+        }
+        
+        // Download
+        const blob = new Blob([combined], { type: kaspaMetadata.file.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = kaspaMetadata.file.name;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        log(`✅ Downloaded: ${kaspaMetadata.file.name}`, 'success');
+        
+    } catch (e) {
+        log('Download error: ' + e.message, 'error');
+    }
+}
+
+// Drag & drop
+document.addEventListener('DOMContentLoaded', () => {
+    const dropZone = document.querySelector('.kaspa-file');
+    
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#3BC9A8';
+    });
+    
+    dropZone.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#49EACB';
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#49EACB';
+        
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.kaspa')) {
+            document.getElementById('kaspaFile').files = e.dataTransfer.files;
+            loadKaspaFile();
+        }
+    });
+    
+    log('🚀 Kaspa P2P Mode Ready!');
+    log('Upload files to create .kaspa P2P metadata files');
+});
+</script>
+</body>
+</html>

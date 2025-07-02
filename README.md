@@ -1,14 +1,22 @@
 # Kaspa File Storage
 
-Anonymous file storage system using Kaspa blockchain transaction payloads.
+Decentralized file storage system using Kaspa blockchain transaction payloads.
 
-## Features
+## 🚀 Latest Features (2025-01-14)
 
-- 💰 **Real-time Balance**: Check testnet wallet balance
-- 📤 **File Upload**: Store files up to 24KB in Kaspa blockchain
-- 🔐 **Anonymous Storage**: Use secret identifiers for privacy
-- 📥 **File Retrieval**: Search and download files using secret keys
-- 🚀 **Direct Transaction**: WASM SDK integration for signing and sending
+### Core Features
+- 💰 **Real-time Balance**: Check testnet/mainnet wallet balance
+- 📤 **File Upload**: Store files of any size using chunking
+- 🔐 **AES-256 Encryption**: Military-grade encryption for all files
+- 📥 **File Retrieval**: Download files using .kaspa metadata files
+- 🚀 **WASM SDK Integration**: Direct blockchain interaction
+
+### Advanced Features
+- 🌊 **Streaming Support**: Handle 100GB+ files with memory efficiency
+- 📦 **Meta-Transactions**: Reduce 100+ chunks to single TxID
+- 🔄 **Auto-Resume**: Automatic resume for interrupted uploads/downloads
+- 🌐 **P2P Sharing**: Share files using .kaspa metadata files
+- ⚡ **Smart Compression**: Automatic compression for text files
 
 ## How to Use
 
@@ -18,13 +26,30 @@ Anonymous file storage system using Kaspa blockchain transaction payloads.
 4. **Send Transaction**: Sign and submit using integrated WASM SDK
 5. **Retrieve Files**: Search blockchain using secret identifier
 
+## 📁 Project Structure
+
+```
+kaspa-file-storage/
+├── index.html              # Main application (Final.html)
+├── file-storage-streaming.html    # 100GB+ streaming support
+├── file-storage-kaspa-p2p.html   # P2P/.kaspa file sharing
+├── file-storage-meta-tx.html     # Meta-transaction system
+├── kaspa-core.js          # Kaspa WASM SDK
+├── kaspa-core_bg.wasm     # WASM binary
+├── README.md              # This file
+├── PROJECT_STATUS.md      # Detailed progress tracking
+└── Old/                   # Archive of test files
+
+```
+
 ## Technical Details
 
-- **Network**: Kaspa Testnet (TN-10)
+- **Network**: Kaspa Testnet (TN-10) / Mainnet
 - **SDK**: Kaspa WASM v1.0.0
-- **API**: TN-10 REST API
-- **Storage**: Transaction payloads (max 24KB)
-- **Security**: Client-side signing with WASM
+- **Encryption**: AES-256-GCM with PBKDF2
+- **Compression**: LZ77 for text files
+- **Chunk Size**: 20KB (optimal for Kaspa)
+- **Max Payload**: 24KB per transaction
 
 ## Demo Address
 

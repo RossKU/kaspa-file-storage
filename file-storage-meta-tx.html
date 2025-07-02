@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kaspa Meta-Transaction Storage</title>
+<style>
+body{font-family:monospace;max-width:800px;margin:0 auto;padding:10px;background:#1a1a1a;color:#fff}
+.container{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:15px 0}
+@media(max-width:768px){.container{grid-template-columns:1fr}}
+.box{border:1px solid #444;padding:15px;border-radius:4px;background:#2a2a2a}
+.box h3{margin-top:0;color:#49EACB}
+input,textarea,button,select{width:100%;padding:8px;margin:5px 0;background:#333;color:#fff;border:1px solid #555;border-radius:4px;font-family:monospace}
+button{background:#49EACB;color:#000;cursor:pointer;font-weight:bold}
+button:hover{background:#3BC9A8}
+button:disabled{background:#666;color:#999;cursor:not-allowed}
+.log{background:#000;padding:8px;height:150px;overflow-y:auto;font-size:11px;white-space:pre-wrap;border:1px solid #333}
+.hide{display:none}
+.info{background:#333;padding:10px;margin:10px 0;border-radius:4px;border-left:3px solid #49EACB}
+.error{border-left-color:#ff4444;color:#ff6666}
+.success{border-left-color:#44ff44;color:#66ff66}
+.warning{border-left-color:#ffaa44;color:#ffcc66}
+.progress{width:100%;height:20px;background:#333;border:1px solid #444;border-radius:4px;overflow:hidden;margin:10px 0}
+.progress-bar{height:100%;background:#49EACB;transition:width 0.3s;text-align:center;line-height:20px;color:#000;font-size:11px}
+.meta-tx-display{background:#000;border:1px solid #49EACB;padding:15px;border-radius:4px;margin:15px 0;text-align:center}
+.meta-tx-id{font-size:12px;word-break:break-all;color:#49EACB;margin:10px 0;font-family:monospace}
+.hierarchy{background:#000;padding:10px;border:1px solid #444;border-radius:4px;font-size:11px}
+.hierarchy-item{margin:3px 0;padding-left:15px;border-left:2px solid #444}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:15px 0}
+.stat-box{background:#333;padding:8px;border:1px solid #444;border-radius:4px;text-align:center}
+.stat-value{font-size:18px;font-weight:bold;color:#49EACB}
+.stat-label{font-size:11px;color:#999}
+pre{background:#000;padding:8px;border-radius:4px;overflow-x:auto;font-size:11px;border:1px solid #333}
+.chunk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(50px,1fr));gap:3px;margin:10px 0}
+.chunk-indicator{background:#333;border:1px solid #444;padding:3px;text-align:center;font-size:10px;border-radius:2px}
+.chunk-indicator.uploaded{background:#49EACB;color:#000}
+.chunk-indicator.meta{background:#888;color:#fff}
+</style>
+</head>
+<body>
+<h1>📦 Kaspa Meta-Transaction Storage</h1>
+
+<div class="container">
+<div>
+<div class="box">
+<h3>📤 File Upload</h3>
+<input type="file" id="file">
+<input type="password" id="pass" placeholder="Password (8+ chars)">
+<select id="strategy">
+<option value="auto">Auto (Smart Selection)</option>
+<option value="single">Single Chunks (< 10 chunks)</option>
+<option value="meta">Meta-Transaction (10-1000 chunks)</option>
+<option value="super">Super-Meta (1000+ chunks)</option>
+</select>
+<button onclick="processFile()" id="processBtn">Process File</button>
+</div>
+
+<div class="box hide" id="uploadProgress">
+<h3>⚡ Processing</h3>
+<div class="progress">
+<div class="progress-bar" id="progressBar">0%</div>
+</div>
+<div id="currentStatus"></div>
+</div>
+
+<div class="box hide" id="resultBox">
+<h3>🎯 Result</h3>
+<div class="meta-tx-display hide" id="metaTxDisplay">
+<div>Copy this single Meta-Transaction ID:</div>
+<div class="meta-tx-id" id="metaTxId"></div>
+<button onclick="copyMetaTx()">Copy Meta TxID</button>
+</div>
+<div id="resultInfo"></div>
+</div>
+</div>
+
+<div>
+<div class="box">
+<h3>📥 Download</h3>
+<input type="text" id="inputTxId" placeholder="Paste Meta-TxID or regular TxID">
+<input type="password" id="downloadPass" placeholder="Password">
+<button onclick="downloadFile()">Download File</button>
+</div>
+
+<div class="box hide" id="downloadProgress">
+<h3>⬇️ Downloading</h3>
+<div class="progress">
+<div class="progress-bar" id="downloadBar">0%</div>
+</div>
+<div id="downloadStatus"></div>
+</div>
+
+<div class="box">
+<h3>📊 Statistics</h3>
+<div class="stats" id="stats">
+<div class="stat-box">
+<div class="stat-value">-</div>
+<div class="stat-label">Total Files</div>
+</div>
+<div class="stat-box">
+<div class="stat-value">-</div>
+<div class="stat-label">Total Chunks</div>
+</div>
+<div class="stat-box">
+<div class="stat-value">-</div>
+<div class="stat-label">Meta-Txs</div>
+</div>
+<div class="stat-box">
+<div class="stat-value">-</div>
+<div class="stat-label">Saved TxIDs</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="box">
+<h3>🔍 Chunk Visualization</h3>
+<div id="chunkViz" class="chunk-grid"></div>
+<div class="info">
+<strong>Legend:</strong> 
+<span style="color:#0ff">□ Pending</span> | 
+<span style="color:#0f0">■ Uploaded</span> | 
+<span style="color:#f0f">▣ Meta-Tx</span>
+</div>
+</div>
+
+<div class="box">
+<h3>📜 Log</h3>
+<div id="log" class="log"></div>
+</div>
+
+<script>
+// Global state
+let currentFile = null;
+let processedChunks = [];
+let metaTransactions = [];
+let uploadedChunks = 0;
+let totalChunks = 0;
+
+// Constants
+const MAX_CHUNKS_PER_META = 500;  // ~150 bytes per chunk reference
+const META_TX_OVERHEAD = 500;     // Metadata overhead in bytes
+
+// Logging
+function log(msg, type = 'info') {
+    const el = document.getElementById('log');
+    const time = new Date().toTimeString().substr(0, 8);
+    const prefix = {
+        error: '❌',
+        success: '✅',
+        warning: '⚠️',
+        info: '📝'
+    }[type] || '📝';
+    el.textContent += `[${time}] ${prefix} ${msg}\n`;
+    el.scrollTop = el.scrollHeight;
+}
+
+// Update statistics
+function updateStats() {
+    const stats = document.getElementById('stats');
+    stats.innerHTML = `
+        <div class="stat-box">
+            <div class="stat-value">${currentFile ? 1 : 0}</div>
+            <div class="stat-label">Total Files</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value">${totalChunks}</div>
+            <div class="stat-label">Total Chunks</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value">${metaTransactions.length}</div>
+            <div class="stat-label">Meta-Txs</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value">${totalChunks > 0 ? totalChunks - metaTransactions.length : 0}</div>
+            <div class="stat-label">Saved TxIDs</div>
+        </div>
+    `;
+}
+
+// Chunk visualization
+function updateChunkViz() {
+    const viz = document.getElementById('chunkViz');
+    viz.innerHTML = '';
+    
+    for (let i = 0; i < totalChunks; i++) {
+        const div = document.createElement('div');
+        div.className = 'chunk-indicator';
+        div.textContent = i + 1;
+        
+        if (processedChunks[i]) {
+            div.classList.add('uploaded');
+        }
+        
+        viz.appendChild(div);
+    }
+    
+    // Add meta-tx indicators
+    metaTransactions.forEach((meta, idx) => {
+        const div = document.createElement('div');
+        div.className = 'chunk-indicator meta';
+        div.textContent = `M${idx + 1}`;
+        div.title = `Meta-Tx containing chunks ${meta.startIdx + 1}-${meta.endIdx + 1}`;
+        viz.appendChild(div);
+    });
+}
+
+// File types that should NOT be compressed
+const COMPRESS_SKIP = {
+    image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'ico', 'svg', 'tiff', 'tif'],
+    video: ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', 'mpg', 'mpeg'],
+    audio: ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'wma', 'opus', 'mp2'],
+    archive: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'z', 'tgz', 'lz'],
+    other: ['pdf', 'docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp']
+};
+
+const ALREADY_COMPRESSED = new Set(Object.values(COMPRESS_SKIP).flat());
+
+// Compression decision logic
+function shouldCompress(filename) {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    return !ALREADY_COMPRESSED.has(ext);
+}
+
+// LZ compression for text/uncompressed data
+function lzCompress(data) {
+    const result = [];
+    let i = 0;
+    while (i < data.length) {
+        let bestLen = 0, bestOff = 0;
+        const start = Math.max(0, i - 255);
+        for (let j = start; j < i; j++) {
+            let len = 0;
+            while (i + len < data.length && data[j + len] === data[i + len] && len < 255) len++;
+            if (len > bestLen) {
+                bestLen = len;
+                bestOff = i - j;
+            }
+        }
+        if (bestLen > 3) {
+            result.push(255, bestOff, bestLen);
+            i += bestLen;
+        } else {
+            result.push(data[i]);
+            i++;
+        }
+    }
+    return new Uint8Array(result);
+}
+
+function lzDecompress(data) {
+    const result = [];
+    let i = 0;
+    while (i < data.length) {
+        if (data[i] === 255 && i + 2 < data.length) {
+            const off = data[i + 1];
+            const len = data[i + 2];
+            const start = result.length - off;
+            for (let j = 0; j < len; j++) {
+                result.push(result[start + j]);
+            }
+            i += 3;
+        } else {
+            result.push(data[i]);
+            i++;
+        }
+    }
+    return new Uint8Array(result);
+}
+
+// Crypto functions
+async function deriveKey(password, salt) {
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(password),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+    );
+    
+    return crypto.subtle.deriveKey(
+        {
+            name: 'PBKDF2',
+            salt: salt,
+            iterations: 10000,
+            hash: 'SHA-256'
+        },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+async function encryptChunk(data, key, chunkIndex) {
+    const iv = new Uint8Array(12);
+    iv[0] = (chunkIndex >> 8) & 0xFF;
+    iv[1] = chunkIndex & 0xFF;
+    for (let i = 2; i < 12; i++) {
+        iv[i] = i * 17;
+    }
+    
+    const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        data
+    );
+    
+    return new Uint8Array(encrypted);
+}
+
+async function decryptChunk(data, key, chunkIndex) {
+    const iv = new Uint8Array(12);
+    iv[0] = (chunkIndex >> 8) & 0xFF;
+    iv[1] = chunkIndex & 0xFF;
+    for (let i = 2; i < 12; i++) {
+        iv[i] = i * 17;
+    }
+    
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        data
+    );
+    
+    return new Uint8Array(decrypted);
+}
+
+// Base64
+function toBase64(data) {
+    return btoa(String.fromCharCode(...data));
+}
+
+function fromBase64(str) {
+    return new Uint8Array(atob(str).split('').map(c => c.charCodeAt(0)));
+}
+
+// SHA256
+async function sha256(data) {
+    const hash = await crypto.subtle.digest('SHA-256', data);
+    return Array.from(new Uint8Array(hash))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+}
+
+// Generate simulated TxID
+async function generateTxId(data, prefix = '') {
+    const hash = await sha256(new TextEncoder().encode(
+        `${prefix}-${Date.now()}-${Math.random()}`
+    ));
+    return hash;
+}
+
+// Create meta-transaction
+async function createMetaTransaction(chunkTxIds, fileInfo, salt, startIdx) {
+    const metaData = {
+        type: "meta-transaction-v1",
+        file: fileInfo,
+        encryption: {
+            algorithm: "AES-256-GCM",
+            salt: toBase64(salt),
+            compression: shouldCompress(fileInfo.name) ? "LZ77" : "none"
+        },
+        chunks: chunkTxIds.map((txid, idx) => ({
+            index: startIdx + idx,
+            txid: txid
+        })),
+        timestamp: Date.now()
+    };
+    
+    // Compress meta transaction (keep LZ for JSON)
+    const metaJson = JSON.stringify(metaData);
+    const compressed = new TextEncoder().encode(metaJson); // Skip compression for now
+    
+    log(`Meta-Tx size: ${metaJson.length} bytes`);
+    
+    // Generate meta TxID
+    const metaTxId = await generateTxId(compressed, 'meta');
+    
+    return {
+        txid: metaTxId,
+        data: metaData,
+        compressed: compressed,
+        startIdx: startIdx,
+        endIdx: startIdx + chunkTxIds.length - 1
+    };
+}
+
+// Process file
+async function processFile() {
+    const file = document.getElementById('file').files[0];
+    const pass = document.getElementById('pass').value;
+    const strategy = document.getElementById('strategy').value;
+    
+    if (!file) return log('No file selected', 'error');
+    if (pass.length < 8) return log('Password must be at least 8 characters', 'error');
+    
+    currentFile = file;
+    processedChunks = [];
+    metaTransactions = [];
+    uploadedChunks = 0;
+    
+    document.getElementById('processBtn').disabled = true;
+    document.getElementById('uploadProgress').classList.remove('hide');
+    document.getElementById('resultBox').classList.add('hide');
+    
+    try {
+        log(`Processing: ${file.name} (${(file.size/1024/1024).toFixed(2)}MB)`);
+        
+        const data = new Uint8Array(await file.arrayBuffer());
+        const fileHash = await sha256(data);
+        
+        // Determine compression strategy
+        const useCompression = shouldCompress(file.name);
+        log(`Compression: ${useCompression ? 'ENABLED' : 'DISABLED'} for ${file.name}`);
+        
+        // Generate salt
+        const saltBase = fileHash + file.name;
+        const saltHash = await sha256(new TextEncoder().encode(saltBase));
+        const salt = fromBase64(btoa(saltHash.substring(0, 24)));
+        
+        const key = await deriveKey(pass, salt);
+        
+        // Calculate chunks
+        const chunkSize = 20 * 1024; // 20KB chunks
+        totalChunks = Math.ceil(data.length / chunkSize);
+        log(`Total chunks: ${totalChunks}`);
+        
+        // Determine strategy
+        let useMetaTx = false;
+        if (strategy === 'auto') {
+            useMetaTx = totalChunks > 10;
+        } else if (strategy === 'meta' || strategy === 'super') {
+            useMetaTx = true;
+        }
+        
+        updateStats();
+        updateChunkViz();
+        
+        // Process chunks
+        const chunkTxIds = [];
+        
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, data.length);
+            const chunk = data.slice(start, end);
+            
+            // Update status
+            document.getElementById('currentStatus').textContent = 
+                `Processing chunk ${i + 1}/${totalChunks}`;
+            
+            // Compress based on file type
+            const compressed = useCompression ? lzCompress(chunk) : chunk;
+            
+            // Verify compression/decompression if enabled
+            if (useCompression) {
+                const testDecompress = lzDecompress(compressed);
+                if (testDecompress.length !== chunk.length) {
+                    log(`Warning: Chunk ${i} compression issue - Original: ${chunk.length}, After decompress: ${testDecompress.length}`, 'warning');
+                }
+            }
+            
+            // Encrypt
+            const encrypted = await encryptChunk(compressed, key, i);
+            
+            // Encode
+            const encoded = toBase64(encrypted);
+            
+            // Simulate upload and get TxID
+            const txid = await generateTxId(encrypted, `chunk-${i}`);
+            
+            processedChunks.push({
+                index: i,
+                txid: txid,
+                originalSize: chunk.length,
+                compressedSize: compressed.length,
+                encodedSize: encoded.length,
+                payload: encoded
+            });
+            
+            chunkTxIds.push(txid);
+            uploadedChunks++;
+            
+            // Update progress
+            const progress = ((i + 1) / totalChunks * 100).toFixed(0);
+            document.getElementById('progressBar').style.width = progress + '%';
+            document.getElementById('progressBar').textContent = progress + '%';
+            
+            updateChunkViz();
+            
+            // Small delay for UI update
+            if (i % 10 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+        }
+        
+        // Create meta-transactions if needed
+        if (useMetaTx) {
+            log('Creating meta-transactions...');
+            
+            const fileInfo = {
+                name: file.name,
+                size: file.size,
+                sha256: fileHash,
+                chunks: totalChunks
+            };
+            
+            // Split chunks into meta-transactions
+            for (let i = 0; i < chunkTxIds.length; i += MAX_CHUNKS_PER_META) {
+                const metaChunks = chunkTxIds.slice(i, i + MAX_CHUNKS_PER_META);
+                const metaTx = await createMetaTransaction(
+                    metaChunks, 
+                    fileInfo, 
+                    salt,
+                    i
+                );
+                metaTransactions.push(metaTx);
+                
+                log(`Created Meta-Tx ${metaTransactions.length}: chunks ${i + 1}-${Math.min(i + MAX_CHUNKS_PER_META, totalChunks)}`);
+            }
+            
+            // If multiple meta-txs, create super-meta
+            if (metaTransactions.length > 1) {
+                log('Creating super-meta transaction...', 'warning');
+                // This would contain references to all meta-transactions
+                // Implementation depends on requirements
+            }
+        }
+        
+        // Show results
+        showResults(useMetaTx);
+        
+        log('Processing complete!', 'success');
+        
+    } catch (e) {
+        log('Error: ' + e.message, 'error');
+    } finally {
+        document.getElementById('processBtn').disabled = false;
+        document.getElementById('uploadProgress').classList.add('hide');
+        updateStats();
+    }
+}
+
+// Show results
+function showResults(useMetaTx) {
+    document.getElementById('resultBox').classList.remove('hide');
+    
+    if (useMetaTx && metaTransactions.length > 0) {
+        // Show meta-transaction ID
+        const mainMetaTx = metaTransactions[0]; // In production, might be super-meta
+        document.getElementById('metaTxDisplay').classList.remove('hide');
+        document.getElementById('metaTxId').textContent = mainMetaTx.txid;
+        
+        // Show hierarchy info
+        const info = document.getElementById('resultInfo');
+        info.innerHTML = `
+            <div class="hierarchy">
+                <h4>Transaction Hierarchy:</h4>
+                <div class="hierarchy-item">Meta-TxID: ${mainMetaTx.txid.substring(0, 16)}...</div>
+                ${metaTransactions.map((meta, idx) => `
+                    <div class="hierarchy-item" style="margin-left:20px">
+                        Meta-Tx ${idx + 1}: ${meta.data.chunks.length} chunks (${meta.startIdx + 1}-${meta.endIdx + 1})
+                    </div>
+                `).join('')}
+                <div class="hierarchy-item" style="margin-left:40px">
+                    ${totalChunks} data chunks total
+                </div>
+            </div>
+            <div class="info success">
+                <strong>✨ Efficiency Gain:</strong><br>
+                Instead of managing ${totalChunks} TxIDs,<br>
+                you only need to save ${metaTransactions.length} Meta-TxID${metaTransactions.length > 1 ? 's' : ''}!<br>
+                <strong>Reduction: ${((1 - metaTransactions.length/totalChunks) * 100).toFixed(1)}%</strong>
+            </div>
+        `;
+    } else {
+        // Regular chunks only
+        const info = document.getElementById('resultInfo');
+        info.innerHTML = `
+            <div class="info">
+                <strong>Single Chunks Mode</strong><br>
+                Total chunks: ${totalChunks}<br>
+                Each chunk has its own TxID<br>
+                Consider using Meta-Tx for files with 10+ chunks
+            </div>
+        `;
+        
+        // Show chunk TxIDs
+        const txidList = processedChunks.map(c => c.txid).join('\n');
+        info.innerHTML += `
+            <textarea rows="5" readonly>${txidList}</textarea>
+        `;
+    }
+}
+
+// Copy meta TxID
+function copyMetaTx() {
+    const txid = document.getElementById('metaTxId').textContent;
+    navigator.clipboard.writeText(txid).then(() => {
+        log('Meta-TxID copied to clipboard!', 'success');
+    });
+}
+
+// Download file
+async function downloadFile() {
+    const txidInput = document.getElementById('inputTxId').value.trim();
+    const pass = document.getElementById('downloadPass').value;
+    
+    if (!txidInput) return log('Please enter a TxID', 'error');
+    if (!pass) return log('Please enter password', 'error');
+    
+    document.getElementById('downloadProgress').classList.remove('hide');
+    
+    try {
+        log(`Resolving TxID: ${txidInput.substring(0, 16)}...`);
+        
+        // Check if it's a meta-transaction
+        const metaTx = metaTransactions.find(m => m.txid === txidInput);
+        
+        if (metaTx) {
+            log('Meta-transaction detected! Fetching all chunks...', 'success');
+            
+            // In production, would fetch meta-tx from blockchain
+            // Then fetch all referenced chunks
+            
+            const salt = fromBase64(metaTx.data.encryption.salt);
+            const key = await deriveKey(pass, salt);
+            
+            const chunks = [];
+            
+            log(`Total chunks to download: ${metaTx.data.chunks.length}`, 'info');
+            log(`File size: ${metaTx.data.file.size} bytes`, 'info');
+            
+            for (let i = 0; i < metaTx.data.chunks.length; i++) {
+                const chunkRef = metaTx.data.chunks[i];
+                const chunkData = processedChunks.find(c => c.txid === chunkRef.txid);
+                
+                if (!chunkData) {
+                    log(`Available chunks: ${processedChunks.length}`, 'error');
+                    log(`Looking for TxID: ${chunkRef.txid.substring(0, 16)}...`, 'error');
+                    throw new Error(`Chunk ${chunkRef.index} not found`);
+                }
+                
+                document.getElementById('downloadStatus').textContent = 
+                    `Downloading chunk ${i + 1}/${metaTx.data.chunks.length}`;
+                
+                // Decode, decrypt, decompress
+                const encrypted = fromBase64(chunkData.payload);
+                const compressed = await decryptChunk(encrypted, key, chunkRef.index);
+                
+                // Check if file was compressed based on metadata
+                const wasCompressed = metaTx.data.encryption.compression === "LZ77";
+                const original = wasCompressed ? lzDecompress(compressed) : compressed;
+                
+                chunks[chunkRef.index] = original;
+                
+                log(`Chunk ${chunkRef.index}: ${original.length} bytes decoded`, 'info');
+                
+                // Update progress
+                const progress = ((i + 1) / metaTx.data.chunks.length * 100).toFixed(0);
+                document.getElementById('downloadBar').style.width = progress + '%';
+                document.getElementById('downloadBar').textContent = progress + '%';
+            }
+            
+            // Combine chunks in correct order
+            const totalSize = chunks.reduce((sum, chunk) => sum + (chunk ? chunk.length : 0), 0);
+            const combined = new Uint8Array(totalSize);
+            let offset = 0;
+            for (let i = 0; i < chunks.length; i++) {
+                if (chunks[i]) {
+                    combined.set(chunks[i], offset);
+                    offset += chunks[i].length;
+                }
+            }
+            
+            // Verify and download
+            const downloadedHash = await sha256(combined);
+            log(`File hash verification:`, 'info');
+            log(`Expected: ${metaTx.data.file.sha256}`, 'info');
+            log(`Actual:   ${downloadedHash}`, 'info');
+            log(`Combined size: ${combined.length} bytes, Expected: ${metaTx.data.file.size} bytes`, 'info');
+            
+            if (downloadedHash !== metaTx.data.file.sha256) {
+                log(`Hash mismatch! File sizes - Combined: ${combined.length}, Expected: ${metaTx.data.file.size}`, 'error');
+                throw new Error('File integrity check failed! Hash mismatch.');
+            }
+            
+            // Download file
+            const blob = new Blob([combined]);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = metaTx.data.file.name;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            log(`Downloaded: ${metaTx.data.file.name}`, 'success');
+            
+        } else {
+            log('Single chunk download not implemented in this demo', 'warning');
+        }
+        
+    } catch (e) {
+        log('Download error: ' + e.message, 'error');
+    } finally {
+        document.getElementById('downloadProgress').classList.add('hide');
+    }
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    log('🔷 Meta-Transaction Storage System Ready!');
+    log('Upload large files to test meta-transaction efficiency');
+    updateStats();
+});
+</script>
+</body>
+</html>

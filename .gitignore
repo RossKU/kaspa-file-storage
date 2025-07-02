@@ -1,0 +1,21 @@
+# Old and test files
+Old/
+*.log
+*.tmp
+.DS_Store
+
+# Node modules (if any)
+node_modules/
+
+# Build artifacts
+dist/
+build/
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*.swp
+*.swo
+*~
