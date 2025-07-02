@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa TxID Mining Test - Debug Version</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+        h1 { color: #49EACB; }
+        input, button, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            background: #333;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        button {
+            background: #49EACB;
+            color: #000;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #3BC9A8; }
+        button:disabled {
+            background: #666;
+            color: #999;
+            cursor: not-allowed;
+        }
+        .output {
+            background: #000;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            font-size: 11px;
+            border: 1px solid #333;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        .info { color: #49EACB; }
+        .success { color: #44ff44; }
+        .error { color: #ff4444; }
+        .warning { color: #ffaa44; }
+        .debug { color: #8888ff; }
+        .trace { color: #666666; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .stat-box {
+            background: #333;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #49EACB;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+        }
+        .pattern-display {
+            font-size: 18px;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+            color: #49EACB;
+            background: #000;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .debug-controls {
+            background: #222;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .debug-checkbox {
+            display: inline-block;
+            margin-right: 20px;
+        }
+        .debug-checkbox input {
+            width: auto;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⛏️ Kaspa TxID Mining Test - DEBUG VERSION</h1>
+        <p>Enhanced version with detailed logging for troubleshooting</p>
+        
+        <div class="debug-controls">
+            <h3>🐛 Debug Controls</h3>
+            <div class="debug-checkbox">
+                <label><input type="checkbox" id="verboseLog" checked> Verbose Logging</label>
+            </div>
+            <div class="debug-checkbox">
+                <label><input type="checkbox" id="traceLog"> Trace Logging</label>
+            </div>
+            <button onclick="clearLogs()" style="width: auto; margin: 5px;">Clear Logs</button>
+            <button onclick="exportLogs()" style="width: auto; margin: 5px;">Export Logs</button>
+        </div>
+        
+        <div style="background: #333; padding: 15px; border-radius: 4px; margin: 15px 0;">
+            <h3>🎯 Mining Configuration</h3>
+            <label>Target Pattern (end of TxID):</label>
+            <input type="text" id="targetPattern" value="00000" placeholder="e.g., 00000, fffff, etc.">
+            
+            <label>Network:</label>
+            <select id="network">
+                <option value="testnet-10">Testnet-10</option>
+                <option value="mainnet" disabled>Mainnet (Coming Soon)</option>
+            </select>
+            
+            <label>Mining Strategy:</label>
+            <select id="strategy">
+                <option value="nonce">Nonce Mining (Fast)</option>
+                <option value="timestamp">Timestamp Variation</option>
+                <option value="amount">Amount Variation</option>
+                <option value="hybrid">Hybrid (All Methods)</option>
+            </select>
+            
+            <label>Max Attempts:</label>
+            <input type="number" id="maxAttempts" value="1000" min="100" max="10000000">
+            
+            <label>RPC Endpoint (optional):</label>
+            <input type="text" id="rpcEndpoint" placeholder="Leave empty for default">
+        </div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="attempts">0</div>
+                <div class="stat-label">Attempts</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="hashRate">0</div>
+                <div class="stat-label">Hash/sec</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="elapsedTime">0s</div>
+                <div class="stat-label">Elapsed Time</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="foundCount">0</div>
+                <div class="stat-label">Found</div>
+            </div>
+        </div>
+        
+        <button id="testConnection" onclick="testConnection()">🔌 Test RPC Connection</button>
+        <button id="startMining" onclick="startMining()">⛏️ Start Mining</button>
+        <button id="stopMining" onclick="stopMining()" disabled>⏹️ Stop Mining</button>
+        
+        <div id="currentTxId" class="pattern-display" style="display:none;">
+            Current Best: <span id="bestPattern"></span>
+        </div>
+        
+        <div class="output" id="output">
+            <div class="info">⚡ WASM SDK initializing...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        let kaspa = null;
+        let isMining = false;
+        let miningWorker = null;
+        let startTime = null;
+        let attempts = 0;
+        let foundPatterns = [];
+        let allLogs = [];
+        
+        // Auto-initialize WASM on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            await initializeWasm();
+        });
+        
+        async function initializeWasm() {
+            try {
+                log('=== WASM INITIALIZATION START ===', 'debug');
+                log('Initializing Kaspa WASM SDK...', 'info');
+                
+                // Import the module
+                kaspa = await import('./kaspa-core.js');
+                log('Module imported successfully', 'debug');
+                
+                // Check for required functions
+                const requiredFunctions = [
+                    'PrivateKey', 'PublicKey', 'NetworkType', 'RpcClient', 
+                    'Resolver', 'UtxoContext', 'createTransactions', 'Address'
+                ];
+                
+                const missingFunctions = [];
+                for (const func of requiredFunctions) {
+                    if (!kaspa[func]) {
+                        missingFunctions.push(func);
+                        log(`❌ Missing function: ${func}`, 'error');
+                    } else {
+                        log(`✅ Found function: ${func}`, 'trace');
+                    }
+                }
+                
+                if (missingFunctions.length > 0) {
+                    throw new Error(`Missing SDK functions: ${missingFunctions.join(', ')}`);
+                }
+                
+                // Test basic functionality
+                log('Testing basic SDK functionality...', 'debug');
+                const testKey = new kaspa.PrivateKey('b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef');
+                const testPubKey = testKey.toPublicKey();
+                const testAddr = testPubKey.toAddress(kaspa.NetworkType.Testnet);
+                log(`Test address: ${testAddr.toString()}`, 'debug');
+                
+                log('✅ WASM SDK initialized successfully', 'success');
+                log('Ready to start TxID mining', 'info');
+                log('=== WASM INITIALIZATION END ===', 'debug');
+                document.getElementById('startMining').disabled = false;
+                
+            } catch (error) {
+                log('=== WASM INITIALIZATION FAILED ===', 'error');
+                log(`❌ WASM initialization failed: ${error.message}`, 'error');
+                log(`Stack trace: ${error.stack}`, 'error');
+                document.getElementById('startMining').disabled = true;
+            }
+        }
+        
+        function log(message, type = 'info') {
+            const verboseLog = document.getElementById('verboseLog').checked;
+            const traceLog = document.getElementById('traceLog').checked;
+            
+            // Skip trace logs if not enabled
+            if (type === 'trace' && !traceLog) return;
+            
+            // Skip debug logs if verbose not enabled
+            if (type === 'debug' && !verboseLog) return;
+            
+            const output = document.getElementById('output');
+            const time = new Date().toTimeString().substr(0, 8);
+            const logEntry = `[${time}] ${message}`;
+            
+            allLogs.push(logEntry);
+            output.innerHTML += `<div class="${type}">${logEntry}</div>`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        window.clearLogs = function() {
+            document.getElementById('output').innerHTML = '';
+            allLogs = [];
+            log('Logs cleared', 'info');
+        };
+        
+        window.exportLogs = function() {
+            const blob = new Blob([allLogs.join('\n')], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `txid-mining-logs-${new Date().toISOString()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+        
+        window.testConnection = async function() {
+            if (!kaspa) {
+                log('WASM not initialized', 'error');
+                return;
+            }
+            
+            try {
+                log('=== RPC CONNECTION TEST START ===', 'debug');
+                
+                const customEndpoint = document.getElementById('rpcEndpoint').value;
+                const resolver = customEndpoint ? 
+                    new kaspa.Resolver({ urls: [customEndpoint] }) : 
+                    new kaspa.Resolver();
+                
+                log(`Creating RPC client... ${customEndpoint ? '(custom: ' + customEndpoint + ')' : '(default)'}`, 'info');
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: resolver,
+                    networkId: 'testnet-10'
+                });
+                
+                log('Connecting to Kaspa testnet...', 'info');
+                await rpcClient.connect();
+                log('✅ Connected successfully', 'success');
+                
+                // Get server info
+                log('Fetching server info...', 'debug');
+                const serverInfo = await rpcClient.getServerInfo();
+                log(`Server version: ${serverInfo.serverVersion}`, 'info');
+                log(`Network: ${serverInfo.networkId}`, 'info');
+                
+                // Get block DAG info
+                const blockDagInfo = await rpcClient.getBlockDagInfo();
+                log(`Block count: ${blockDagInfo.blockCount}`, 'info');
+                log(`Tip hashes: ${blockDagInfo.tipHashes.length}`, 'info');
+                
+                await rpcClient.disconnect();
+                log('✅ RPC connection test passed', 'success');
+                log('=== RPC CONNECTION TEST END ===', 'debug');
+                
+            } catch (error) {
+                log('=== RPC CONNECTION TEST FAILED ===', 'error');
+                log(`❌ Connection test failed: ${error.message}`, 'error');
+                log(`Stack trace: ${error.stack}`, 'debug');
+            }
+        };
+        
+        window.startMining = async function() {
+            if (!kaspa) {
+                log('WASM not initialized', 'error');
+                return;
+            }
+            
+            const targetPattern = document.getElementById('targetPattern').value.toLowerCase();
+            const strategy = document.getElementById('strategy').value;
+            const maxAttempts = parseInt(document.getElementById('maxAttempts').value);
+            
+            if (!targetPattern || !/^[0-9a-f]+$/.test(targetPattern)) {
+                log('Invalid pattern. Use hexadecimal characters only (0-9, a-f)', 'error');
+                return;
+            }
+            
+            log('=== MINING START ===', 'debug');
+            log(`Starting TxID mining for pattern: *${targetPattern}`, 'info');
+            log(`Strategy: ${strategy}, Max attempts: ${maxAttempts.toLocaleString()}`, 'info');
+            
+            // Update UI
+            document.getElementById('startMining').disabled = true;
+            document.getElementById('stopMining').disabled = false;
+            document.getElementById('currentTxId').style.display = 'block';
+            
+            // Reset stats
+            attempts = 0;
+            startTime = Date.now();
+            isMining = true;
+            foundPatterns = [];
+            
+            // Start mining
+            await minePattern(targetPattern, strategy, maxAttempts);
+        };
+        
+        window.stopMining = function() {
+            isMining = false;
+            document.getElementById('startMining').disabled = false;
+            document.getElementById('stopMining').disabled = true;
+            log('Mining stopped by user', 'warning');
+            log('=== MINING STOPPED ===', 'debug');
+        };
+        
+        async function minePattern(targetPattern, strategy, maxAttempts) {
+            // Use existing testnet wallet with balance
+            const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+            let rpcClient = null;
+            
+            try {
+                log('Creating private key...', 'trace');
+                const testPrivateKey = new kaspa.PrivateKey(testKeyHex);
+                const publicKey = testPrivateKey.toPublicKey();
+                const address = publicKey.toAddress(kaspa.NetworkType.Testnet);
+                
+                log(`Mining address: ${address.toString()}`, 'info');
+                log('Strategy: Creating actual transactions with varying parameters', 'info');
+                
+                // Connect to RPC
+                const customEndpoint = document.getElementById('rpcEndpoint').value;
+                const resolver = customEndpoint ? 
+                    new kaspa.Resolver({ urls: [customEndpoint] }) : 
+                    new kaspa.Resolver();
+                
+                log('Creating RPC client...', 'debug');
+                rpcClient = new kaspa.RpcClient({
+                    resolver: resolver,
+                    networkId: 'testnet-10'
+                });
+                
+                log('Connecting to Kaspa testnet RPC...', 'info');
+                await rpcClient.connect();
+                log('✅ Connected to RPC', 'success');
+                
+                // Create UTXO context
+                log('Creating UTXO context...', 'debug');
+                const utxoContext = new kaspa.UtxoContext({ rpcClient });
+                
+                log('Tracking address...', 'debug');
+                await utxoContext.trackAddresses([address]);
+                
+                log('Fetching balance...', 'debug');
+                const balance = await utxoContext.getBalance();
+                log(`Balance: ${(balance.mature / 100000000).toFixed(8)} KAS`, 'info');
+                
+                if (balance.mature < 100000000) {
+                    throw new Error('Insufficient balance for mining (need at least 1 KAS)');
+                }
+                
+                let bestMatch = '';
+                let bestMatchLength = 0;
+                
+                const updateInterval = setInterval(() => {
+                    if (!isMining) {
+                        clearInterval(updateInterval);
+                        return;
+                    }
+                    updateStats();
+                }, 100);
+                
+                // Mining loop - create real transactions
+                log('Starting mining loop...', 'debug');
+                for (let i = 0; i < maxAttempts && isMining; i++) {
+                    attempts++;
+                    
+                    try {
+                        if (attempts % 100 === 0) {
+                            log(`Progress: ${attempts}/${maxAttempts}`, 'trace');
+                        }
+                        
+                        // Create transaction with varying parameters
+                        let txid = '';
+                        let tx = null;
+                        let signedTx = null;
+                        
+                        log(`=== Attempt ${attempts} ===`, 'trace');
+                        
+                        switch (strategy) {
+                            case 'nonce':
+                                // Add nonce data to payload
+                                const payloadData = new Uint8Array([...new TextEncoder().encode('nonce:'), ...numberToBytes(i)]);
+                                log(`Creating tx with nonce payload: ${bytesToHex(payloadData)}`, 'trace');
+                                tx = await createTransactionWithPayload(utxoContext, address, payloadData, rpcClient);
+                                break;
+                            case 'timestamp':
+                                // Wait for different timestamp
+                                if (i > 0 && i % 10 === 0) {
+                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                }
+                                tx = await createTransactionWithPayload(utxoContext, address, new Uint8Array([i % 256]), rpcClient);
+                                break;
+                            case 'amount':
+                                // Vary amount slightly
+                                const amount = BigInt(10000000) + BigInt(i % 1000); // 0.1 KAS + variation
+                                log(`Creating tx with amount: ${amount}`, 'trace');
+                                tx = await createTransactionWithAmount(utxoContext, address, amount, rpcClient);
+                                break;
+                            case 'hybrid':
+                                // Combine strategies
+                                const hybridData = new Uint8Array([i % 256, (i >> 8) % 256]);
+                                const hybridAmount = BigInt(10000000) + BigInt(i % 100);
+                                tx = await createTransactionWithPayloadAndAmount(utxoContext, address, hybridData, hybridAmount, rpcClient);
+                                break;
+                        }
+                        
+                        if (tx) {
+                            log('Transaction created, signing...', 'trace');
+                            // Sign but don't submit yet
+                            signedTx = await tx.sign([testPrivateKey]);
+                            txid = await signedTx.id();
+                            log(`Generated TxID: ${txid}`, 'trace');
+                        }
+                        
+                        // Check if pattern matches
+                        if (txid && txid.endsWith(targetPattern)) {
+                            foundPatterns.push({ txid, tx: signedTx });
+                            document.getElementById('foundCount').textContent = foundPatterns.length;
+                            log(`🎉 FOUND! TxID: ${txid}`, 'success');
+                            document.getElementById('bestPattern').textContent = txid;
+                            
+                            // Ask user if they want to submit this transaction
+                            if (confirm(`Found matching TxID! Submit this transaction?\nTxID: ${txid}`)) {
+                                try {
+                                    log('Submitting transaction...', 'info');
+                                    await signedTx.submit(rpcClient);
+                                    log(`✅ Transaction submitted: ${txid}`, 'success');
+                                    log(`Explorer: https://explorer-tn10.kaspa.org/txs/${txid}`, 'info');
+                                } catch (submitError) {
+                                    log(`❌ Submit failed: ${submitError.message}`, 'error');
+                                }
+                            }
+                            
+                            if (strategy !== 'hybrid') {
+                                isMining = false;
+                                break;
+                            }
+                        }
+                        
+                        // Update best partial match
+                        if (txid) {
+                            const matchLength = getMatchLength(txid, targetPattern);
+                            if (matchLength > bestMatchLength) {
+                                bestMatchLength = matchLength;
+                                bestMatch = txid;
+                                document.getElementById('bestPattern').innerHTML = 
+                                    txid.substring(0, txid.length - matchLength) + 
+                                    '<span style="color: #44ff44">' + txid.substring(txid.length - matchLength) + '</span>';
+                            }
+                        }
+                        
+                    } catch (error) {
+                        log(`Error creating transaction: ${error.message}`, 'error');
+                        log(`Stack trace: ${error.stack}`, 'trace');
+                        if (error.message.includes('insufficient')) {
+                            log('Insufficient balance for mining. Stopping...', 'error');
+                            isMining = false;
+                            break;
+                        }
+                    }
+                    
+                    // Update UI periodically
+                    if (attempts % 100 === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 1));
+                    }
+                }
+                
+                clearInterval(updateInterval);
+                
+                // Final results
+                log('=== MINING COMPLETE ===', 'debug');
+                if (foundPatterns.length > 0) {
+                    log(`Mining complete! Found ${foundPatterns.length} matching TxIDs`, 'success');
+                    foundPatterns.forEach((item, i) => {
+                        log(`Match ${i + 1}: ${item.txid}`, 'success');
+                    });
+                } else {
+                    log(`Mining complete. No exact matches found after ${attempts.toLocaleString()} attempts`, 'warning');
+                    log(`Best partial match: ${bestMatch} (${bestMatchLength}/${targetPattern.length} chars)`, 'info');
+                }
+                
+            } catch (error) {
+                log('=== MINING ERROR ===', 'error');
+                log(`Mining error: ${error.message}`, 'error');
+                log(`Stack trace: ${error.stack}`, 'debug');
+            } finally {
+                document.getElementById('startMining').disabled = false;
+                document.getElementById('stopMining').disabled = true;
+                if (rpcClient) {
+                    try {
+                        log('Disconnecting RPC...', 'debug');
+                        await rpcClient.disconnect();
+                        log('RPC disconnected', 'debug');
+                    } catch (e) {
+                        log(`Error disconnecting: ${e.message}`, 'trace');
+                    }
+                }
+            }
+        }
+        
+        // Helper functions to create transactions with different parameters
+        async function createTransactionWithPayload(utxoContext, address, payload, rpcClient) {
+            log('Creating transaction with payload...', 'trace');
+            const result = await kaspa.createTransactions({
+                entries: [{
+                    address: address.toString(),
+                    amount: BigInt(10000000), // 0.1 KAS
+                    payload: payload
+                }],
+                utxoContext: utxoContext,
+                changeAddress: address.toString(),
+                priorityFee: BigInt(1000)
+            });
+            log(`Transaction result: ${JSON.stringify(result.summary)}`, 'debug');
+            return result.transactions[0];
+        }
+        
+        async function createTransactionWithAmount(utxoContext, address, amount, rpcClient) {
+            log(`Creating transaction with amount: ${amount}`, 'trace');
+            const result = await kaspa.createTransactions({
+                entries: [{
+                    address: address.toString(),
+                    amount: amount
+                }],
+                utxoContext: utxoContext,
+                changeAddress: address.toString(),
+                priorityFee: BigInt(1000)
+            });
+            log(`Transaction result: ${JSON.stringify(result.summary)}`, 'debug');
+            return result.transactions[0];
+        }
+        
+        async function createTransactionWithPayloadAndAmount(utxoContext, address, payload, amount, rpcClient) {
+            log('Creating transaction with payload and amount...', 'trace');
+            const result = await kaspa.createTransactions({
+                entries: [{
+                    address: address.toString(),
+                    amount: amount,
+                    payload: payload
+                }],
+                utxoContext: utxoContext,
+                changeAddress: address.toString(),
+                priorityFee: BigInt(1000)
+            });
+            log(`Transaction result: ${JSON.stringify(result.summary)}`, 'debug');
+            return result.transactions[0];
+        }
+        
+        function numberToBytes(num) {
+            const buffer = new ArrayBuffer(8);
+            const view = new DataView(buffer);
+            view.setBigUint64(0, BigInt(num), true);
+            return new Uint8Array(buffer);
+        }
+        
+        function bytesToHex(bytes) {
+            return Array.from(bytes)
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function getMatchLength(txid, pattern) {
+            let matches = 0;
+            for (let i = 0; i < pattern.length; i++) {
+                if (txid[txid.length - 1 - i] === pattern[pattern.length - 1 - i]) {
+                    matches++;
+                } else {
+                    break;
+                }
+            }
+            return matches;
+        }
+        
+        function updateStats() {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const hashRate = Math.floor(attempts / elapsed);
+            
+            document.getElementById('attempts').textContent = attempts.toLocaleString();
+            document.getElementById('hashRate').textContent = hashRate.toLocaleString();
+            document.getElementById('elapsedTime').textContent = elapsed.toFixed(1) + 's';
+        }
+    </script>
+</body>
+</html>
