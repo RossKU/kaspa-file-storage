@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa Transaction Decode Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            color: #4CAF50;
+            text-align: center;
+        }
+        .input-group {
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #b0b0b0;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background: #333;
+            color: #fff;
+            font-family: monospace;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            background: #333;
+            border: 1px solid #444;
+        }
+        .error {
+            background: #5a2a2a;
+            border-color: #f44336;
+            color: #ff9999;
+        }
+        .success {
+            background: #2a5a2a;
+            border-color: #4CAF50;
+            color: #99ff99;
+        }
+        .result-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #333;
+            border-radius: 5px;
+            border: 1px solid #444;
+        }
+        .result-section h3 {
+            color: #4CAF50;
+            margin-top: 0;
+        }
+        pre {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Kaspa Transaction Decode Test</h1>
+        
+        <div class="input-group">
+            <label for="txId">Transaction ID:</label>
+            <input type="text" id="txId" value="0cd6b4b8cd551e59f5ed7180c989507d3df88dc9151121851d11a17b00cadfbf" placeholder="Enter Transaction ID">
+        </div>
+
+        <div>
+            <button onclick="initializeWASM()">1. Initialize WASM</button>
+            <button onclick="connectToNetwork()" id="connectBtn" disabled>2. Connect to Network</button>
+            <button onclick="fetchTransaction()" id="fetchBtn" disabled>3. Fetch Transaction</button>
+            <button onclick="decodePayload()" id="decodeBtn" disabled>4. Decode Payload</button>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <div id="transactionResult" class="result-section" style="display: none;">
+            <h3>Transaction Data</h3>
+            <pre id="txData"></pre>
+        </div>
+
+        <div id="payloadResult" class="result-section" style="display: none;">
+            <h3>Payload (Raw)</h3>
+            <pre id="payloadRaw"></pre>
+        </div>
+
+        <div id="decodedResult" class="result-section" style="display: none;">
+            <h3>Decoded Data</h3>
+            <pre id="decodedData"></pre>
+        </div>
+
+        <div id="fileResult" class="result-section" style="display: none;">
+            <h3>File Information</h3>
+            <div id="fileInfo"></div>
+            <button onclick="downloadFile()" id="downloadBtn" style="display: none;">Download File</button>
+        </div>
+    </div>
+
+    <script type="module">
+        let kaspa = null;
+        let rpcClient = null;
+        let currentTransaction = null;
+        let decodedFileData = null;
+
+        window.initializeWASM = async function() {
+            try {
+                updateStatus('Initializing WASM SDK...', 'loading');
+                
+                kaspa = await import('./kaspa-core.js');
+                await kaspa.default('./kaspa-core_bg.wasm');
+                window.kaspa = kaspa;
+                
+                updateStatus('WASM SDK initialized successfully!', 'success');
+                document.getElementById('connectBtn').disabled = false;
+            } catch (error) {
+                updateStatus(`WASM initialization failed: ${error.message}`, 'error');
+                console.error('WASM init error:', error);
+            }
+        };
+
+        window.connectToNetwork = async function() {
+            try {
+                updateStatus('Connecting to Kaspa Testnet-10...', 'loading');
+                
+                const resolver = new kaspa.Resolver();
+                const urls = await resolver.urls(new kaspa.NetworkId('testnet-10'));
+                
+                if (!urls || urls.length === 0) {
+                    throw new Error('No available nodes found');
+                }
+                
+                rpcClient = new kaspa.RpcClient({
+                    resolver,
+                    networkId: new kaspa.NetworkId('testnet-10')
+                });
+                
+                await rpcClient.connect();
+                
+                updateStatus(`Connected to Kaspa Testnet-10!`, 'success');
+                document.getElementById('fetchBtn').disabled = false;
+            } catch (error) {
+                updateStatus(`Connection failed: ${error.message}`, 'error');
+                console.error('Connection error:', error);
+            }
+        };
+
+        window.fetchTransaction = async function() {
+            try {
+                const txId = document.getElementById('txId').value.trim();
+                if (!txId) {
+                    throw new Error('Please enter a transaction ID');
+                }
+                
+                updateStatus('Fetching transaction from blockchain...', 'loading');
+                
+                // Get transaction data from RPC
+                const txData = await rpcClient.getTransaction({
+                    transactionId: txId,
+                    includeTransactionVerboseData: true
+                });
+                
+                if (!txData) {
+                    throw new Error('Transaction not found');
+                }
+                
+                currentTransaction = txData;
+                
+                // Display transaction data
+                document.getElementById('txData').textContent = JSON.stringify(txData, null, 2);
+                document.getElementById('transactionResult').style.display = 'block';
+                
+                // Extract payload if exists
+                if (txData.transaction && txData.transaction.payload) {
+                    const payload = txData.transaction.payload;
+                    document.getElementById('payloadRaw').textContent = payload;
+                    document.getElementById('payloadResult').style.display = 'block';
+                    document.getElementById('decodeBtn').disabled = false;
+                    
+                    updateStatus(`Transaction fetched! Payload size: ${payload.length} chars`, 'success');
+                } else {
+                    updateStatus('Transaction fetched but no payload found', 'success');
+                }
+                
+            } catch (error) {
+                updateStatus(`Failed to fetch transaction: ${error.message}`, 'error');
+                console.error('Fetch error:', error);
+            }
+        };
+
+        window.decodePayload = function() {
+            try {
+                if (!currentTransaction || !currentTransaction.transaction || !currentTransaction.transaction.payload) {
+                    throw new Error('No payload to decode');
+                }
+                
+                updateStatus('Decoding payload...', 'loading');
+                
+                const payload = currentTransaction.transaction.payload;
+                
+                // Try different decoding methods
+                let decodedText = '';
+                let fileData = null;
+                
+                try {
+                    // Method 1: Base64 decode
+                    const base64Decoded = atob(payload);
+                    decodedText += "Base64 Decoded:\n" + base64Decoded + "\n\n";
+                    
+                    // Check if it's JSON
+                    try {
+                        const jsonData = JSON.parse(base64Decoded);
+                        decodedText += "JSON Parsed:\n" + JSON.stringify(jsonData, null, 2) + "\n\n";
+                        
+                        // Check for file data structure
+                        if (jsonData.filename || jsonData.data || jsonData.type) {
+                            fileData = jsonData;
+                        }
+                    } catch (e) {
+                        // Not JSON
+                    }
+                } catch (e) {
+                    decodedText += "Base64 decode failed\n\n";
+                }
+                
+                // Method 2: Hex decode
+                try {
+                    if (payload.match(/^[0-9a-fA-F]+$/)) {
+                        const hexDecoded = payload.match(/.{1,2}/g)
+                            .map(byte => String.fromCharCode(parseInt(byte, 16)))
+                            .join('');
+                        decodedText += "Hex Decoded:\n" + hexDecoded + "\n\n";
+                    }
+                } catch (e) {
+                    decodedText += "Hex decode failed\n\n";
+                }
+                
+                // Method 3: Direct UTF-8
+                decodedText += "Direct UTF-8:\n" + payload + "\n\n";
+                
+                // Display decoded data
+                document.getElementById('decodedData').textContent = decodedText;
+                document.getElementById('decodedResult').style.display = 'block';
+                
+                // If file data found, show file info
+                if (fileData) {
+                    decodedFileData = fileData;
+                    const fileInfo = document.getElementById('fileInfo');
+                    fileInfo.innerHTML = `
+                        <p><strong>Filename:</strong> ${fileData.filename || 'Unknown'}</p>
+                        <p><strong>Type:</strong> ${fileData.type || 'Unknown'}</p>
+                        <p><strong>Size:</strong> ${fileData.size || 'Unknown'} bytes</p>
+                        ${fileData.timestamp ? `<p><strong>Timestamp:</strong> ${new Date(fileData.timestamp).toLocaleString()}</p>` : ''}
+                    `;
+                    document.getElementById('fileResult').style.display = 'block';
+                    
+                    if (fileData.data) {
+                        document.getElementById('downloadBtn').style.display = 'inline-block';
+                    }
+                }
+                
+                updateStatus('Payload decoded successfully!', 'success');
+                
+            } catch (error) {
+                updateStatus(`Decode failed: ${error.message}`, 'error');
+                console.error('Decode error:', error);
+            }
+        };
+
+        window.downloadFile = function() {
+            try {
+                if (!decodedFileData || !decodedFileData.data) {
+                    throw new Error('No file data to download');
+                }
+                
+                // Decode file data (assuming base64)
+                const binaryString = atob(decodedFileData.data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                // Create blob and download
+                const blob = new Blob([bytes], { type: decodedFileData.type || 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = decodedFileData.filename || 'downloaded-file';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                updateStatus('File downloaded!', 'success');
+                
+            } catch (error) {
+                updateStatus(`Download failed: ${error.message}`, 'error');
+                console.error('Download error:', error);
+            }
+        };
+
+        function updateStatus(message, type = '') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status';
+            
+            if (type === 'error') {
+                statusEl.classList.add('error');
+            } else if (type === 'success') {
+                statusEl.classList.add('success');
+            } else if (type === 'loading') {
+                statusEl.innerHTML = message + '<span class="loading"></span>';
+            }
+        }
+
+        // Initialize on page load
+        updateStatus('Ready to start. Click "1. Initialize WASM" to begin.');
+    </script>
+</body>
+</html>
