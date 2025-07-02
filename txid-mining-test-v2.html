@@ -106,7 +106,7 @@
         <h1>⛏️ Kaspa TxID Mining Test v2</h1>
         <p>Generate transactions with specific TxID patterns for enhanced searchability</p>
         <div class="version">
-            Version 2.3.0 | Enhanced error logging | 2025-07-02 20:05 JST
+            Version 2.4.0 | Fixed storage mass error | 2025-07-02 20:08 JST
         </div>
         
         <div style="background: #333; padding: 15px; border-radius: 4px; margin: 15px 0;">
@@ -160,7 +160,7 @@
         
         <div class="output" id="output">
             <div class="info">⚡ WASM SDK initializing...</div>
-            <div style="color: #ff6666; font-size: 10px;">Version 2.3.0 - Enhanced error handling to diagnose undefined errors</div>
+            <div style="color: #ff6666; font-size: 10px;">Version 2.4.0 - Fixed storage mass error by increasing amount to 1 KAS</div>
         </div>
     </div>
 
@@ -320,7 +320,7 @@
                         // Create transaction with varying parameters
                         let txResult = null;
                         let payloadData = null;
-                        let amount = BigInt(10000000); // 0.1 KAS default
+                        let amount = BigInt(100000000); // 1 KAS default (was 0.1 KAS - too small)
                         
                         switch (strategy) {
                             case 'nonce':
@@ -333,11 +333,11 @@
                                 payloadData = new Uint8Array([i % 256]);
                                 break;
                             case 'amount':
-                                amount = BigInt(10000000) + BigInt(i % 1000);
+                                amount = BigInt(100000000) + BigInt(i % 1000); // 1 KAS + variation
                                 break;
                             case 'hybrid':
                                 payloadData = new Uint8Array([i % 256, (i >> 8) % 256]);
-                                amount = BigInt(10000000) + BigInt(i % 100);
+                                amount = BigInt(100000000) + BigInt(i % 100); // 1 KAS + variation
                                 break;
                         }
                         
