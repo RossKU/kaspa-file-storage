@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Debug Test</title>
+</head>
+<body>
+    <h1>Debug Test for prepareUpload()</h1>
+    <input type="file" id="fileInput" accept="*/*">
+    <input type="text" id="secretKey" placeholder="Secret identifier" value="test_debug">
+    <button onclick="debugUpload()">Debug Upload</button>
+    <div id="debugOutput"></div>
+
+    <script>
+        function debugUpload() {
+            console.log("Debug function called");
+            const fileInput = document.getElementById('fileInput');
+            const secretKey = document.getElementById('secretKey').value;
+            const output = document.getElementById('debugOutput');
+            
+            console.log("File input:", fileInput);
+            console.log("Files:", fileInput.files);
+            console.log("Secret key:", secretKey);
+            
+            if (!fileInput.files[0]) {
+                output.innerHTML = 'Error: No file selected';
+                console.log("No file selected");
+                return;
+            }
+            
+            if (!secretKey) {
+                output.innerHTML = 'Error: No secret key';
+                console.log("No secret key");
+                return;
+            }
+
+            const file = fileInput.files[0];
+            console.log("File object:", file);
+            console.log("File name:", file.name);
+            console.log("File size:", file.size);
+            
+            output.innerHTML = `File: ${file.name}, Size: ${file.size}, Secret: ${secretKey}`;
+        }
+    </script>
+</body>
+</html>

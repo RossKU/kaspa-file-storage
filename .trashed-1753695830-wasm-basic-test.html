@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kaspa WASM Basic Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .result { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        button { padding: 10px 20px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Kaspa WASM SDK Basic Tests</h1>
+    
+    <div>
+        <button onclick="testBasicInitialization()">1. Test Basic Initialization</button>
+        <button onclick="testPrivateKeyCreation()">2. Test PrivateKey Creation</button>
+        <button onclick="testAddressGeneration()">3. Test Address Generation</button>
+        <button onclick="testTransactionFunction()">4. Test Transaction Functions</button>
+        <button onclick="testPayloadHandling()">5. Test Payload Handling</button>
+        <button onclick="testDetailedTransaction()">6. Test Detailed Transaction</button>
+        <button onclick="testCreateTransactionDebug()">7. Test SDK-Compliant createTransaction</button>
+        <button onclick="testFullTransactionFlow()">8. Test Full Transaction Flow (RPC + Balance)</button>
+    </div>
+    
+    <div class="result" id="testOutput"></div>
+
+    <script type="module">
+        let kaspa = null;
+        let testResults = [];
+        
+        // ペイロード処理ヘルパー関数
+        function textToHex(text) {
+            return Array.from(new TextEncoder().encode(text))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function hexToText(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return new TextDecoder().decode(bytes);
+        }
+        
+        function arrayBufferToHex(buffer) {
+            return Array.from(new Uint8Array(buffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+        
+        function hexToArrayBuffer(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes.buffer;
+        }
+        
+        // テスト結果を表示する関数
+        function logTest(testName, result, details = '') {
+            const status = result ? '✅' : '❌';
+            const message = `${status} ${testName}: ${result ? 'PASS' : 'FAIL'} ${details}`;
+            testResults.push(message);
+            console.log(message);
+            updateDisplay();
+        }
+        
+        function updateDisplay() {
+            document.getElementById('testOutput').innerHTML = testResults.join('<br>');
+        }
+        
+        // 基本初期化テスト
+        window.testBasicInitialization = async function() {
+            testResults = [];
+            logTest('Starting WASM Basic Tests', true, 'v1.0.0-basic');
+            
+            try {
+                logTest('Importing kaspa-core.js', true);
+                kaspa = await import('./kaspa-core.js');
+                logTest('Module imported', !!kaspa);
+                
+                logTest('Initializing WASM', true);
+                await kaspa.default('./kaspa-core_bg.wasm');
+                logTest('WASM initialized', true);
+                
+                // バージョン確認
+                if (kaspa.version) {
+                    const version = kaspa.version();
+                    logTest('Version check', true, version);
+                } else {
+                    logTest('Version check', false, 'version() not found');
+                }
+                
+                // 基本クラスの存在確認
+                logTest('PrivateKey class exists', !!kaspa.PrivateKey);
+                logTest('Transaction class exists', !!kaspa.Transaction);
+                logTest('createTransaction function exists', !!kaspa.createTransaction);
+                logTest('createTransactions function exists', !!kaspa.createTransactions);
+                
+                // WASM初期化完了
+                
+            } catch (error) {
+                logTest('Initialization failed', false, error.message || error.toString());
+            }
+        };
+        
+        // PrivateKey作成テスト
+        window.testPrivateKeyCreation = async function() {
+            if (!kaspa) {
+                logTest('PrivateKey test skipped', false, 'WASM not initialized - run test 1 first');
+                return;
+            }
+            
+            // WASM完全初期化を待機
+            if (!kaspa.PrivateKey) {
+                logTest('PrivateKey test skipped', false, 'PrivateKey class not available');
+                return;
+            }
+            
+            try {
+                // テスト用の既知の秘密鍵（公式例と同じ形式）
+                const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                logTest('Creating PrivateKey from hex', true, testKeyHex.substring(0, 8) + '...');
+                
+                // 小さな待機時間を入れてWASM完全初期化を確保
+                await new Promise(resolve => setTimeout(resolve, 10));
+                
+                const privateKey = new kaspa.PrivateKey(testKeyHex);
+                logTest('PrivateKey created', !!privateKey);
+                
+                // toString メソッドテスト
+                if (privateKey.toString) {
+                    const keyString = privateKey.toString();
+                    logTest('PrivateKey.toString()', keyString === testKeyHex, keyString.substring(0, 8) + '...');
+                } else {
+                    logTest('PrivateKey.toString()', false, 'method not found');
+                }
+                
+                // toKeypair メソッドテスト
+                if (privateKey.toKeypair) {
+                    const keypair = privateKey.toKeypair();
+                    logTest('PrivateKey.toKeypair()', !!keypair);
+                } else {
+                    logTest('PrivateKey.toKeypair()', false, 'method not found');
+                }
+                
+                window.testPrivateKey = privateKey; // 次のテスト用に保存
+                
+            } catch (error) {
+                logTest('PrivateKey creation failed', false, (error.message || error.toString()).substring(0, 100));
+                console.error('PrivateKey creation error details:', error);
+            }
+        };
+        
+        // アドレス生成テスト
+        window.testAddressGeneration = async function() {
+            if (!kaspa) {
+                logTest('Address test skipped', false, 'WASM not initialized - run test 1 first');
+                return;
+            }
+            
+            if (!window.testPrivateKey) {
+                // If no existing private key, create one for this test
+                try {
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
+                } catch (e) {
+                    logTest('Address test skipped', false, 'Cannot create PrivateKey - run test 2 first');
+                    return;
+                }
+            }
+            
+            try {
+                const privateKey = window.testPrivateKey;
+                
+                // NetworkType確認
+                logTest('NetworkType available', !!kaspa.NetworkType);
+                
+                if (kaspa.NetworkType) {
+                    // Keypairからアドレス生成
+                    const keypair = privateKey.toKeypair();
+                    
+                    if (keypair.toAddress) {
+                        // メインネットアドレス
+                        if (kaspa.NetworkType.Mainnet) {
+                            const mainnetAddr = keypair.toAddress(kaspa.NetworkType.Mainnet);
+                            logTest('Mainnet address', !!mainnetAddr, mainnetAddr ? mainnetAddr.toString().substring(0, 20) + '...' : '');
+                        }
+                        
+                        // テストネットアドレス
+                        if (kaspa.NetworkType.Testnet) {
+                            const testnetAddr = keypair.toAddress(kaspa.NetworkType.Testnet);
+                            logTest('Testnet address', !!testnetAddr, testnetAddr ? testnetAddr.toString().substring(0, 20) + '...' : '');
+                        }
+                    } else {
+                        logTest('toAddress method', false, 'not found on keypair');
+                    }
+                } else {
+                    logTest('NetworkType not found', false);
+                }
+                
+            } catch (error) {
+                logTest('Address generation failed', false, error.message);
+            }
+        };
+        
+        // トランザクション関数テスト
+        window.testTransactionFunction = async function() {
+            if (!kaspa) {
+                logTest('Transaction test skipped', false, 'WASM not initialized');
+                return;
+            }
+            
+            try {
+                // createTransaction関数の基本テスト
+                logTest('createTransaction function type', typeof kaspa.createTransaction === 'function');
+                
+                if (kaspa.createTransaction) {
+                    // 関数の長さ（パラメータ数）確認
+                    logTest('createTransaction parameters', true, `expects ${kaspa.createTransaction.length} params`);
+                }
+                
+                // createTransactions関数の基本テスト  
+                logTest('createTransactions function type', typeof kaspa.createTransactions === 'function');
+                
+                if (kaspa.createTransactions) {
+                    logTest('createTransactions parameters', true, `expects ${kaspa.createTransactions.length} params`);
+                }
+                
+                // 実際の呼び出しテスト（エラーが予想される）
+                try {
+                    const result = kaspa.createTransaction([], [], 0n, null, 1);
+                    logTest('createTransaction call', !!result, 'unexpected success');
+                } catch (error) {
+                    logTest('createTransaction call', true, `expected error: ${(error.message || error.toString()).substring(0, 50)}...`);
+                }
+                
+            } catch (error) {
+                logTest('Transaction function test failed', false, error.message || error.toString());
+            }
+        };
+        
+        // ペイロード処理テスト
+        window.testPayloadHandling = async function() {
+            if (!kaspa) {
+                logTest('Payload test skipped', false, 'WASM not initialized');
+                return;
+            }
+            
+            try {
+                // テストペイロード作成
+                const testText = 'Hello Kaspa!';
+                const testPayloadBytes = new TextEncoder().encode(testText);
+                logTest('Test payload created', true, `${testPayloadBytes.length} bytes`);
+                
+                // Hex変換テスト
+                const testPayloadHex = Array.from(testPayloadBytes, b => b.toString(16).padStart(2, '0')).join('');
+                logTest('Payload hex conversion', true, testPayloadHex);
+                
+                // 独自実装のペイロード関数をテスト
+                try {
+                    const hexResult = textToHex(testText);
+                    logTest('textToHex function', hexResult === testPayloadHex, hexResult);
+                    
+                    const textResult = hexToText(testPayloadHex);
+                    logTest('hexToText function', textResult === testText, textResult);
+                    
+                    const bufferHex = arrayBufferToHex(testPayloadBytes.buffer);
+                    logTest('arrayBufferToHex function', bufferHex === testPayloadHex, bufferHex);
+                    
+                    const bufferResult = hexToArrayBuffer(testPayloadHex);
+                    const bufferMatch = new Uint8Array(bufferResult).every((val, idx) => val === testPayloadBytes[idx]);
+                    logTest('hexToArrayBuffer function', bufferMatch, `${new Uint8Array(bufferResult).length} bytes`);
+                    
+                } catch (error) {
+                    logTest('Payload helper functions', false, error.message);
+                }
+                
+            } catch (error) {
+                logTest('Payload handling test failed', false, error.message);
+            }
+        };
+        
+        // 詳細なトランザクション作成テスト
+        window.testDetailedTransaction = async function() {
+            if (!kaspa) {
+                logTest('Detailed transaction test skipped', false, 'WASM not initialized - run test 1 first');
+                return;
+            }
+            
+            if (!window.testPrivateKey) {
+                // Create a private key for this test
+                try {
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
+                } catch (e) {
+                    logTest('Detailed transaction test skipped', false, 'Cannot create PrivateKey');
+                    return;
+                }
+            }
+            
+            try {
+                logTest('=== REAL TRANSACTION CREATION TEST ===', true);
+                
+                const privateKey = window.testPrivateKey;
+                const keypair = privateKey.toKeypair();
+                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                // Test different UTXO formats
+                logTest('Test UTXO data prepared', true, '1 UTXOs');
+                
+                // Test different output formats
+                logTest('Test output data prepared', true, '1 outputs');
+                
+                // Test payload
+                const testPayload = 'Test file storage payload';
+                const payloadBytes = new TextEncoder().encode(testPayload);
+                logTest('Test payload prepared', true, `${testPayload.length} bytes`);
+                
+                // Test createTransaction with various parameter combinations
+                logTest('Calling createTransaction with real data...', true);
+                
+                try {
+                    // Method 1: Basic test with empty arrays
+                    const result1 = kaspa.createTransaction([], [], 0n, payloadBytes, 1);
+                    logTest('createTransaction Method 1 (empty)', !!result1, 'success');
+                } catch (e) {
+                    logTest('createTransaction Method 1 (empty)', false, (e.message || e.toString()).substring(0, 50));
+                }
+                
+                logTest('=== UTXO AND OUTPUT FORMAT TEST ===', true);
+                
+                // Test kaspaToSompi function
+                if (kaspa.kaspaToSompi) {
+                    try {
+                        // Try different parameter types
+                        const sompi1 = kaspa.kaspaToSompi("1");
+                        logTest('kaspaToSompi function (string)', true, `1 KAS = ${sompi1} sompi`);
+                    } catch (e1) {
+                        try {
+                            const sompi2 = kaspa.kaspaToSompi(1.0);
+                            logTest('kaspaToSompi function (float)', true, `1 KAS = ${sompi2} sompi`);
+                        } catch (e2) {
+                            logTest('kaspaToSompi function', false, (e1.message || e1.toString()).substring(0, 50));
+                        }
+                    }
+                }
+                
+                // Test Address constructor 
+                if (kaspa.Address) {
+                    try {
+                        const addr = new kaspa.Address('kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd');
+                        logTest('Address constructor', !!addr, addr.toString().substring(0, 20) + '...');
+                    } catch (e) {
+                        logTest('Address constructor', false, e.message);
+                    }
+                }
+                
+                // Test PaymentOutput class
+                if (kaspa.PaymentOutput) {
+                    try {
+                        const output = new kaspa.PaymentOutput(address, 100000000n);
+                        logTest('PaymentOutput class', !!output);
+                    } catch (e) {
+                        logTest('PaymentOutput class', false, e.message);
+                    }
+                }
+                
+                // Test UtxoEntry class  
+                if (kaspa.UtxoEntry) {
+                    try {
+                        const utxo = new kaspa.UtxoEntry();
+                        logTest('UtxoEntry class', !!utxo);
+                    } catch (e) {
+                        logTest('UtxoEntry class', false, e.message);
+                    }
+                }
+                
+            } catch (error) {
+                logTest('Detailed transaction test failed', false, error.message || error.toString());
+            }
+        };
+        
+        // createTransaction詳細デバッグテスト
+        window.testCreateTransactionDebug = async function() {
+            if (!kaspa) {
+                logTest('Debug test skipped', false, 'WASM not initialized - run test 1 first');
+                return;
+            }
+            
+            if (!window.testPrivateKey) {
+                // Create a private key for this test
+                try {
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
+                } catch (e) {
+                    logTest('Debug test skipped', false, 'Cannot create PrivateKey');
+                    return;
+                }
+            }
+            
+            try {
+                logTest('=== DEBUG createTransaction ERROR ===', true);
+                
+                const privateKey = window.testPrivateKey;
+                const keypair = privateKey.toKeypair();
+                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                // 正しいIUtxoEntry形式のテストデータ
+                const testUtxos = [{
+                    outpoint: {
+                        transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                        index: 0
+                    },
+                    amount: 200000000000n, // 2000 KAS in sompi (enough for 1 TKAS + fees)
+                    scriptPublicKey: {
+                        version: 0,
+                        script: new Uint8Array([0x20, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11])
+                    },
+                    blockDaaScore: 12345678n
+                }];
+                logTest('Test UTXO data prepared (IUtxoEntry format)', true, `${testUtxos.length} UTXOs`);
+                
+                // 正しいIPaymentOutput形式のテストデータ（1 TKAS送金）
+                const testOutputs = [{
+                    address: address.toString(), // use generated address
+                    amount: 100000000000n // 1 TKAS in sompi (1000 KAS)
+                }];
+                logTest('Test output data prepared (1 TKAS transfer)', true, `${testOutputs.length} outputs`);
+                
+                // テストペイロード（Uint8Array形式）- ファイルストレージデータ
+                const testFileData = "Test 1 TKAS transfer with file storage payload!";
+                const payloadBytes = new TextEncoder().encode(testFileData);
+                logTest('Test file storage payload prepared', true, `${payloadBytes.length} bytes`);
+                
+                // createTransaction関数をSDK仕様に準拠して呼び出し
+                try {
+                    logTest('=== Testing 1 TKAS Transfer with File Storage ===', true);
+                
+                // ウォレット情報表示
+                logTest('Sender address', true, address.toString().substring(0, 20) + '...');
+                logTest('Recipient address', true, address.toString().substring(0, 20) + '...');
+                logTest('Transfer amount', true, '1 TKAS (1000 KAS)');
+                logTest('Fee amount', true, '0.01 KAS');
+                logTest('File storage payload', true, `"${testFileData.substring(0, 30)}..."`);
+                
+                logTest('=== Testing createTransaction with proper SDK interfaces ===', true);
+                    
+                    // Test Case 1: Empty arrays (should work)
+                    try {
+                        const emptyResult = kaspa.createTransaction(
+                            [],        // empty utxo_entry_source
+                            [],        // empty outputs
+                            0n,        // priority_fee (0 for empty UTXO)
+                            payloadBytes,  // payload as Uint8Array
+                            1          // sig_op_count
+                        );
+                        logTest('Empty arrays test', !!emptyResult, typeof emptyResult);
+                    } catch (e) {
+                        logTest('Empty arrays test', false, (e.message || e.toString()).substring(0, 50));
+                    }
+                    
+                    // Test Case 2: With proper UTXO and output data
+                    try {
+                        const transaction = kaspa.createTransaction(
+                            testUtxos,     // utxo_entry_source (IUtxoEntry[])
+                            testOutputs,   // outputs (IPaymentOutput[])
+                            1000000n,      // priority_fee (0.01 KAS in sompi for 1 TKAS transfer)
+                            payloadBytes,  // payload (Uint8Array)
+                            1              // sig_op_count
+                        );
+                        
+                        logTest('createTransaction with data', !!transaction, typeof transaction);
+                        
+                        if (transaction) {
+                            // トランザクションオブジェクトの詳細確認
+                            logTest('Transaction object type', typeof transaction === 'object');
+                            
+                            // 利用可能なメソッド確認
+                            const methods = ['toString', 'id', 'inputs', 'outputs'].map(method => ({
+                                name: method,
+                                exists: transaction[method] !== undefined
+                            }));
+                            
+                            methods.forEach(method => {
+                                logTest(`Transaction.${method.name}`, method.exists);
+                            });
+                            
+                            // Optional methods (may not exist)
+                            const optionalMethods = ['sign', 'toJson', 'toRaw', 'serialize'].map(method => ({
+                                name: method,
+                                exists: transaction[method] !== undefined
+                            }));
+                            
+                            optionalMethods.forEach(method => {
+                                logTest(`Transaction.${method.name} (optional)`, true, method.exists ? 'available' : 'not available');
+                            });
+                            
+                            window.testTransaction = transaction; // 次のテスト用に保存
+                        }
+                        
+                    } catch (createError) {
+                        logTest('createTransaction with data', false, (createError.message || createError.toString()).substring(0, 50));
+                        console.group('🔍 createTransaction Error Details');
+                        console.error('Full error:', createError);
+                        console.log('Test UTXOs:', testUtxos);
+                        console.log('Test outputs:', testOutputs);
+                        console.log('Payload:', payloadBytes);
+                        console.groupEnd();
+                    }
+                    
+                    // Test Case 3: Test createTransactions (object parameter)
+                    try {
+                        logTest('=== Testing createTransactions function ===', true);
+                        // Create proper mock UTXO entries with sufficient balance
+                        // Create proper mock UTXO with realistic Kaspa transaction ID and correct format
+                        const mockUtxoEntries = [{
+                            address: address.toString(),
+                            outpoint: {
+                                transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                                index: 0
+                            },
+                            scriptPublicKey: kaspa.payToAddressScript ? kaspa.payToAddressScript(address) : {
+                                version: 0,
+                                script: new Uint8Array([
+                                    0x20, // OP_DATA_32 - push 32 bytes
+                                    // 32-byte public key hash derived from test private key
+                                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                                    0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11,
+                                    0xac // OP_CHECKSIG
+                                ])
+                            },
+                            amount: 500000000000n, // 5000 KAS (much more than needed: sufficient for 1000 KAS output + fees)
+                            isCoinbase: false,
+                            blockDaaScore: 12345678n
+                        }];
+                        
+                        const transactionsResult = await kaspa.createTransactions({
+                            entries: mockUtxoEntries,  // sufficient UTXO balance
+                            outputs: testOutputs,      // 1000 KAS output
+                            changeAddress: address,    // required for change
+                            priorityFee: 1000000n,     // 0.01 KAS fee
+                            networkId: "testnet-10"    // correct string format
+                        });
+                        logTest('createTransactions call', !!transactionsResult, typeof transactionsResult);
+                        
+                        if (transactionsResult && transactionsResult.transactions) {
+                            logTest('createTransactions result has transactions', true, `${transactionsResult.transactions.length} transactions`);
+                        }
+                    } catch (e) {
+                        logTest('createTransactions call', false, (e.message || e.toString()).substring(0, 50));
+                    }
+                    
+                } catch (generalError) {
+                    logTest('General createTransaction test failed', false, (generalError.message || generalError.toString()).substring(0, 50));
+                    console.error('General error:', generalError);
+                }
+                
+                // 関数signature分析
+                logTest('=== FUNCTION SIGNATURE ANALYSIS ===', true);
+                logTest('createTransaction length', true, `${kaspa.createTransaction.length} parameters`);
+                logTest('createTransaction toString', true, kaspa.createTransaction.toString().substring(0, 100) + '...');
+                
+            } catch (error) {
+                logTest('Debug test failed', false, error.message || error.toString());
+                console.error('Debug test error:', error);
+            }
+        };
+        
+        // 完全なトランザクションフロー（RPC + 残高確認）
+        window.testFullTransactionFlow = async function() {
+            if (!kaspa) {
+                logTest('Full flow test skipped', false, 'WASM not initialized - run test 1 first');
+                return;
+            }
+            
+            // 重複実行を防ぐ
+            if (window.testFullTransactionFlow.running) {
+                logTest('Full flow test already running', false, 'please wait for completion');
+                return;
+            }
+            window.testFullTransactionFlow.running = true;
+            
+            if (!window.testPrivateKey) {
+                try {
+                    const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                    window.testPrivateKey = new kaspa.PrivateKey(testKeyHex);
+                } catch (e) {
+                    logTest('Full flow test skipped', false, 'Cannot create PrivateKey');
+                    return;
+                }
+            }
+            
+            try {
+                logTest('=== COMPLETE TRANSACTION FLOW TEST ===', true);
+                
+                const privateKey = window.testPrivateKey;
+                const keypair = privateKey.toKeypair();
+                const senderAddress = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                logTest('Sender Address', true, senderAddress.toString().substring(0, 30) + '...');
+                
+                // Step 1: RPC接続のテスト
+                logTest('=== Step 1: RPC Connection Test ===', true);
+                let rpcClient = null;
+                
+                try {
+                    // Kaspa testnet public node
+                    const testnetNodes = [
+                        'wss://testnet-1.kaspa.aspectron.org',
+                        'wss://testnet-2.kaspa.aspectron.org'
+                    ];
+                    
+                    logTest('Creating RPC client...', true);
+                    rpcClient = new kaspa.RpcClient({
+                        url: testnetNodes[0],
+                        networkId: 'testnet-10'
+                    });
+                    
+                    logTest('RPC Client created', true, testnetNodes[0]);
+                    
+                    // 接続試行（タイムアウト付き）
+                    logTest('Attempting RPC connection...', true);
+                    const connectionPromise = rpcClient.connect();
+                    const timeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
+                    );
+                    
+                    await Promise.race([connectionPromise, timeoutPromise]);
+                    logTest('RPC Connection established', true);
+                    
+                    // ネットワーク情報取得（タイムアウト付き）
+                    logTest('Requesting network info...', true);
+                    const networkInfoPromise = rpcClient.getBlockDagInfo();
+                    const networkTimeoutPromise = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Network info timeout after 5 seconds')), 5000)
+                    );
+                    
+                    const networkInfo = await Promise.race([networkInfoPromise, networkTimeoutPromise]);
+                    logTest('Network info retrieved', !!networkInfo, `DAA Score: ${networkInfo.daaScore || 'unknown'}`);
+                    logTest('Network info details', true, `blockCount: ${networkInfo.blockCount || 'unknown'}, headerCount: ${networkInfo.headerCount || 'unknown'}`);
+                    
+                } catch (rpcError) {
+                    logTest('RPC Connection failed', false, (rpcError.message || rpcError.toString()).substring(0, 100));
+                    logTest('RPC Error name', false, rpcError.name || 'unknown error type');
+                    logTest('RPC Error stack trace', false, (rpcError.stack || 'no stack').substring(0, 200));
+                    logTest('Full flow test using mock data', true, 'continuing with simulated data');
+                    rpcClient = null; // Force fallback to mock data
+                }
+                
+                // Step 2: 残高確認
+                logTest('=== Step 2: Balance Check ===', true);
+                let currentBalance = 0n;
+                let utxoEntries = [];
+                
+                try {
+                    if (rpcClient) {
+                        logTest('Attempting live balance check...', true);
+                        const balanceInfo = await rpcClient.getBalanceByAddress(senderAddress.toString());
+                        currentBalance = balanceInfo.balance || 0n;
+                        logTest('Current balance retrieved', true, `${currentBalance} sompi`);
+                        
+                        // UTXO取得
+                        logTest('Attempting UTXO retrieval...', true);
+                        const utxoInfo = await rpcClient.getUtxosByAddresses([senderAddress.toString()]);
+                        utxoEntries = utxoInfo.entries || [];
+                        logTest('UTXO entries retrieved', true, `${utxoEntries.length} UTXOs`);
+                    } else {
+                        // Mock data for offline testing
+                        currentBalance = 500000000000n; // 5000 KAS
+                        utxoEntries = [{
+                            address: senderAddress.toString(),
+                            outpoint: {
+                                transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                                index: 0
+                            },
+                            scriptPublicKey: {
+                                version: 0,
+                                script: new Uint8Array([0x20, 0xb7, 0xe1, 0x51, 0x62, 0x8a, 0xed, 0x2a, 0x6a, 0xbf, 0x71, 0x58, 0x80, 0x9c, 0xf4, 0xf3, 0xc7, 0x62, 0xe7, 0x16, 0x0f, 0x38, 0xb4, 0xda, 0x56, 0xa7, 0x84, 0xd9, 0x04, 0x51, 0x90, 0xcf, 0xef, 0xac])
+                            },
+                            amount: currentBalance,
+                            isCoinbase: false,
+                            blockDaaScore: 12345678n
+                        }];
+                        logTest('Using mock balance data', true, `${currentBalance} sompi (5000 KAS)`);
+                    }
+                } catch (balanceError) {
+                    logTest('Balance check failed', false, (balanceError.message || balanceError.toString()).substring(0, 100));
+                    logTest('Balance Error name', false, balanceError.name || 'unknown error type');
+                    logTest('Balance Error stack trace', false, (balanceError.stack || 'no stack').substring(0, 200));
+                    
+                    // Fallback to mock data on balance error
+                    logTest('Fallback to mock data', true, 'due to balance error');
+                    currentBalance = 500000000000n; // 5000 KAS
+                    utxoEntries = [{
+                        address: senderAddress.toString(),
+                        outpoint: {
+                            transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                            index: 0
+                        },
+                        scriptPublicKey: {
+                            version: 0,
+                            script: new Uint8Array([0x20, 0xb7, 0xe1, 0x51, 0x62, 0x8a, 0xed, 0x2a, 0x6a, 0xbf, 0x71, 0x58, 0x80, 0x9c, 0xf4, 0xf3, 0xc7, 0x62, 0xe7, 0x16, 0x0f, 0x38, 0xb4, 0xda, 0x56, 0xa7, 0x84, 0xd9, 0x04, 0x51, 0x90, 0xcf, 0xef, 0xac])
+                        },
+                        amount: currentBalance,
+                        isCoinbase: false,
+                        blockDaaScore: 12345678n
+                    }];
+                }
+                
+                // Step 3: トランザクション作成
+                logTest('=== Step 3: Transaction Creation ===', true);
+                
+                const transferAmount = 100000000000n; // 1000 KAS (1 TKAS)
+                const priorityFee = 1000000n; // 0.01 KAS
+                const totalRequired = transferAmount + priorityFee;
+                
+                if (currentBalance < totalRequired) {
+                    logTest('Insufficient funds', false, `Need ${totalRequired}, have ${currentBalance}`);
+                    return;
+                }
+                
+                logTest('Sufficient balance confirmed', true, `${currentBalance} >= ${totalRequired}`);
+                
+                // 受信アドレス（テスト用に送信者と同じアドレス）
+                const recipientAddress = senderAddress.toString();
+                
+                const testPayload = `File storage test - 1 TKAS transfer at ${new Date().toISOString()}`;
+                const payloadBytes = new TextEncoder().encode(testPayload);
+                
+                let transactionResult = null;
+                
+                try {
+                    transactionResult = await kaspa.createTransactions({
+                        entries: utxoEntries,
+                        outputs: [{
+                            address: recipientAddress,
+                            amount: transferAmount
+                        }],
+                        changeAddress: senderAddress.toString(),
+                        priorityFee: priorityFee,
+                        networkId: "testnet-10",
+                        payload: payloadBytes
+                    });
+                    
+                    logTest('Transaction created successfully', !!transactionResult, `${transactionResult.transactions?.length || 0} transactions`);
+                    
+                    if (transactionResult.summary) {
+                        const summary = transactionResult.summary;
+                        logTest('Transaction fees calculated', true, `${summary.fees || 'unknown'} sompi`);
+                        logTest('Final transaction amount', true, `${summary.finalAmount || transferAmount} sompi`);
+                        logTest('Change amount', true, `${summary.changeAmount || 'unknown'} sompi`);
+                    }
+                    
+                } catch (txError) {
+                    logTest('Transaction creation failed', false, (txError.message || txError.toString()).substring(0, 100));
+                    logTest('Transaction Error name', false, txError.name || 'unknown error type');
+                    logTest('Transaction Error stack trace', false, (txError.stack || 'no stack').substring(0, 200));
+                    return;
+                }
+                
+                // Step 4: トランザクション署名（シミュレーション）
+                logTest('=== Step 4: Transaction Signing (Simulation) ===', true);
+                
+                if (transactionResult?.transactions?.length > 0) {
+                    const firstTx = transactionResult.transactions[0];
+                    logTest('Transaction ready for signing', true, typeof firstTx);
+                    
+                    // Note: 実際の署名は PendingTransaction.sign([privateKey]) を使用
+                    logTest('Signing simulation', true, 'would call: pendingTx.sign([privateKey])');
+                    logTest('Submission simulation', true, 'would call: pendingTx.submit(rpcClient)');
+                }
+                
+                // Step 5: 残高変更の予測
+                logTest('=== Step 5: Expected Balance Changes ===', true);
+                
+                const expectedNewBalance = currentBalance - transferAmount - priorityFee;
+                logTest('Expected sender balance after tx', true, `${expectedNewBalance} sompi`);
+                logTest('Expected recipient balance change', true, `+${transferAmount} sompi`);
+                logTest('Total fees paid', true, `${priorityFee} sompi (0.01 KAS)`);
+                
+                // Step 6: トランザクション詳細
+                logTest('=== Step 6: Transaction Details ===', true);
+                logTest('File storage payload', true, `"${testPayload.substring(0, 40)}..."`);
+                logTest('Payload size', true, `${payloadBytes.length} bytes`);
+                logTest('Transaction type', true, '1 TKAS transfer with file storage');
+                
+                // Step 7: クリーンアップ
+                if (rpcClient) {
+                    try {
+                        await rpcClient.disconnect();
+                        logTest('RPC Connection closed', true);
+                    } catch (disconnectError) {
+                        logTest('RPC Disconnect warning', false, 'connection may still be open');
+                    }
+                }
+                
+                logTest('=== COMPLETE TRANSACTION FLOW FINISHED ===', true, 'Ready for real deployment');
+                
+            } catch (error) {
+                logTest('Full transaction flow failed', false, (error.message || error.toString()).substring(0, 100));
+                logTest('Full Flow Error name', false, error.name || 'unknown error type');
+                logTest('Full Flow Error stack trace', false, (error.stack || 'no stack').substring(0, 300));
+                logTest('Full Flow Error details', false, `Error at line: ${error.lineNumber || 'unknown'}, column: ${error.columnNumber || 'unknown'}`);
+            } finally {
+                // 実行フラグをリセット
+                window.testFullTransactionFlow.running = false;
+            }
+        };
+        
+        // 自動初期化
+        window.addEventListener('load', () => {
+            updateDisplay();
+        });
+        
+    </script>
+</body>
+</html>

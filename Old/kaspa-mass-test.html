@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kaspa Mass Limit Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .result { margin: 10px 0; }
+        .error { color: red; }
+        .ok { color: green; }
+        .warning { color: orange; }
+        pre { background: #f5f5f5; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Kaspa Mass Limit Analysis</h1>
+    <div id="output"></div>
+
+    <script type="module">
+        import init, * as kaspa from '/storage/emulated/0/Download/ClaudeCLI/kaspa-wasm32-sdk/web/kaspa/kaspa.js';
+
+        async function runTest() {
+            const output = document.getElementById('output');
+            
+            function log(message, className = '') {
+                const div = document.createElement('div');
+                div.className = `result ${className}`;
+                div.textContent = message;
+                output.appendChild(div);
+                console.log(message);
+            }
+
+            try {
+                // Initialize WASM
+                await init('/storage/emulated/0/Download/ClaudeCLI/kaspa-wasm32-sdk/web/kaspa/kaspa_bg.wasm');
+                
+                log("=== Kaspa Mass Limit Analysis ===");
+                log("");
+                
+                // 1. Get maximum standard transaction mass
+                const maxMass = kaspa.maximumStandardTransactionMass();
+                log(`Maximum Standard Transaction Mass: ${maxMass}`);
+                
+                // 2. Create a test UTXO entry
+                const testUtxo = {
+                    address: "kaspa:qr0lr4ml9fn3chekrqmjdkergxl93l4wrk3dankcgvjq776s9wn9jkdskewva",
+                    outpoint: {
+                        transactionId: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                        index: 0
+                    },
+                    utxoEntry: {
+                        amount: kaspa.kaspaToSompi("1.0"),
+                        scriptPublicKey: {
+                            version: 0,
+                            script: "76a914ab68025513c3dbd2f7b92a94e0581f5d50f654e788ac"
+                        },
+                        blockDaaScore: 1000n,
+                        isCoinbase: false
+                    }
+                };
+                
+                // 3. Create output
+                const outputs = [{
+                    address: "kaspa:qr0lr4ml9fn3chekrqmjdkergxl93l4wrk3dankcgvjq776s9wn9jkdskewva",
+                    amount: kaspa.kaspaToSompi("0.5")
+                }];
+                
+                // 4. Test different payload sizes
+                log("");
+                log("=== Payload Size vs Mass Analysis ===");
+                const payloadSizes = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 101, 110, 120, 150, 200];
+                
+                for (const size of payloadSizes) {
+                    try {
+                        // Create payload of specified size
+                        const payload = 'A'.repeat(size * 2); // hex string, so double the size
+                        
+                        // Create transaction with payload
+                        const tx = kaspa.createTransaction([testUtxo], outputs, 0n, payload, 1);
+                        
+                        // Calculate mass
+                        const mass = kaspa.calculateTransactionMass("testnet-11", tx, 1);
+                        
+                        const status = mass <= maxMass ? "OK" : "EXCEEDS LIMIT";
+                        const className = mass <= maxMass ? "ok" : "error";
+                        
+                        log(`Payload size: ${size.toString().padStart(4)} bytes | Mass: ${mass.toString().padStart(8)} | Status: ${status}`, className);
+                        
+                        if (mass > maxMass) break;
+                        
+                    } catch (error) {
+                        log(`Payload size: ${size.toString().padStart(4)} bytes | ERROR: ${error.message}`, 'error');
+                        break;
+                    }
+                }
+                
+                // 5. Test specific 101 byte payload (user's failing case)
+                log("");
+                log("=== Specific 101 Byte Test ===");
+                try {
+                    const payload101 = 'A'.repeat(101 * 2); // 101 bytes in hex
+                    const tx101 = kaspa.createTransaction([testUtxo], outputs, 0n, payload101, 1);
+                    const mass101 = kaspa.calculateTransactionMass("testnet-11", tx101, 1);
+                    const status = mass101 <= maxMass ? 'OK' : 'EXCEEDS LIMIT';
+                    const className = mass101 <= maxMass ? 'ok' : 'error';
+                    log(`101 byte payload - Mass: ${mass101} | Max allowed: ${maxMass} | Status: ${status}`, className);
+                } catch (error) {
+                    log(`101 byte payload - Error: ${error.message}`, 'error');
+                }
+                
+                // 6. Find the exact limit using binary search
+                log("");
+                log("=== Binary Search for Exact Payload Limit ===");
+                let low = 0;
+                let high = 200;
+                let maxValidSize = 0;
+                
+                while (low <= high) {
+                    const mid = Math.floor((low + high) / 2);
+                    try {
+                        const payload = 'A'.repeat(mid * 2);
+                        const tx = kaspa.createTransaction([testUtxo], outputs, 0n, payload, 1);
+                        const mass = kaspa.calculateTransactionMass("testnet-11", tx, 1);
+                        
+                        if (mass <= maxMass) {
+                            maxValidSize = mid;
+                            low = mid + 1;
+                        } else {
+                            high = mid - 1;
+                        }
+                    } catch (error) {
+                        high = mid - 1;
+                    }
+                }
+                
+                log(`Maximum safe payload size: ${maxValidSize} bytes`);
+                
+                // 7. Recommended safe size (with safety margin)
+                const safeSize = Math.floor(maxValidSize * 0.8);
+                log(`Recommended safe payload size (with 20% margin): ${safeSize} bytes`, 'warning');
+                
+                log("");
+                log("=== Mass Calculation Formula Analysis ===");
+                
+                // Test with minimal transaction
+                const minTx = kaspa.createTransaction([testUtxo], outputs, 0n, "", 1);
+                const minMass = kaspa.calculateTransactionMass("testnet-11", minTx, 1);
+                log(`Base transaction mass (no payload): ${minMass}`);
+                
+                // Test with 1 byte payload
+                const oneByteTx = kaspa.createTransaction([testUtxo], outputs, 0n, "41", 1); // "A" in hex
+                const oneByteMass = kaspa.calculateTransactionMass("testnet-11", oneByteTx, 1);
+                log(`1 byte payload mass: ${oneByteMass}`);
+                log(`Mass per payload byte: ${oneByteMass - minMass}`);
+                
+                log("");
+                log("=== Summary ===");
+                log(`Network maximum mass limit: ${maxMass}`);
+                log(`Base transaction overhead: ${minMass}`);
+                log(`Available mass for payload: ${maxMass - minMass}`);
+                log(`Theoretical max payload: ${Math.floor((maxMass - minMass) / (oneByteMass - minMass))} bytes`);
+                
+                // 8. Test with different numbers of inputs/outputs
+                log("");
+                log("=== Effect of Transaction Complexity on Mass ===");
+                
+                // Test with multiple UTXOs
+                const multipleUtxos = Array(5).fill(testUtxo);
+                const multipleOutputs = Array(3).fill(outputs[0]);
+                
+                try {
+                    const complexTx = kaspa.createTransaction(multipleUtxos, multipleOutputs, 0n, "", 1);
+                    const complexMass = kaspa.calculateTransactionMass("testnet-11", complexTx, 1);
+                    log(`Complex transaction (5 inputs, 3 outputs): ${complexMass}`);
+                    log(`Available mass for payload in complex tx: ${maxMass - complexMass}`);
+                    
+                    // Find max payload for complex transaction
+                    let maxPayloadForComplex = 0;
+                    for (let size = 1; size <= 100; size++) {
+                        try {
+                            const payload = 'A'.repeat(size * 2);
+                            const tx = kaspa.createTransaction(multipleUtxos, multipleOutputs, 0n, payload, 1);
+                            const mass = kaspa.calculateTransactionMass("testnet-11", tx, 1);
+                            if (mass <= maxMass) {
+                                maxPayloadForComplex = size;
+                            } else {
+                                break;
+                            }
+                        } catch (error) {
+                            break;
+                        }
+                    }
+                    log(`Max payload for complex transaction: ${maxPayloadForComplex} bytes`, 'warning');
+                    
+                } catch (error) {
+                    log(`Complex transaction test failed: ${error.message}`, 'error');
+                }
+                
+            } catch (error) {
+                log(`Fatal error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        // Run the test
+        runTest();
+    </script>
+</body>
+</html>

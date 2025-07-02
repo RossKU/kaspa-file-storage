@@ -1,0 +1,11 @@
+# Kaspa Storage Test File
+Created: 2025-06-26T05:46:42.593Z
+Secret: test_secret_12345
+Content: This is a test file for Kaspa blockchain storage.
+
+Features:
+- Small size for testing
+- UTF-8 text content
+- Easy to verify
+
+Test data: Hello Kaspa! 🚀

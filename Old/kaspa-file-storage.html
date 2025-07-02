@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa File Storage</title>
+    <style>
+        body { font: 14px monospace; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 600px; background: white; padding: 20px; border: 1px solid #ddd; }
+        .section { margin: 20px 0; padding: 10px; border-left: 3px solid #333; }
+        input, textarea, button { font: inherit; margin: 5px 0; }
+        input[type="file"], input[type="text"] { width: 100%; padding: 5px; }
+        button { background: #333; color: white; border: none; padding: 8px 16px; cursor: pointer; }
+        button:hover { background: #555; }
+        .output { background: #f0f0f0; padding: 10px; margin: 10px 0; font-size: 12px; }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Kaspa File Storage</h1>
+        <p>Store files anonymously on Kaspa blockchain via transaction payloads (80KB max)</p>
+
+        <!-- Wallet Info Section -->
+        <div class="section">
+            <h3>💰 Wallet Information</h3>
+            <div class="output">
+                <strong>Address:</strong> kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd<br>
+                <strong>Balance:</strong> <span id="walletBalance">Checking...</span> TKAS<br>
+                <strong>Network:</strong> Testnet<br>
+                <button onclick="checkBalance()" style="margin-top: 10px;">Refresh Balance</button>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div class="section">
+            <h3>📤 Upload File</h3>
+            <input type="file" id="fileInput" accept="*/*">
+            <input type="text" id="secretKey" placeholder="Secret identifier (for retrieval)">
+            <button onclick="prepareUpload()">Prepare Transaction</button>
+            <div class="output" id="uploadOutput"></div>
+        </div>
+
+        <!-- Download Section -->
+        <div class="section">
+            <h3>📥 Retrieve Files</h3>
+            <input type="text" id="retrieveSecret" placeholder="Secret identifier">
+            <button onclick="retrieveFiles()">Search Files</button>
+            <div class="output" id="retrieveOutput"></div>
+        </div>
+
+        <!-- Transaction Section -->
+        <div class="section">
+            <h3>🔗 Transaction Data</h3>
+            <p>Copy this to send via Kaspa wallet:</p>
+            <textarea id="transactionData" rows="8" style="width:100%" readonly></textarea>
+            <button onclick="copyTransaction()">Copy to Clipboard</button>
+            <button onclick="saveTransactionFile()">Save as File</button>
+            <button onclick="sendTransaction()" style="background: #e67e22;">🚀 Send Transaction (Test)</button>
+        </div>
+
+        <!-- Test Section -->
+        <div class="section">
+            <h3>🧪 Test Functions</h3>
+            <button onclick="createTestFile()">Create Test Text File</button>
+            <button onclick="savePayloadAsText()">Save Payload as Text</button>
+            <div class="output" id="testOutput"></div>
+        </div>
+
+        <!-- Status -->
+        <div class="output" id="status">Ready</div>
+    </div>
+
+    <script type="module">
+        // Kaspa WASM SDK loading
+        let kaspaWasm = null;
+        let isWasmLoaded = false;
+
+        async function loadKaspaWasm() {
+            try {
+                document.getElementById('status').innerHTML = '<span class="info">Loading Kaspa WASM SDK...</span>';
+                
+                const module = await import('./kaspa-wasm.js');
+                kaspaWasm = await module.default('./kaspa-wasm_bg.wasm');
+                isWasmLoaded = true;
+                
+                document.getElementById('status').innerHTML = '<span class="success">✅ Kaspa WASM SDK loaded successfully!</span>';
+                
+                // Check balance after WASM loads
+                await checkBalance();
+                
+                return true;
+            } catch (error) {
+                document.getElementById('status').innerHTML = `<span class="error">❌ Failed to load WASM SDK: ${error.message}</span>`;
+                console.error('WASM loading error:', error);
+                return false;
+            }
+        }
+
+        // Global state
+        let currentFile = null;
+        let currentSecret = null;
+
+        // File encoding utilities
+        function arrayBufferToHex(buffer) {
+            return Array.from(new Uint8Array(buffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+
+        function hexToArrayBuffer(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes.buffer;
+        }
+
+        function textToHex(text) {
+            return Array.from(new TextEncoder().encode(text))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+        }
+
+        function hexToText(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return new TextDecoder().decode(bytes);
+        }
+
+        // Upload preparation
+        async function prepareUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const secretKey = document.getElementById('secretKey').value;
+            const output = document.getElementById('uploadOutput');
+            
+            if (!fileInput.files[0]) {
+                output.innerHTML = '<span class="error">Please select a file</span>';
+                return;
+            }
+            
+            if (!secretKey) {
+                output.innerHTML = '<span class="error">Please enter a secret identifier</span>';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            
+            // Check file size
+            if (file.size > 80000) {
+                output.innerHTML = `<span class="error">File too large: ${file.size} bytes (max 80KB)</span>`;
+                return;
+            }
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const fileHex = arrayBufferToHex(arrayBuffer);
+                
+                // Create file metadata
+                const metadata = {
+                    filename: file.name,
+                    size: file.size,
+                    type: file.type,
+                    timestamp: new Date().toISOString(),
+                    secret: secretKey
+                };
+                
+                const metadataHex = textToHex(JSON.stringify(metadata));
+                const separatorHex = textToHex('|');
+                const combinedPayload = metadataHex + separatorHex + fileHex;
+                
+                // Create transaction template with real UTXO data
+                const transaction = {
+                    version: 0,
+                    inputs: [{
+                        previousOutpoint: {
+                            transactionId: "b316c423c35c9e24bb263f56475df4297a82f4c52c70237e0fc36af5f7df1f9e",
+                            index: 0
+                        },
+                        signatureScript: "SIGNATURE_WILL_BE_ADDED",
+                        sequence: 18446744073709551615,
+                        sigOpCount: 1
+                    }],
+                    outputs: [{
+                        amount: 100000000, // 1 KAS
+                        scriptPublicKey: {
+                            version: 0,
+                            scriptPublicKey: "20qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd"
+                        }
+                    }],
+                    lockTime: 0,
+                    subnetworkId: "0000000000000000000000000000000000000000",
+                    gas: 0,
+                    payload: combinedPayload,
+                    mass: null
+                };
+
+                currentFile = file;
+                currentSecret = secretKey;
+                
+                document.getElementById('transactionData').value = JSON.stringify(transaction, null, 2);
+                
+                output.innerHTML = `
+                    <span class="success">✓ File prepared for upload</span><br>
+                    File: ${file.name} (${file.size} bytes)<br>
+                    Payload size: ${combinedPayload.length / 2} bytes<br>
+                    <span class="info">Replace UTXO and address in transaction data, then send via wallet</span>
+                `;
+
+            } catch (error) {
+                output.innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+
+        // API configuration
+        const KASPA_API_BASE = 'https://api-tn10.kaspa.org';
+        const CORS_PROXY = ''; // Add if needed for CORS
+
+        // Retrieve files via REST API
+        async function retrieveFiles() {
+            const secret = document.getElementById('retrieveSecret').value;
+            const output = document.getElementById('retrieveOutput');
+            
+            if (!secret) {
+                output.innerHTML = '<span class="error">Please enter secret identifier</span>';
+                return;
+            }
+
+            output.innerHTML = '<span class="info">Searching blockchain for your files...</span>';
+
+            try {
+                // Get recent blocks to search
+                const sinkResponse = await fetch(`${KASPA_API_BASE}/get_sink`);
+                const sinkData = await sinkResponse.json();
+                const currentHash = sinkData.sink;
+
+                let foundFiles = [];
+                let searchedBlocks = 0;
+                const maxBlocks = 100; // Search last 100 blocks
+
+                // Search recent blocks
+                let currentBlockHash = currentHash;
+                
+                for (let i = 0; i < maxBlocks && currentBlockHash; i++) {
+                    try {
+                        const blockResponse = await fetch(`${KASPA_API_BASE}/get_block?hash=${currentBlockHash}&include_transactions=true`);
+                        const blockData = await blockResponse.json();
+                        
+                        if (blockData.block && blockData.block.transactions) {
+                            // Search transactions in this block
+                            for (const tx of blockData.block.transactions) {
+                                if (tx.payload && tx.payload.length > 0) {
+                                    try {
+                                        const file = await parsePayloadForSecret(tx.payload, secret);
+                                        if (file) {
+                                            file.txId = tx.verboseData ? tx.verboseData.transactionId : 'unknown';
+                                            file.blockHash = currentBlockHash;
+                                            foundFiles.push(file);
+                                        }
+                                    } catch (e) {
+                                        // Skip invalid payloads
+                                    }
+                                }
+                            }
+                        }
+
+                        searchedBlocks++;
+                        
+                        // Get parent block for next iteration
+                        if (blockData.block && blockData.block.header && blockData.block.header.parents && blockData.block.header.parents.length > 0) {
+                            currentBlockHash = blockData.block.header.parents[0];
+                        } else {
+                            break;
+                        }
+
+                        // Update progress every 10 blocks
+                        if (i % 10 === 0) {
+                            output.innerHTML = `<span class="info">Searched ${searchedBlocks} blocks... Found ${foundFiles.length} files</span>`;
+                        }
+
+                    } catch (blockError) {
+                        console.error('Block search error:', blockError);
+                        break;
+                    }
+                }
+
+                // Display results
+                if (foundFiles.length === 0) {
+                    output.innerHTML = `
+                        <span class="info">No files found with secret "${secret}"</span><br>
+                        <small>Searched ${searchedBlocks} recent blocks</small>
+                    `;
+                } else {
+                    let resultHtml = `<span class="success">Found ${foundFiles.length} file(s):</span><br>`;
+                    foundFiles.forEach((file, index) => {
+                        resultHtml += `
+                            <div style="margin: 10px 0; padding: 10px; background: #e8f4e8; border-left: 3px solid green;">
+                                <strong>${file.filename}</strong> (${file.size} bytes)<br>
+                                <small>Type: ${file.type} | Date: ${new Date(file.timestamp).toLocaleString()}</small><br>
+                                <button onclick="downloadFile(${index})" style="margin-top: 5px;">Download</button>
+                                <small style="display: block; margin-top: 5px;">TX: ${file.txId}</small>
+                            </div>
+                        `;
+                    });
+                    output.innerHTML = resultHtml;
+                    
+                    // Store found files for download
+                    window.foundFiles = foundFiles;
+                }
+
+            } catch (error) {
+                output.innerHTML = `<span class="error">Search failed: ${error.message}</span>`;
+                console.error('API Error:', error);
+            }
+        }
+
+        // Parse payload to check for secret match
+        async function parsePayloadForSecret(payloadHex, targetSecret) {
+            try {
+                // Convert hex to text
+                const payloadText = hexToText(payloadHex);
+                
+                // Check if it contains our separator
+                if (!payloadText.includes('|')) {
+                    return null;
+                }
+
+                const parts = payloadText.split('|');
+                if (parts.length !== 2) {
+                    return null;
+                }
+
+                // Parse metadata
+                const metadata = JSON.parse(parts[0]);
+                
+                // Check if secret matches
+                if (metadata.secret !== targetSecret) {
+                    return null;
+                }
+
+                // Return file info (without actual data for listing)
+                return {
+                    filename: metadata.filename,
+                    size: metadata.size,
+                    type: metadata.type,
+                    timestamp: metadata.timestamp,
+                    payloadHex: payloadHex
+                };
+
+            } catch (e) {
+                return null;
+            }
+        }
+
+        // Download file from stored data
+        function downloadFile(index) {
+            const file = window.foundFiles[index];
+            if (!file) return;
+
+            try {
+                // Extract file data from payload
+                const payloadText = hexToText(file.payloadHex);
+                const parts = payloadText.split('|');
+                const fileDataHex = parts[1];
+                
+                // Convert hex back to binary
+                const fileData = hexToArrayBuffer(fileDataHex);
+                
+                // Create download
+                const blob = new Blob([fileData], { type: file.type });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                document.getElementById('status').innerHTML = 
+                    `<span class="success">Downloaded: ${file.filename}</span>`;
+
+            } catch (error) {
+                document.getElementById('status').innerHTML = 
+                    `<span class="error">Download failed: ${error.message}</span>`;
+            }
+        }
+
+        // Copy transaction to clipboard
+        function copyTransaction() {
+            const textarea = document.getElementById('transactionData');
+            textarea.select();
+            document.execCommand('copy');
+            
+            document.getElementById('status').innerHTML = 
+                '<span class="success">Transaction data copied to clipboard</span>';
+        }
+
+        // Save transaction as file
+        function saveTransactionFile() {
+            const transactionData = document.getElementById('transactionData').value;
+            if (!transactionData) {
+                document.getElementById('status').innerHTML = 
+                    '<span class="error">No transaction data to save</span>';
+                return;
+            }
+
+            const blob = new Blob([transactionData], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'kaspa-transaction.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            document.getElementById('status').innerHTML = 
+                '<span class="success">Transaction saved as kaspa-transaction.json</span>';
+        }
+
+        // Create test text file
+        function createTestFile() {
+            const testContent = `# Kaspa Storage Test File
+Created: ${new Date().toISOString()}
+Secret: test_secret_12345
+Content: This is a test file for Kaspa blockchain storage.
+
+Features:
+- Small size for testing
+- UTF-8 text content
+- Easy to verify
+
+Test data: Hello Kaspa! 🚀`;
+
+            const blob = new Blob([testContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'kaspa-test-file.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            document.getElementById('testOutput').innerHTML = 
+                '<span class="success">Test file created: kaspa-test-file.txt</span><br>' +
+                '<small>Use this file for testing with secret: "test_secret_12345"</small>';
+        }
+
+        // Save current payload as text file
+        function savePayloadAsText() {
+            if (!currentFile || !currentSecret) {
+                document.getElementById('testOutput').innerHTML = 
+                    '<span class="error">No file prepared. Use "Prepare Transaction" first.</span>';
+                return;
+            }
+
+            const transactionData = document.getElementById('transactionData').value;
+            const transaction = JSON.parse(transactionData);
+            
+            const payloadInfo = `# Kaspa Payload Information
+File: ${currentFile.name}
+Size: ${currentFile.size} bytes
+Secret: ${currentSecret}
+Timestamp: ${new Date().toISOString()}
+
+# Payload (hex):
+${transaction.payload}
+
+# For CLI testing:
+Payload size: ${transaction.payload.length / 2} bytes
+Ready for testnet transaction.`;
+
+            const blob = new Blob([payloadInfo], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'kaspa-payload-info.txt';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            document.getElementById('testOutput').innerHTML = 
+                '<span class="success">Payload info saved: kaspa-payload-info.txt</span>';
+        }
+
+        // Wallet functions
+        const WALLET_ADDRESS = 'kaspatest:qqk8m83ypfr4yg0ykaszpwjfm86c9vf22jgfg0jpc39h2k80nx8rxrumw8zpd';
+
+        async function checkBalance() {
+            document.getElementById('walletBalance').innerHTML = 'Checking...';
+            
+            try {
+                const response = await fetch(`${KASPA_API_BASE}/addresses/${WALLET_ADDRESS}/balance`);
+                const data = await response.json();
+                
+                if (data.balance !== undefined) {
+                    const balanceKAS = (data.balance / 100000000).toFixed(8);
+                    document.getElementById('walletBalance').innerHTML = balanceKAS;
+                    
+                    if (data.balance > 0) {
+                        document.getElementById('status').innerHTML = 
+                            `<span class="success">Wallet has ${balanceKAS} TKAS - Ready to send transactions!</span>`;
+                    } else {
+                        document.getElementById('status').innerHTML = 
+                            '<span class="error">No balance - Request funds from faucet</span>';
+                    }
+                } else {
+                    document.getElementById('walletBalance').innerHTML = 'Error';
+                    document.getElementById('status').innerHTML = 
+                        '<span class="error">Failed to check balance</span>';
+                }
+            } catch (error) {
+                document.getElementById('walletBalance').innerHTML = 'Error';
+                document.getElementById('status').innerHTML = 
+                    `<span class="error">Balance check failed: ${error.message}</span>`;
+            }
+        }
+
+        // Sign and send transaction function
+        async function sendTransaction() {
+            if (!isWasmLoaded) {
+                document.getElementById('status').innerHTML = 
+                    '<span class="error">WASM SDK not loaded yet</span>';
+                return;
+            }
+
+            const transactionData = document.getElementById('transactionData').value;
+            if (!transactionData) {
+                document.getElementById('status').innerHTML = 
+                    '<span class="error">No transaction data to send</span>';
+                return;
+            }
+
+            try {
+                const transaction = JSON.parse(transactionData);
+                document.getElementById('status').innerHTML = 
+                    '<span class="info">🔐 Signing transaction with WASM SDK...</span>';
+
+                // Generate a test private key for demonstration
+                // WARNING: This is for testing only - in production, use proper key management
+                const privateKey = kaspaWasm.PrivateKey.fromHex("1111111111111111111111111111111111111111111111111111111111111111");
+                
+                // Create transaction object
+                const tx = new kaspaWasm.Transaction(transaction);
+                
+                // Sign transaction
+                const signedTx = await kaspaWasm.signTransaction(tx, [privateKey]);
+                
+                document.getElementById('status').innerHTML = 
+                    '<span class="info">🚀 Attempting to send signed transaction...</span>';
+
+                // Try to submit signed transaction
+                const endpoints = [
+                    'https://api-tn10.kaspa.org/transactions',
+                    'https://proxy.kaspa.ws/submit_transaction'
+                ];
+
+                for (const endpoint of endpoints) {
+                    try {
+                        const response = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ transaction: signedTx.toJson() })
+                        });
+
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                            document.getElementById('status').innerHTML = 
+                                `<span class="success">✅ Transaction sent! Result: ${JSON.stringify(result)}</span>`;
+                            return;
+                        } else {
+                            console.log(`Failed with ${endpoint}:`, result);
+                        }
+                    } catch (e) {
+                        console.log(`Error with ${endpoint}:`, e);
+                    }
+                }
+
+                document.getElementById('status').innerHTML = 
+                    '<span class="error">❌ Transaction failed - Check console for details</span>';
+
+            } catch (error) {
+                document.getElementById('status').innerHTML = 
+                    `<span class="error">❌ Send failed: ${error.message}</span>`;
+                console.error('Transaction error:', error);
+            }
+        }
+
+        // Initialize - Load WASM SDK first
+        document.getElementById('status').innerHTML = 'Initializing...';
+        
+        // Load WASM SDK on page load
+        loadKaspaWasm().then(success => {
+            if (success) {
+                document.getElementById('status').innerHTML = 'Ready - WASM SDK loaded, select file to upload';
+            }
+        });
+    </script>
+</body>
+</html>
