@@ -244,125 +244,195 @@
             const address = publicKey.toAddress(kaspa.NetworkType.Testnet);
             
             log(`Mining address: ${address.toString()}`, 'info');
-            log(`Note: Using existing testnet wallet with balance`, 'info');
+            log(`Strategy: Creating actual transactions with varying parameters`, 'info');
             
-            let bestMatch = '';
-            let bestMatchLength = 0;
+            // Connect to RPC for real transaction mining
+            const rpcClient = new kaspa.RpcClient({
+                resolver: new kaspa.Resolver(),
+                networkId: 'testnet-10'
+            });
             
-            const updateInterval = setInterval(() => {
-                if (!isMining) {
-                    clearInterval(updateInterval);
-                    return;
-                }
-                updateStats();
-            }, 100);
+            try {
+                log('Connecting to Kaspa testnet RPC...', 'info');
+                await rpcClient.connect();
+                
+                const utxoContext = new kaspa.UtxoContext({ rpcClient });
+                await utxoContext.trackAddresses([address]);
+                const balance = await utxoContext.getBalance();
+                log(`Balance: ${(balance.mature / 100000000).toFixed(8)} KAS`, 'info');
             
-            // Mining loop
-            for (let i = 0; i < maxAttempts && isMining; i++) {
-                attempts++;
+                let bestMatch = '';
+                let bestMatchLength = 0;
                 
-                // Generate transaction based on strategy
-                let txid = '';
+                const updateInterval = setInterval(() => {
+                    if (!isMining) {
+                        clearInterval(updateInterval);
+                        return;
+                    }
+                    updateStats();
+                }, 100);
                 
-                switch (strategy) {
-                    case 'nonce':
-                        txid = await generateWithNonce(i, testPrivateKey);
-                        break;
-                    case 'timestamp':
-                        txid = await generateWithTimestamp(i, testPrivateKey);
-                        break;
-                    case 'amount':
-                        txid = await generateWithAmount(i, testPrivateKey);
-                        break;
-                    case 'hybrid':
-                        txid = await generateHybrid(i, testPrivateKey);
-                        break;
-                }
-                
-                // Check if pattern matches
-                if (txid.endsWith(targetPattern)) {
-                    foundPatterns.push(txid);
-                    document.getElementById('foundCount').textContent = foundPatterns.length;
-                    log(`🎉 FOUND! TxID: ${txid}`, 'success');
-                    document.getElementById('bestPattern').textContent = txid;
+                // Mining loop - create real transactions
+                for (let i = 0; i < maxAttempts && isMining; i++) {
+                    attempts++;
                     
-                    if (strategy !== 'hybrid') {
-                        isMining = false;
-                        break;
+                    try {
+                        // Create transaction with varying parameters
+                        let txid = '';
+                        let tx = null;
+                        
+                        switch (strategy) {
+                            case 'nonce':
+                                // Add nonce data to payload
+                                const payloadData = new Uint8Array([...new TextEncoder().encode('nonce:'), ...numberToBytes(i)]);
+                                tx = await createTransactionWithPayload(utxoContext, address, payloadData, rpcClient);
+                                break;
+                            case 'timestamp':
+                                // Wait for different timestamp
+                                if (i > 0 && i % 10 === 0) {
+                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                }
+                                tx = await createTransactionWithPayload(utxoContext, address, new Uint8Array([i % 256]), rpcClient);
+                                break;
+                            case 'amount':
+                                // Vary amount slightly
+                                const amount = BigInt(10000000) + BigInt(i % 1000); // 0.1 KAS + variation
+                                tx = await createTransactionWithAmount(utxoContext, address, amount, rpcClient);
+                                break;
+                            case 'hybrid':
+                                // Combine strategies
+                                const hybridData = new Uint8Array([i % 256, (i >> 8) % 256]);
+                                const hybridAmount = BigInt(10000000) + BigInt(i % 100);
+                                tx = await createTransactionWithPayloadAndAmount(utxoContext, address, hybridData, hybridAmount, rpcClient);
+                                break;
+                        }
+                        
+                        if (tx) {
+                            // Sign but don't submit yet
+                            const signedTx = await tx.sign([testPrivateKey]);
+                            txid = await signedTx.id();
+                        }
+                
+                        // Check if pattern matches
+                        if (txid && txid.endsWith(targetPattern)) {
+                            foundPatterns.push({ txid, tx: signedTx });
+                            document.getElementById('foundCount').textContent = foundPatterns.length;
+                            log(`🎉 FOUND! TxID: ${txid}`, 'success');
+                            document.getElementById('bestPattern').textContent = txid;
+                            
+                            // Ask user if they want to submit this transaction
+                            if (confirm(`Found matching TxID! Submit this transaction?\nTxID: ${txid}`)) {
+                                try {
+                                    await signedTx.submit(rpcClient);
+                                    log(`✅ Transaction submitted: ${txid}`, 'success');
+                                    log(`Explorer: https://explorer-tn10.kaspa.org/txs/${txid}`, 'info');
+                                } catch (submitError) {
+                                    log(`❌ Submit failed: ${submitError.message}`, 'error');
+                                }
+                            }
+                            
+                            if (strategy !== 'hybrid') {
+                                isMining = false;
+                                break;
+                            }
+                        }
+                
+                        // Update best partial match
+                        if (txid) {
+                            const matchLength = getMatchLength(txid, targetPattern);
+                            if (matchLength > bestMatchLength) {
+                                bestMatchLength = matchLength;
+                                bestMatch = txid;
+                                document.getElementById('bestPattern').innerHTML = 
+                                    txid.substring(0, txid.length - matchLength) + 
+                                    '<span style="color: #44ff44">' + txid.substring(txid.length - matchLength) + '</span>';
+                            }
+                        }
+                        
+                    } catch (error) {
+                        log(`Error creating transaction: ${error.message}`, 'error');
+                        if (error.message.includes('insufficient')) {
+                            log('Insufficient balance for mining. Stopping...', 'error');
+                            isMining = false;
+                            break;
+                        }
+                    }
+                    
+                    // Update UI periodically
+                    if (attempts % 100 === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 1));
                     }
                 }
+            
+                clearInterval(updateInterval);
                 
-                // Update best partial match
-                const matchLength = getMatchLength(txid, targetPattern);
-                if (matchLength > bestMatchLength) {
-                    bestMatchLength = matchLength;
-                    bestMatch = txid;
-                    document.getElementById('bestPattern').textContent = 
-                        txid.substring(0, txid.length - matchLength) + 
-                        '<span style="color: #44ff44">' + txid.substring(txid.length - matchLength) + '</span>';
+                // Disconnect RPC
+                await rpcClient.disconnect();
+                
+                // Final results
+                if (foundPatterns.length > 0) {
+                    log(`Mining complete! Found ${foundPatterns.length} matching TxIDs`, 'success');
+                    foundPatterns.forEach((item, i) => {
+                        log(`Match ${i + 1}: ${item.txid}`, 'success');
+                    });
+                } else {
+                    log(`Mining complete. No exact matches found after ${attempts.toLocaleString()} attempts`, 'warning');
+                    log(`Best partial match: ${bestMatch} (${bestMatchLength}/${targetPattern.length} chars)`, 'info');
                 }
                 
-                // Update UI periodically
-                if (attempts % 1000 === 0) {
-                    await new Promise(resolve => setTimeout(resolve, 1));
+            } catch (error) {
+                log(`Mining error: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('startMining').disabled = false;
+                document.getElementById('stopMining').disabled = true;
+                if (rpcClient) {
+                    try {
+                        await rpcClient.disconnect();
+                    } catch (e) {}
                 }
             }
-            
-            clearInterval(updateInterval);
-            
-            // Final results
-            if (foundPatterns.length > 0) {
-                log(`Mining complete! Found ${foundPatterns.length} matching TxIDs`, 'success');
-                foundPatterns.forEach((txid, i) => {
-                    log(`Match ${i + 1}: ${txid}`, 'success');
-                });
-            } else {
-                log(`Mining complete. No exact matches found after ${attempts.toLocaleString()} attempts`, 'warning');
-                log(`Best partial match: ${bestMatch} (${bestMatchLength}/${targetPattern.length} chars)`, 'info');
-            }
-            
-            document.getElementById('startMining').disabled = false;
-            document.getElementById('stopMining').disabled = true;
         }
         
-        async function generateWithNonce(nonce, privateKey) {
-            // Simulate transaction with nonce in payload
-            const data = new Uint8Array([...new TextEncoder().encode('nonce:'), ...numberToBytes(nonce)]);
-            const hash = await crypto.subtle.digest('SHA-256', data);
-            return bytesToHex(new Uint8Array(hash));
+        // Helper functions to create transactions with different parameters
+        async function createTransactionWithPayload(utxoContext, address, payload, rpcClient) {
+            const { transactions } = await kaspa.createTransactions({
+                entries: [{
+                    address: address.toString(),
+                    amount: BigInt(10000000), // 0.1 KAS
+                    payload: payload
+                }],
+                utxoContext: utxoContext,
+                changeAddress: address.toString(),
+                priorityFee: BigInt(1000)
+            });
+            return transactions[0];
         }
         
-        async function generateWithTimestamp(iteration, privateKey) {
-            // Vary timestamp slightly
-            const timestamp = Date.now() + iteration;
-            const data = new Uint8Array([...new TextEncoder().encode('ts:'), ...numberToBytes(timestamp)]);
-            const hash = await crypto.subtle.digest('SHA-256', data);
-            return bytesToHex(new Uint8Array(hash));
+        async function createTransactionWithAmount(utxoContext, address, amount, rpcClient) {
+            const { transactions } = await kaspa.createTransactions({
+                entries: [{
+                    address: address.toString(),
+                    amount: amount
+                }],
+                utxoContext: utxoContext,
+                changeAddress: address.toString(),
+                priorityFee: BigInt(1000)
+            });
+            return transactions[0];
         }
         
-        async function generateWithAmount(iteration, privateKey) {
-            // Vary amount in smallest unit
-            const amount = 100000000 + iteration; // 1 KAS + iteration sompis
-            const data = new Uint8Array([...new TextEncoder().encode('amt:'), ...numberToBytes(amount)]);
-            const hash = await crypto.subtle.digest('SHA-256', data);
-            return bytesToHex(new Uint8Array(hash));
-        }
-        
-        async function generateHybrid(iteration, privateKey) {
-            // Combine all strategies
-            const nonce = iteration;
-            const timestamp = Date.now() + (iteration % 1000);
-            const amount = 100000000 + (iteration % 10000);
-            
-            const data = new Uint8Array([
-                ...new TextEncoder().encode('hybrid:'),
-                ...numberToBytes(nonce),
-                ...numberToBytes(timestamp),
-                ...numberToBytes(amount)
-            ]);
-            
-            const hash = await crypto.subtle.digest('SHA-256', data);
-            return bytesToHex(new Uint8Array(hash));
+        async function createTransactionWithPayloadAndAmount(utxoContext, address, payload, amount, rpcClient) {
+            const { transactions } = await kaspa.createTransactions({
+                entries: [{
+                    address: address.toString(),
+                    amount: amount,
+                    payload: payload
+                }],
+                utxoContext: utxoContext,
+                changeAddress: address.toString(),
+                priorityFee: BigInt(1000)
+            });
+            return transactions[0];
         }
         
         function numberToBytes(num) {
