@@ -257,12 +257,27 @@
             
             try {
                 log('Connecting to Kaspa testnet RPC...', 'info');
-                await rpcClient.connect();
+                try {
+                    await rpcClient.connect();
+                    log('✅ RPC connected successfully', 'success');
+                } catch (connectError) {
+                    log(`❌ RPC connection failed: ${connectError.message}`, 'error');
+                    throw connectError;
+                }
                 
+                log('Creating UTXO context...', 'info');
                 const utxoContext = new kaspa.UtxoContext({ rpcClient });
+                
+                log('Tracking addresses...', 'info');
                 await utxoContext.trackAddresses([address]);
+                
+                log('Fetching balance...', 'info');
                 const balance = await utxoContext.getBalance();
                 log(`Balance: ${(balance.mature / 100000000).toFixed(8)} KAS`, 'info');
+                
+                if (balance.mature < 10000000) {
+                    throw new Error(`Insufficient balance: ${(balance.mature / 100000000).toFixed(8)} KAS (need at least 0.1 KAS)`);
+                }
             
                 let bestMatch = '';
                 let bestMatchLength = 0;
@@ -288,7 +303,9 @@
                             case 'nonce':
                                 // Add nonce data to payload
                                 const payloadData = new Uint8Array([...new TextEncoder().encode('nonce:'), ...numberToBytes(i)]);
+                                log(`Creating transaction with nonce payload (${payloadData.length} bytes)...`, 'info');
                                 tx = await createTransactionWithPayload(utxoContext, address, payloadData, rpcClient);
+                                log('Transaction created successfully', 'success');
                                 break;
                             case 'timestamp':
                                 // Wait for different timestamp
@@ -312,8 +329,18 @@
                         
                         if (tx) {
                             // Sign but don't submit yet
-                            const signedTx = await tx.sign([testPrivateKey]);
-                            txid = await signedTx.id();
+                            log('Signing transaction...', 'info');
+                            try {
+                                signedTx = await tx.sign([testPrivateKey]);
+                                log('✅ Transaction signed successfully', 'success');
+                                
+                                log('Getting transaction ID...', 'info');
+                                txid = await signedTx.id();
+                                log(`Transaction ID: ${txid}`, 'info');
+                            } catch (signError) {
+                                log(`❌ Signing error: ${signError.message}`, 'error');
+                                throw signError;
+                            }
                         }
                 
                         // Check if pattern matches
@@ -353,12 +380,17 @@
                         }
                         
                     } catch (error) {
-                        log(`Error creating transaction: ${error.message}`, 'error');
-                        if (error.message.includes('insufficient')) {
+                        log(`❌ Error in attempt ${attempts}: ${error.message || error}`, 'error');
+                        console.error('Full error:', error);
+                        if (error.stack) {
+                            console.error('Stack trace:', error.stack);
+                        }
+                        if (error.message && error.message.includes('insufficient')) {
                             log('Insufficient balance for mining. Stopping...', 'error');
                             isMining = false;
                             break;
                         }
+                        // Continue to next attempt on other errors
                     }
                     
                     // Update UI periodically
@@ -384,7 +416,11 @@
                 }
                 
             } catch (error) {
-                log(`Mining error: ${error.message}`, 'error');
+                log(`❌ Mining error: ${error.message || error}`, 'error');
+                console.error('Full mining error:', error);
+                if (error.stack) {
+                    console.error('Stack trace:', error.stack);
+                }
             } finally {
                 document.getElementById('startMining').disabled = false;
                 document.getElementById('stopMining').disabled = true;
@@ -398,17 +434,27 @@
         
         // Helper functions to create transactions with different parameters
         async function createTransactionWithPayload(utxoContext, address, payload, rpcClient) {
-            const { transactions } = await kaspa.createTransactions({
-                entries: [{
-                    address: address.toString(),
-                    amount: BigInt(10000000), // 0.1 KAS
-                    payload: payload
-                }],
-                utxoContext: utxoContext,
-                changeAddress: address.toString(),
-                priorityFee: BigInt(1000)
-            });
-            return transactions[0];
+            try {
+                const result = await kaspa.createTransactions({
+                    entries: [{
+                        address: address.toString(),
+                        amount: BigInt(10000000), // 0.1 KAS
+                        payload: payload
+                    }],
+                    utxoContext: utxoContext,
+                    changeAddress: address.toString(),
+                    priorityFee: BigInt(1000)
+                });
+                
+                if (!result || !result.transactions || result.transactions.length === 0) {
+                    throw new Error('No transactions created');
+                }
+                
+                return result.transactions[0];
+            } catch (error) {
+                log(`❌ createTransactionWithPayload error: ${error.message}`, 'error');
+                throw error;
+            }
         }
         
         async function createTransactionWithAmount(utxoContext, address, amount, rpcClient) {
@@ -552,8 +598,11 @@
                 await rpcClient.disconnect();
                 
             } catch (error) {
-                log(`❌ Transaction failed: ${error.message}`, 'error');
-                console.error(error);
+                log(`❌ Transaction failed: ${error.message || error}`, 'error');
+                console.error('Full error:', error);
+                if (error.stack) {
+                    console.error('Stack trace:', error.stack);
+                }
             }
         };
     </script>
