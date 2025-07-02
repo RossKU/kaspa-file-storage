@@ -106,7 +106,7 @@
         <h1>⛏️ Kaspa TxID Mining Test v2</h1>
         <p>Generate transactions with specific TxID patterns for enhanced searchability</p>
         <div class="version">
-            Version 2.2.0 | Restored WASM init | 2025-07-02 19:50 JST
+            Version 2.3.0 | Enhanced error logging | 2025-07-02 20:05 JST
         </div>
         
         <div style="background: #333; padding: 15px; border-radius: 4px; margin: 15px 0;">
@@ -160,7 +160,7 @@
         
         <div class="output" id="output">
             <div class="info">⚡ WASM SDK initializing...</div>
-            <div style="color: #ff6666; font-size: 10px;">Version 2.2.0 - Restored WASM init, using kaspa-wallet-test.html as reference</div>
+            <div style="color: #ff6666; font-size: 10px;">Version 2.3.0 - Enhanced error handling to diagnose undefined errors</div>
         </div>
     </div>
 
@@ -343,17 +343,29 @@
                         
                         // Create transaction using the same pattern as working examples
                         log(`Creating transaction attempt ${attempts}...`, 'info');
-                        txResult = await kaspa.createTransactions({
-                            entries: formattedUtxos,
-                            outputs: [{
-                                address: address.toString(),
-                                amount: amount
-                            }],
-                            changeAddress: address.toString(),
-                            priorityFee: BigInt(1000),
-                            networkId: "testnet-10",
-                            payload: payloadData
-                        });
+                        log(`Payload size: ${payloadData ? payloadData.length : 0} bytes`, 'info');
+                        log(`Amount: ${Number(amount) / 100000000} KAS`, 'info');
+                        
+                        try {
+                            txResult = await kaspa.createTransactions({
+                                entries: formattedUtxos,
+                                outputs: [{
+                                    address: address.toString(),
+                                    amount: amount
+                                }],
+                                changeAddress: address.toString(),
+                                priorityFee: BigInt(1000),
+                                networkId: "testnet-10",
+                                payload: payloadData
+                            });
+                            
+                            log(`Transaction result type: ${typeof txResult}`, 'info');
+                            log(`Has transactions: ${!!txResult?.transactions}`, 'info');
+                            
+                        } catch (createError) {
+                            log(`❌ createTransactions error: ${createError?.message || createError}`, 'error');
+                            throw createError;
+                        }
                         
                         if (!txResult || !txResult.transactions || txResult.transactions.length === 0) {
                             throw new Error('No transactions created');
@@ -405,11 +417,14 @@
                         }
                         
                     } catch (error) {
-                        log(`❌ Error in attempt ${attempts}: ${error.message}`, 'error');
+                        const errorMessage = error?.message || error?.toString() || 'Unknown error';
+                        log(`❌ Error in attempt ${attempts}: ${errorMessage}`, 'error');
                         console.error('Full error:', error);
+                        console.error('Error type:', typeof error);
+                        console.error('Error keys:', error ? Object.keys(error) : 'null/undefined');
                         
                         // Need to refresh UTXOs after spending
-                        if (error.message.includes('already spent') || attempts % 50 === 0) {
+                        if (errorMessage && errorMessage.includes && errorMessage.includes('already spent') || attempts % 50 === 0) {
                             log('Refreshing UTXOs...', 'info');
                             const newUtxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
                             const newUtxoEntries = newUtxoResponse.entries || [];
@@ -458,8 +473,10 @@
                 }
                 
             } catch (error) {
-                log(`❌ Mining error: ${error.message}`, 'error');
-                console.error('Full error:', error);
+                const errorMessage = error?.message || error?.toString() || 'Unknown error';
+                log(`❌ Mining error: ${errorMessage}`, 'error');
+                console.error('Full mining error:', error);
+                console.error('Stack trace:', error?.stack);
             } finally {
                 document.getElementById('startMining').disabled = false;
                 document.getElementById('stopMining').disabled = true;
