@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa TxID Mining Test</title>
+    <title>Kaspa TxID Mining Test v2</title>
     <style>
         body {
             font-family: monospace;
@@ -56,6 +56,16 @@
         .success { color: #44ff44; }
         .error { color: #ff4444; }
         .warning { color: #ffaa44; }
+        .version {
+            background: #ff6666; 
+            color: #000; 
+            padding: 5px 10px; 
+            border-radius: 4px; 
+            display: inline-block; 
+            font-size: 11px; 
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
         .stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -93,10 +103,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>⛏️ Kaspa TxID Mining Test</h1>
+        <h1>⛏️ Kaspa TxID Mining Test v2</h1>
         <p>Generate transactions with specific TxID patterns for enhanced searchability</p>
-        <div style="background: #1a1a1a; padding: 5px 10px; border-radius: 4px; display: inline-block; font-size: 11px; color: #888; margin-bottom: 10px;">
-            Version: 1.2.0 | Updated: 2025-07-02 19:20 JST
+        <div class="version">
+            Version 2.0.0 | Fixed UTXO handling | 2025-07-02 19:30 JST
         </div>
         
         <div style="background: #333; padding: 15px; border-radius: 4px; margin: 15px 0;">
@@ -119,7 +129,7 @@
             </select>
             
             <label>Max Attempts:</label>
-            <input type="number" id="maxAttempts" value="100000" min="1000" max="10000000">
+            <input type="number" id="maxAttempts" value="10000" min="100" max="10000000">
         </div>
         
         <div class="stats">
@@ -144,26 +154,19 @@
         <button id="startMining" onclick="startMining()">⛏️ Start Mining</button>
         <button id="stopMining" onclick="stopMining()" disabled>⏹️ Stop Mining</button>
         
-        <div style="margin-top: 20px; padding: 15px; background: #3a2a2a; border-radius: 4px;">
-            <h3>💸 Send Real Transaction (Optional)</h3>
-            <p style="color: #ffaa44; font-size: 12px;">⚠️ This will send actual KAS on testnet</p>
-            <button id="sendTx" onclick="sendRealTransaction()" style="background: #ff6666;">Send Test Transaction</button>
-        </div>
-        
         <div id="currentTxId" class="pattern-display" style="display:none;">
             Current Best: <span id="bestPattern"></span>
         </div>
         
         <div class="output" id="output">
             <div class="info">⚡ WASM SDK initializing...</div>
-            <div style="color: #666; font-size: 10px;">Version 1.2.0 - Enhanced error logging</div>
+            <div style="color: #ff6666; font-size: 10px;">Version 2.0.0 - Fixed UTXO handling based on working examples</div>
         </div>
     </div>
 
     <script type="module">
         let kaspa = null;
         let isMining = false;
-        let miningWorker = null;
         let startTime = null;
         let attempts = 0;
         let foundPatterns = [];
@@ -175,22 +178,26 @@
         
         async function initializeWasm() {
             try {
-                log('Initializing Kaspa WASM SDK v1.2.0...', 'info');
+                log('Initializing Kaspa WASM SDK v2.0.0...', 'info');
                 kaspa = await import('./kaspa-core.js');
                 
                 // Initialize WASM binary - this is required!
+                log('Loading WASM binary...', 'info');
                 await kaspa.default('./kaspa-core_bg.wasm');
                 
-                if (!kaspa.PrivateKey || !kaspa.PublicKey || !kaspa.NetworkType) {
-                    throw new Error('Essential SDK functions not available');
-                }
+                // Test basic functionality
+                const testKey = new kaspa.PrivateKey('b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef');
+                const testKeypair = testKey.toKeypair();
+                const testAddr = testKeypair.toAddress(kaspa.NetworkType.Testnet);
+                log(`Test address: ${testAddr.toString()}`, 'info');
                 
                 log('✅ WASM SDK initialized successfully', 'success');
                 log('Ready to start TxID mining', 'info');
                 document.getElementById('startMining').disabled = false;
                 
             } catch (error) {
-                log('❌ WASM initialization failed: ' + error.message, 'error');
+                log(`❌ WASM initialization failed: ${error.message}`, 'error');
+                console.error('Full error:', error);
                 document.getElementById('startMining').disabled = true;
             }
         }
@@ -247,13 +254,12 @@
             // Use existing testnet wallet with balance
             const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
             const testPrivateKey = new kaspa.PrivateKey(testKeyHex);
-            const publicKey = testPrivateKey.toPublicKey();
-            const address = publicKey.toAddress(kaspa.NetworkType.Testnet);
+            const keypair = testPrivateKey.toKeypair();
+            const address = keypair.toAddress(kaspa.NetworkType.Testnet);
             
             log(`Mining address: ${address.toString()}`, 'info');
-            log(`Strategy: Creating actual transactions with varying parameters`, 'info');
             
-            // Connect to RPC for real transaction mining
+            // Connect to RPC
             const rpcClient = new kaspa.RpcClient({
                 resolver: new kaspa.Resolver(),
                 networkId: 'testnet-10'
@@ -261,28 +267,40 @@
             
             try {
                 log('Connecting to Kaspa testnet RPC...', 'info');
-                try {
-                    await rpcClient.connect();
-                    log('✅ RPC connected successfully', 'success');
-                } catch (connectError) {
-                    log(`❌ RPC connection failed: ${connectError.message}`, 'error');
-                    throw connectError;
+                await rpcClient.connect();
+                log('✅ RPC connected successfully', 'success');
+                
+                // Get UTXOs using RPC directly (not UtxoContext)
+                log('Fetching UTXOs...', 'info');
+                const utxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+                const utxoEntries = utxoResponse.entries || [];
+                log(`Found ${utxoEntries.length} UTXOs`, 'info');
+                
+                if (utxoEntries.length === 0) {
+                    throw new Error('No UTXOs available for this address');
                 }
                 
-                log('Creating UTXO context...', 'info');
-                const utxoContext = new kaspa.UtxoContext({ rpcClient });
+                // Calculate total balance
+                const totalBalance = utxoEntries.reduce((sum, utxo) => sum + BigInt(utxo.amount), BigInt(0));
+                log(`Balance: ${(Number(totalBalance) / 100000000).toFixed(8)} KAS`, 'info');
                 
-                log('Tracking addresses...', 'info');
-                await utxoContext.trackAddresses([address]);
-                
-                log('Fetching balance...', 'info');
-                const balance = await utxoContext.getBalance();
-                log(`Balance: ${(balance.mature / 100000000).toFixed(8)} KAS`, 'info');
-                
-                if (balance.mature < 10000000) {
-                    throw new Error(`Insufficient balance: ${(balance.mature / 100000000).toFixed(8)} KAS (need at least 0.1 KAS)`);
+                if (totalBalance < BigInt(10000000)) {
+                    throw new Error(`Insufficient balance: ${(Number(totalBalance) / 100000000).toFixed(8)} KAS (need at least 0.1 KAS)`);
                 }
-            
+                
+                // Format UTXOs for transaction creation
+                const formattedUtxos = utxoEntries.map(utxo => ({
+                    address: address.toString(),
+                    outpoint: {
+                        transactionId: utxo.outpoint.transactionId,
+                        index: utxo.outpoint.index
+                    },
+                    scriptPublicKey: utxo.scriptPublicKey,
+                    amount: BigInt(utxo.amount),
+                    isCoinbase: utxo.isCoinbase || false,
+                    blockDaaScore: BigInt(utxo.blockDaaScore)
+                }));
+                
                 let bestMatch = '';
                 let bestMatchLength = 0;
                 
@@ -294,70 +312,75 @@
                     updateStats();
                 }, 100);
                 
-                // Mining loop - create real transactions
+                // Mining loop
                 for (let i = 0; i < maxAttempts && isMining; i++) {
                     attempts++;
                     
                     try {
                         // Create transaction with varying parameters
-                        let txid = '';
-                        let tx = null;
+                        let txResult = null;
+                        let payloadData = null;
+                        let amount = BigInt(10000000); // 0.1 KAS default
                         
                         switch (strategy) {
                             case 'nonce':
-                                // Add nonce data to payload
-                                const payloadData = new Uint8Array([...new TextEncoder().encode('nonce:'), ...numberToBytes(i)]);
-                                log(`Creating transaction with nonce payload (${payloadData.length} bytes)...`, 'info');
-                                tx = await createTransactionWithPayload(utxoContext, address, payloadData, rpcClient);
-                                log('Transaction created successfully', 'success');
+                                payloadData = new Uint8Array([...new TextEncoder().encode('n:'), ...numberToBytes(i)]);
                                 break;
                             case 'timestamp':
-                                // Wait for different timestamp
                                 if (i > 0 && i % 10 === 0) {
-                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                    await new Promise(resolve => setTimeout(resolve, 10));
                                 }
-                                tx = await createTransactionWithPayload(utxoContext, address, new Uint8Array([i % 256]), rpcClient);
+                                payloadData = new Uint8Array([i % 256]);
                                 break;
                             case 'amount':
-                                // Vary amount slightly
-                                const amount = BigInt(10000000) + BigInt(i % 1000); // 0.1 KAS + variation
-                                tx = await createTransactionWithAmount(utxoContext, address, amount, rpcClient);
+                                amount = BigInt(10000000) + BigInt(i % 1000);
                                 break;
                             case 'hybrid':
-                                // Combine strategies
-                                const hybridData = new Uint8Array([i % 256, (i >> 8) % 256]);
-                                const hybridAmount = BigInt(10000000) + BigInt(i % 100);
-                                tx = await createTransactionWithPayloadAndAmount(utxoContext, address, hybridData, hybridAmount, rpcClient);
+                                payloadData = new Uint8Array([i % 256, (i >> 8) % 256]);
+                                amount = BigInt(10000000) + BigInt(i % 100);
                                 break;
                         }
                         
-                        if (tx) {
-                            // Sign but don't submit yet
-                            log('Signing transaction...', 'info');
-                            try {
-                                signedTx = await tx.sign([testPrivateKey]);
-                                log('✅ Transaction signed successfully', 'success');
-                                
-                                log('Getting transaction ID...', 'info');
-                                txid = await signedTx.id();
-                                log(`Transaction ID: ${txid}`, 'info');
-                            } catch (signError) {
-                                log(`❌ Signing error: ${signError.message}`, 'error');
-                                throw signError;
-                            }
+                        // Create transaction using the same pattern as working examples
+                        log(`Creating transaction attempt ${attempts}...`, 'info');
+                        txResult = await kaspa.createTransactions({
+                            entries: formattedUtxos,
+                            outputs: [{
+                                address: address.toString(),
+                                amount: amount
+                            }],
+                            changeAddress: address.toString(),
+                            priorityFee: BigInt(1000),
+                            networkId: "testnet-10",
+                            payload: payloadData
+                        });
+                        
+                        if (!txResult || !txResult.transactions || txResult.transactions.length === 0) {
+                            throw new Error('No transactions created');
                         }
-                
+                        
+                        const tx = txResult.transactions[0];
+                        
+                        // Sign transaction
+                        log('Signing transaction...', 'info');
+                        await tx.sign([testPrivateKey]);
+                        
+                        // Get transaction ID
+                        const txid = await tx.id();
+                        log(`Generated TxID: ${txid}`, 'info');
+                        
                         // Check if pattern matches
-                        if (txid && txid.endsWith(targetPattern)) {
-                            foundPatterns.push({ txid, tx: signedTx });
+                        if (txid.endsWith(targetPattern)) {
+                            foundPatterns.push({ txid, tx });
                             document.getElementById('foundCount').textContent = foundPatterns.length;
                             log(`🎉 FOUND! TxID: ${txid}`, 'success');
                             document.getElementById('bestPattern').textContent = txid;
                             
-                            // Ask user if they want to submit this transaction
+                            // Ask user if they want to submit
                             if (confirm(`Found matching TxID! Submit this transaction?\nTxID: ${txid}`)) {
                                 try {
-                                    await signedTx.submit(rpcClient);
+                                    log('Submitting transaction...', 'info');
+                                    await tx.submit(rpcClient);
                                     log(`✅ Transaction submitted: ${txid}`, 'success');
                                     log(`Explorer: https://explorer-tn10.kaspa.org/txs/${txid}`, 'info');
                                 } catch (submitError) {
@@ -370,31 +393,46 @@
                                 break;
                             }
                         }
-                
+                        
                         // Update best partial match
-                        if (txid) {
-                            const matchLength = getMatchLength(txid, targetPattern);
-                            if (matchLength > bestMatchLength) {
-                                bestMatchLength = matchLength;
-                                bestMatch = txid;
-                                document.getElementById('bestPattern').innerHTML = 
-                                    txid.substring(0, txid.length - matchLength) + 
-                                    '<span style="color: #44ff44">' + txid.substring(txid.length - matchLength) + '</span>';
-                            }
+                        const matchLength = getMatchLength(txid, targetPattern);
+                        if (matchLength > bestMatchLength) {
+                            bestMatchLength = matchLength;
+                            bestMatch = txid;
+                            document.getElementById('bestPattern').innerHTML = 
+                                txid.substring(0, txid.length - matchLength) + 
+                                '<span style="color: #44ff44">' + txid.substring(txid.length - matchLength) + '</span>';
                         }
                         
                     } catch (error) {
-                        log(`❌ Error in attempt ${attempts}: ${error.message || error}`, 'error');
+                        log(`❌ Error in attempt ${attempts}: ${error.message}`, 'error');
                         console.error('Full error:', error);
-                        if (error.stack) {
-                            console.error('Stack trace:', error.stack);
+                        
+                        // Need to refresh UTXOs after spending
+                        if (error.message.includes('already spent') || attempts % 50 === 0) {
+                            log('Refreshing UTXOs...', 'info');
+                            const newUtxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+                            const newUtxoEntries = newUtxoResponse.entries || [];
+                            
+                            if (newUtxoEntries.length === 0) {
+                                log('No more UTXOs available. Stopping...', 'error');
+                                isMining = false;
+                                break;
+                            }
+                            
+                            formattedUtxos.length = 0;
+                            formattedUtxos.push(...newUtxoEntries.map(utxo => ({
+                                address: address.toString(),
+                                outpoint: {
+                                    transactionId: utxo.outpoint.transactionId,
+                                    index: utxo.outpoint.index
+                                },
+                                scriptPublicKey: utxo.scriptPublicKey,
+                                amount: BigInt(utxo.amount),
+                                isCoinbase: utxo.isCoinbase || false,
+                                blockDaaScore: BigInt(utxo.blockDaaScore)
+                            })));
                         }
-                        if (error.message && error.message.includes('insufficient')) {
-                            log('Insufficient balance for mining. Stopping...', 'error');
-                            isMining = false;
-                            break;
-                        }
-                        // Continue to next attempt on other errors
                     }
                     
                     // Update UI periodically
@@ -402,7 +440,7 @@
                         await new Promise(resolve => setTimeout(resolve, 1));
                     }
                 }
-            
+                
                 clearInterval(updateInterval);
                 
                 // Disconnect RPC
@@ -420,11 +458,8 @@
                 }
                 
             } catch (error) {
-                log(`❌ Mining error: ${error.message || error}`, 'error');
-                console.error('Full mining error:', error);
-                if (error.stack) {
-                    console.error('Stack trace:', error.stack);
-                }
+                log(`❌ Mining error: ${error.message}`, 'error');
+                console.error('Full error:', error);
             } finally {
                 document.getElementById('startMining').disabled = false;
                 document.getElementById('stopMining').disabled = true;
@@ -436,69 +471,11 @@
             }
         }
         
-        // Helper functions to create transactions with different parameters
-        async function createTransactionWithPayload(utxoContext, address, payload, rpcClient) {
-            try {
-                const result = await kaspa.createTransactions({
-                    entries: [{
-                        address: address.toString(),
-                        amount: BigInt(10000000), // 0.1 KAS
-                        payload: payload
-                    }],
-                    utxoContext: utxoContext,
-                    changeAddress: address.toString(),
-                    priorityFee: BigInt(1000)
-                });
-                
-                if (!result || !result.transactions || result.transactions.length === 0) {
-                    throw new Error('No transactions created');
-                }
-                
-                return result.transactions[0];
-            } catch (error) {
-                log(`❌ createTransactionWithPayload error: ${error.message}`, 'error');
-                throw error;
-            }
-        }
-        
-        async function createTransactionWithAmount(utxoContext, address, amount, rpcClient) {
-            const { transactions } = await kaspa.createTransactions({
-                entries: [{
-                    address: address.toString(),
-                    amount: amount
-                }],
-                utxoContext: utxoContext,
-                changeAddress: address.toString(),
-                priorityFee: BigInt(1000)
-            });
-            return transactions[0];
-        }
-        
-        async function createTransactionWithPayloadAndAmount(utxoContext, address, payload, amount, rpcClient) {
-            const { transactions } = await kaspa.createTransactions({
-                entries: [{
-                    address: address.toString(),
-                    amount: amount,
-                    payload: payload
-                }],
-                utxoContext: utxoContext,
-                changeAddress: address.toString(),
-                priorityFee: BigInt(1000)
-            });
-            return transactions[0];
-        }
-        
         function numberToBytes(num) {
             const buffer = new ArrayBuffer(8);
             const view = new DataView(buffer);
             view.setBigUint64(0, BigInt(num), true);
             return new Uint8Array(buffer);
-        }
-        
-        function bytesToHex(bytes) {
-            return Array.from(bytes)
-                .map(b => b.toString(16).padStart(2, '0'))
-                .join('');
         }
         
         function getMatchLength(txid, pattern) {
@@ -521,94 +498,6 @@
             document.getElementById('hashRate').textContent = hashRate.toLocaleString();
             document.getElementById('elapsedTime').textContent = elapsed.toFixed(1) + 's';
         }
-        
-        // Send real transaction function
-        window.sendRealTransaction = async function() {
-            if (!kaspa) {
-                log('WASM not initialized', 'error');
-                return;
-            }
-            
-            try {
-                log('Preparing real transaction...', 'info');
-                
-                // Initialize wallet
-                const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
-                const privateKey = new kaspa.PrivateKey(testKeyHex);
-                const publicKey = privateKey.toPublicKey();
-                const address = publicKey.toAddress(kaspa.NetworkType.Testnet);
-                
-                // Connect to RPC
-                const rpcClient = new kaspa.RpcClient({
-                    resolver: new kaspa.Resolver(),
-                    networkId: 'testnet-10'
-                });
-                
-                log('Connecting to Kaspa testnet...', 'info');
-                await rpcClient.connect();
-                
-                // Get UTXOs
-                const utxoContext = new kaspa.UtxoContext({ rpcClient });
-                await utxoContext.trackAddresses([address]);
-                const balance = await utxoContext.getBalance();
-                
-                log(`Current balance: ${(balance.mature / 100000000).toFixed(8)} KAS`, 'info');
-                
-                // Create transaction with small amount
-                const toAddress = address; // Send to self
-                const amount = BigInt(10000000); // 0.1 KAS
-                const priorityFee = BigInt(1000); // Small priority fee
-                
-                log('Creating transaction...', 'info');
-                const { transactions } = await kaspa.createTransactions({
-                    entries: [{
-                        address: toAddress.toString(),
-                        amount: amount,
-                        priorityFee: priorityFee
-                    }],
-                    utxoContext: utxoContext,
-                    changeAddress: address.toString(),
-                    priorityFee: priorityFee
-                });
-                
-                if (!transactions || transactions.length === 0) {
-                    throw new Error('Failed to create transaction');
-                }
-                
-                const tx = transactions[0];
-                
-                // Sign transaction
-                log('Signing transaction...', 'info');
-                const signedTx = await tx.sign([privateKey]);
-                
-                // Get transaction ID before submission
-                const txid = await signedTx.id();
-                log(`Transaction ID: ${txid}`, 'info');
-                
-                // Check if it matches any pattern
-                const targetPattern = document.getElementById('targetPattern').value.toLowerCase();
-                if (txid.endsWith(targetPattern)) {
-                    log(`🎉 LUCKY! TxID matches pattern: ${targetPattern}`, 'success');
-                }
-                
-                // Submit transaction
-                log('Submitting transaction...', 'warning');
-                const submitResult = await signedTx.submit(rpcClient);
-                
-                log(`✅ Transaction submitted successfully!`, 'success');
-                log(`TxID: ${txid}`, 'success');
-                log(`Explorer: https://explorer-tn10.kaspa.org/txs/${txid}`, 'info');
-                
-                await rpcClient.disconnect();
-                
-            } catch (error) {
-                log(`❌ Transaction failed: ${error.message || error}`, 'error');
-                console.error('Full error:', error);
-                if (error.stack) {
-                    console.error('Stack trace:', error.stack);
-                }
-            }
-        };
     </script>
 </body>
 </html>
