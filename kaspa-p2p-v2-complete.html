@@ -1401,27 +1401,44 @@
                     if (response.ok) {
                         const data = await response.json();
                         
-                        // Extract payload from transaction
-                        if (data.outputs && data.outputs.length > 0) {
-                            for (const output of data.outputs) {
+                        log(`Transaction data received, checking for payload...`, 'info');
+                        
+                        // First, check if there's a direct payload field
+                        if (data.payload) {
+                            log(`Found direct payload field: ${data.payload.substring(0, 50)}...`, 'info');
+                            payload = new Uint8Array(data.payload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                        } else if (data.outputs && data.outputs.length > 0) {
+                            // Extract payload from transaction outputs
+                            log(`Checking ${data.outputs.length} outputs for payload...`, 'info');
+                            
+                            for (let i = 0; i < data.outputs.length; i++) {
+                                const output = data.outputs[i];
+                                log(`Output ${i}: type=${output.script_public_key_type}, script length=${output.script_public_key?.length || 0}`, 'info');
+                                
                                 if (output.script_public_key_type === 'pubkey' && output.script_public_key) {
-                                    // Extract payload from script
                                     const scriptHex = output.script_public_key;
-                                    // Kaspa script format: OP_DATA_XX <data> OP_CHECKSIG
-                                    // Look for payload data
+                                    
+                                    // In Kaspa, payload transactions have a different script structure
+                                    // The script should contain the payload data embedded
                                     if (scriptHex.length > 140) {
-                                        // Extract the middle part which contains the payload
+                                        log(`Found long script (${scriptHex.length} chars), attempting to extract payload...`, 'info');
+                                        log(`Script preview: ${scriptHex.substring(0, 100)}...`, 'info');
+                                        
+                                        // Try different extraction methods
+                                        // Method 1: Skip first 4 chars and last 68 chars
                                         const payloadHex = scriptHex.substring(4, scriptHex.length - 68);
                                         payload = new Uint8Array(payloadHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                        log(`Extracted payload size: ${payload.length} bytes`, 'info');
                                         break;
                                     }
                                 }
                             }
                         }
                         
-                        if (!payload && data.payload) {
-                            // Direct payload field (if available)
-                            payload = new Uint8Array(data.payload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                        // Check if we have transaction with payload in a different format
+                        if (!payload && data.subnetwork_id === "0000000000000000000000000000000000000000") {
+                            log(`Checking for payload in transaction data...`, 'info');
+                            console.log('Full transaction data:', data);
                         }
                     }
                 } catch (apiError) {
@@ -1459,11 +1476,19 @@
                         const key = await deriveKey(password, salt);
                         
                         try {
+                            log(`Attempting to decrypt with salt (${salt.length} bytes) and encrypted data (${encryptedData.length} bytes)`, 'info');
                             decrypted = await decryptChunk(encryptedData, key, -1);
                             const metaDataString = new TextDecoder().decode(decrypted);
+                            log(`Decrypted string preview: ${metaDataString.substring(0, 50)}...`, 'info');
                             metaData = JSON.parse(metaDataString);
                         } catch (e) {
                             log('復号化失敗 - パスワードが間違っている可能性があります', 'error');
+                            log(`Decryption error details: ${e.message || e}`, 'error');
+                            console.error('Decryption error:', e);
+                            
+                            // Log first few bytes of payload for debugging
+                            const payloadPreview = Array.from(payload.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                            log(`Payload hex preview: ${payloadPreview}`, 'info');
                             throw e;
                         }
                     } else {
