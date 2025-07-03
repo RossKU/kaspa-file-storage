@@ -881,7 +881,8 @@
                 // Generate salt
                 const saltBase = fileHash + currentFile.name;
                 const saltHash = await sha256(new TextEncoder().encode(saltBase));
-                const salt = fromBase64(btoa(saltHash.substring(0, 24)));
+                // Take first 16 bytes of hash (32 hex chars = 16 bytes)
+                const salt = new Uint8Array(saltHash.substring(0, 32).match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                 
                 const key = await deriveKey(password, salt);
                 
@@ -1427,19 +1428,22 @@
                         
                         // First, check if there's a direct payload field
                         if (data.payload) {
-                            log(`Found direct payload field: ${data.payload.substring(0, 50)}...`, 'info');
-                            // The payload is already a hex string, convert it to bytes
-                            const hexString = data.payload;
-                            payload = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                            log(`Found direct payload field, length: ${data.payload.length} chars`, 'info');
+                            log(`Payload preview: ${data.payload.substring(0, 100)}...`, 'info');
                             
-                            // Debug: Check if the payload looks like double-encoded hex
-                            const firstBytes = Array.from(payload.slice(0, 20)).map(b => String.fromCharCode(b)).join('');
-                            if (/^[0-9a-fA-F]+$/.test(firstBytes)) {
-                                log('Warning: Payload appears to be double-encoded hex, decoding again...', 'warning');
-                                // It's double-encoded, decode it again
-                                const actualHex = new TextDecoder().decode(payload);
-                                payload = new Uint8Array(actualHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                            // The payload is a hex string, convert it to bytes
+                            const hexString = data.payload;
+                            
+                            // Check if it's valid hex
+                            if (!/^[0-9a-fA-F]+$/.test(hexString)) {
+                                log('Warning: Payload contains non-hex characters', 'warning');
                             }
+                            
+                            // The blockchain returns the payload as hex, decode it directly
+                            // Same as chunk download (line 1746)
+                            payload = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                            log(`Decoded payload: ${payload.length} bytes`, 'info');
+                            
                         } else if (data.outputs && data.outputs.length > 0) {
                             // Extract payload from transaction outputs
                             log(`Checking ${data.outputs.length} outputs for payload...`, 'info');
@@ -1476,6 +1480,48 @@
                     }
                 } catch (apiError) {
                     log(`Explorer APIエラー: ${apiError.message}`, 'warning');
+                }
+                
+                // If Explorer API failed or payload is incomplete, try RPC
+                if (!payload || payload.length < 100) {
+                    log('Explorer APIのペイロードが不完全、RPC経由で再試行...', 'warning');
+                    
+                    try {
+                        // Get transaction via RPC
+                        const txResponse = await rpcClient.getTransaction({
+                            transactionId: metaTxId,
+                            includeBlockInfo: true
+                        });
+                        
+                        if (txResponse && txResponse.transaction) {
+                            log('RPC経由でトランザクション取得成功', 'info');
+                            
+                            // Extract payload from transaction
+                            const tx = txResponse.transaction;
+                            if (tx.payload) {
+                                // RPC might return hex or base64 encoded payload
+                                // Check if it's hex
+                                if (/^[0-9a-fA-F]+$/.test(tx.payload)) {
+                                    payload = new Uint8Array(tx.payload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                    log(`RPC hex payload: ${payload.length} bytes`, 'info');
+                                } else {
+                                    // Assume base64
+                                    payload = fromBase64(tx.payload);
+                                    log(`RPC base64 payload: ${payload.length} bytes`, 'info');
+                                }
+                            } else if (tx.verboseData && tx.verboseData.payload) {
+                                if (/^[0-9a-fA-F]+$/.test(tx.verboseData.payload)) {
+                                    payload = new Uint8Array(tx.verboseData.payload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                    log(`RPC verbose hex payload: ${payload.length} bytes`, 'info');
+                                } else {
+                                    payload = fromBase64(tx.verboseData.payload);
+                                    log(`RPC verbose base64 payload: ${payload.length} bytes`, 'info');
+                                }
+                            }
+                        }
+                    } catch (rpcError) {
+                        log(`RPC取得エラー: ${rpcError.message}`, 'error');
+                    }
                 }
                 
                 if (!payload) {
