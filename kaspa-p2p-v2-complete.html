@@ -857,11 +857,8 @@
                 const chunks = Math.ceil(data.length / chunkSize);
                 log(`チャンク数: ${chunks}`);
                 
-                // Get UTXOs
-                const { entries } = await rpcClient.getUtxosByAddresses([address.toString()]);
-                if (!entries || entries.length === 0) {
-                    throw new Error('利用可能なUTXOがありません');
-                }
+                // Initial UTXO fetch
+                let currentUtxos = null;
                 
                 // Start WebSocket monitoring
                 if (!wsMonitorActive) {
@@ -873,6 +870,12 @@
                 chunksList.innerHTML = '';
                 
                 for (let i = 0; i < chunks; i++) {
+                    // Get fresh UTXOs for each chunk
+                    const { entries } = await rpcClient.getUtxosByAddresses([address.toString()]);
+                    if (!entries || entries.length === 0) {
+                        throw new Error('利用可能なUTXOがありません');
+                    }
+                    log(`Chunk ${i + 1}: ${entries.length} UTXOs available`);
                     const start = i * chunkSize;
                     const end = Math.min(start + chunkSize, data.length);
                     const chunk = data.slice(start, end);
@@ -914,6 +917,7 @@
                             log(`Chunk ${i + 1} payload size: ${payloadBytes.length} bytes`);
 
                             
+                            // Format current UTXOs
                             const formattedUtxos = entries.map(utxo => ({
                                 address: address.toString(),
                                 outpoint: {
@@ -951,17 +955,21 @@
                             // Submit to network
                             txid = await pendingTx.submit(rpcClient);
                             
+                            // Wait for transaction to be accepted
+                            log(`Waiting for transaction confirmation...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            
                             log(`Chunk ${i + 1} TxID: ${txid}`, 'success');
                             
-                            // Wait for BlockID from monitor
+                            // Wait for BlockID from monitor with shorter timeout
                             let waitTime = 0;
-                            while (!blockId && waitTime < 30000) {
+                            while (!blockId && waitTime < 10000) {
                                 if (monitoredTransactions.has(txid)) {
                                     blockId = monitoredTransactions.get(txid).blockId;
                                     break;
                                 }
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-                                waitTime += 1000;
+                                await new Promise(resolve => setTimeout(resolve, 500));
+                                waitTime += 500;
                             }
                             
                             // Fallback to Explorer API
