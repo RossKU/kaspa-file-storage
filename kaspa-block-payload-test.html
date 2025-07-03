@@ -344,15 +344,67 @@
             logStep('📦 ブロックデータ取得中...', 'info');
             
             try {
-                // Get block with verbose data
-                const block = await rpcClient.getBlock(blockId, true);
+                // Debug: Check RPC client methods
+                logStep('利用可能なRPCメソッド:', 'info');
+                if (rpcClient.getBlockByHash) {
+                    logStep('- getBlockByHash: 利用可能', 'info');
+                }
+                if (rpcClient.getBlock) {
+                    logStep('- getBlock: 利用可能', 'info');
+                }
+                if (rpcClient.getBlockDagInfo) {
+                    logStep('- getBlockDagInfo: 利用可能', 'info');
+                }
+                
+                // Try different methods
+                let block = null;
+                
+                // Method 1: Try getBlock with hash
+                try {
+                    logStep('Method 1: getBlock(hash)を試行中...', 'info');
+                    block = await rpcClient.getBlock(blockId);
+                    logStep('Method 1: 成功', 'success');
+                } catch (e1) {
+                    logStep(`Method 1 エラー: ${e1.toString()}`, 'error');
+                    
+                    // Method 2: Try getBlock with includeTransactions flag
+                    try {
+                        logStep('Method 2: getBlock(hash, includeTransactions=true)を試行中...', 'info');
+                        block = await rpcClient.getBlock(blockId, true);
+                        logStep('Method 2: 成功', 'success');
+                    } catch (e2) {
+                        logStep(`Method 2 エラー: ${e2.toString()}`, 'error');
+                        
+                        // Method 3: Try getBlockByHash if available
+                        if (rpcClient.getBlockByHash) {
+                            try {
+                                logStep('Method 3: getBlockByHash(hash)を試行中...', 'info');
+                                block = await rpcClient.getBlockByHash(blockId);
+                                logStep('Method 3: 成功', 'success');
+                            } catch (e3) {
+                                logStep(`Method 3 エラー: ${e3.toString()}`, 'error');
+                            }
+                        }
+                    }
+                }
                 
                 if (!block) {
-                    throw new Error('ブロックが見つかりません');
+                    // Try to get current DAG info for debugging
+                    try {
+                        const dagInfo = await rpcClient.getBlockDagInfo();
+                        logStep(`現在のDAG情報: tips=${dagInfo.tipHashes ? dagInfo.tipHashes.length : 'N/A'}, virtualParentHashes=${dagInfo.virtualParentHashes ? dagInfo.virtualParentHashes.length : 'N/A'}`, 'info');
+                    } catch (e) {
+                        logStep('DAG情報取得エラー: ' + e.toString(), 'error');
+                    }
+                    
+                    throw new Error('すべてのメソッドでブロック取得に失敗しました');
                 }
 
                 testResults.blockRetrieval = true;
                 logStep('✅ ブロックデータ取得成功', 'success');
+                
+                // Debug: Show block structure
+                logStep('Block structure keys: ' + Object.keys(block).join(', '), 'info');
                 
                 // Display block info
                 displayBlockInfo(block);
@@ -360,7 +412,9 @@
                 return block;
                 
             } catch (error) {
-                throw new Error('ブロック取得失敗: ' + error.message);
+                logStep(`詳細エラー情報: ${error.toString()}`, 'error');
+                logStep(`エラースタック: ${error.stack}`, 'error');
+                throw new Error('ブロック取得失敗: ' + (error.message || error.toString()));
             }
         }
 
