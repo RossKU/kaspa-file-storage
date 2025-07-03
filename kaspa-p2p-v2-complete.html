@@ -344,6 +344,11 @@
                 <label for="includePassword">パスワードを.kaspaファイルに含める（⚠️ セキュリティリスク）</label>
             </div>
             
+            <div class="checkbox-label">
+                <input type="checkbox" id="useMetaTx">
+                <label for="useMetaTx">メタTxIDを使用（.kaspaファイル不要で共有可能）</label>
+            </div>
+            
             <button onclick="processAndUpload()" id="uploadBtn" disabled>
                 ファイルを処理してアップロード
             </button>
@@ -372,13 +377,24 @@
         <div class="container">
             <h2>📥 ファイルダウンロード</h2>
             
-            <div class="kaspa-file-drop" onclick="document.getElementById('kaspaFileInput').click()" 
-                 ondrop="handleKaspaDrop(event)" 
-                 ondragover="handleDragOver(event)" 
-                 ondragleave="handleDragLeave(event)">
-                <p>📁 .kaspaファイルをクリックして選択<br>またはドラッグ&ドロップ</p>
+            <!-- Meta-TxID input option -->
+            <div class="section-divider">
+                <h3>🔗 メタTxIDから復元</h3>
+                <input type="text" id="metaTxIdInput" placeholder="メタTxIDを入力（64文字の16進数）" style="width: 100%;">
+                <input type="password" id="metaTxPassword" placeholder="パスワード" style="width: 100%; margin-top: 10px;">
+                <button onclick="loadFromMetaTxId()" style="margin-top: 10px;">メタTxIDから復元</button>
             </div>
-            <input type="file" id="kaspaFileInput" accept=".kaspa" style="display:none" onchange="loadKaspaFile(event)">
+            
+            <div class="section-divider" style="margin-top: 20px;">
+                <h3>📁 または.kaspaファイルから復元</h3>
+                <div class="kaspa-file-drop" onclick="document.getElementById('kaspaFileInput').click()" 
+                     ondrop="handleKaspaDrop(event)" 
+                     ondragover="handleDragOver(event)" 
+                     ondragleave="handleDragLeave(event)">
+                    <p>📁 .kaspaファイルをクリックして選択<br>またはドラッグ&ドロップ</p>
+                </div>
+                <input type="file" id="kaspaFileInput" accept=".kaspa" style="display:none" onchange="loadKaspaFile(event)">
+            </div>
             
             <div id="downloadSection" style="display: none;">
                 <div class="metric-box">
@@ -1074,7 +1090,14 @@
                 });
                 
                 log(`アップロード完了! 総コスト: ${totalCost.toFixed(5)} KAS`, 'success');
-                document.getElementById('generateKaspaSection').style.display = 'block';
+                
+                // Check if meta-tx option is enabled
+                const useMetaTx = document.getElementById('useMetaTx').checked;
+                if (useMetaTx) {
+                    await createAndUploadMetaTx();
+                } else {
+                    document.getElementById('generateKaspaSection').style.display = 'block';
+                }
                 
             } catch (error) {
                 log(`アップロードエラー: ${error.message}`, 'error');
@@ -1127,6 +1150,110 @@
                 
             } catch (error) {
                 log(`.kaspaファイル生成エラー: ${error.message}`, 'error');
+            }
+        };
+
+        // Create and upload meta transaction
+        window.createAndUploadMetaTx = async function() {
+            try {
+                log('メタトランザクション作成を開始します...', 'info');
+                
+                // Prepare meta-tx data (similar to .kaspa file but with version 2.1)
+                const metaTxData = {
+                    version: "2.1",
+                    type: "kaspa-meta-tx",
+                    kaspa: kaspaMetadata.kaspa,
+                    file: kaspaMetadata.file,
+                    encryption: kaspaMetadata.encryption,
+                    compression: kaspaMetadata.compression,
+                    chunks: kaspaMetadata.chunks,
+                    metadata: kaspaMetadata.metadata
+                };
+                
+                // Encrypt meta-tx data with the same password
+                const metaDataString = JSON.stringify(metaTxData);
+                const metaDataBytes = new TextEncoder().encode(metaDataString);
+                
+                // Use the same salt and key from file encryption
+                const salt = fromBase64(kaspaMetadata.encryption.pbkdf2.salt);
+                const key = await deriveKey(currentPassword, salt);
+                
+                // Encrypt with chunk index -1 to indicate meta-tx
+                const encryptedMetaData = await encryptChunk(metaDataBytes, key, -1);
+                
+                // Prepend salt to encrypted data for self-contained decryption
+                const metaPayload = new Uint8Array(salt.length + encryptedMetaData.length);
+                metaPayload.set(salt, 0);
+                metaPayload.set(encryptedMetaData, salt.length);
+                
+                log(`メタデータサイズ: ${metaDataBytes.length} bytes → 暗号化後: ${metaPayload.length} bytes (salt含む)`);
+                
+                // Upload meta-tx to blockchain
+                const { entries } = await rpcClient.getUtxosByAddresses([address.toString()]);
+                const formattedUtxos = entries.map(utxo => ({
+                    address: utxo.address,
+                    outpoint: {
+                        transactionId: utxo.outpoint.transactionId,
+                        index: utxo.outpoint.index
+                    },
+                    amount: utxo.utxoEntry.amount,
+                    scriptPublicKey: utxo.utxoEntry.scriptPublicKey
+                }));
+                
+                const result = await kaspa.createTransactions({
+                    entries: formattedUtxos,
+                    outputs: [{
+                        address: address.toString(),
+                        amount: 100000n
+                    }],
+                    changeAddress: address.toString(),
+                    priorityFee: 10000n,
+                    networkId: config.network,
+                    payload: metaPayload
+                });
+                
+                if (!result.transactions || result.transactions.length === 0) {
+                    throw new Error('メタトランザクション生成失敗');
+                }
+                
+                const pendingTx = result.transactions[0];
+                await pendingTx.sign([privateKey]);
+                const metaTxId = await pendingTx.submit(rpcClient);
+                
+                log(`メタトランザクションを送信しました: ${metaTxId}`, 'success');
+                
+                // Show meta-tx result
+                document.getElementById('generateKaspaSection').innerHTML = `
+                    <div class="container" style="background: #1a3d2e; border: 2px solid #49EACB;">
+                        <h3>🎉 メタトランザクション作成完了！</h3>
+                        <div class="metric-box">
+                            <p><strong>メタTxID:</strong></p>
+                            <p style="word-break: break-all; font-family: monospace; color: #49EACB;">${metaTxId}</p>
+                            <button onclick="navigator.clipboard.writeText('${metaTxId}').then(() => log('メタTxIDをコピーしました', 'success'))">
+                                📋 コピー
+                            </button>
+                        </div>
+                        <div class="info">
+                            <p>このメタTxIDとパスワードだけでファイルを復元できます。</p>
+                            <p>.kaspaファイルは不要です！</p>
+                        </div>
+                        <button onclick="generateKaspaFile()" style="margin-top: 10px;">
+                            📄 念のため.kaspaファイルも生成
+                        </button>
+                    </div>
+                `;
+                document.getElementById('generateKaspaSection').style.display = 'block';
+                
+                // Add meta-tx to metadata for .kaspa file generation
+                kaspaMetadata.metaTx = {
+                    txid: metaTxId,
+                    createdAt: Date.now()
+                };
+                
+            } catch (error) {
+                log(`メタトランザクション作成エラー: ${error.message}`, 'error');
+                // Fallback to normal .kaspa generation
+                document.getElementById('generateKaspaSection').style.display = 'block';
             }
         };
 
@@ -1200,6 +1327,162 @@
                 
             } catch (error) {
                 log(`.kaspaファイル読み込みエラー: ${error.message}`, 'error');
+            }
+        };
+
+        // Load from Meta-TxID
+        window.loadFromMetaTxId = async function() {
+            const metaTxId = document.getElementById('metaTxIdInput').value.trim();
+            const password = document.getElementById('metaTxPassword').value;
+            
+            if (!metaTxId || metaTxId.length !== 64) {
+                log('有効なメタTxID（64文字）を入力してください', 'error');
+                return;
+            }
+            
+            if (!password) {
+                log('パスワードを入力してください', 'error');
+                return;
+            }
+            
+            if (!rpcClient) {
+                log('先にシステムを初期化してください', 'error');
+                return;
+            }
+            
+            try {
+                log(`メタTxID ${metaTxId.substring(0, 16)}... から復元を開始`, 'info');
+                
+                // Get transaction from blockchain
+                let payload = null;
+                
+                try {
+                    // First try to get via Explorer API (more reliable)
+                    log('Explorer API経由でメタトランザクションを取得中...', 'info');
+                    const apiUrl = `https://api-tn10.kaspa.org/transactions/${metaTxId}`;
+                    const response = await fetch(apiUrl);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        // Extract payload from transaction
+                        if (data.outputs && data.outputs.length > 0) {
+                            for (const output of data.outputs) {
+                                if (output.script_public_key_type === 'pubkey' && output.script_public_key) {
+                                    // Extract payload from script
+                                    const scriptHex = output.script_public_key;
+                                    // Kaspa script format: OP_DATA_XX <data> OP_CHECKSIG
+                                    // Look for payload data
+                                    if (scriptHex.length > 140) {
+                                        // Extract the middle part which contains the payload
+                                        const payloadHex = scriptHex.substring(4, scriptHex.length - 68);
+                                        payload = new Uint8Array(payloadHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (!payload && data.payload) {
+                            // Direct payload field (if available)
+                            payload = new Uint8Array(data.payload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                        }
+                    }
+                } catch (apiError) {
+                    log(`Explorer APIエラー: ${apiError.message}`, 'warning');
+                }
+                
+                if (!payload) {
+                    throw new Error('メタトランザクションのペイロードが見つかりません');
+                }
+                
+                log(`ペイロード取得成功: ${payload.length} bytes`, 'info');
+                
+                // Try to decrypt the payload
+                try {
+                    // First, try to derive key with a temporary salt (we'll get the real salt from decrypted data)
+                    // Use the metaTxId as a deterministic salt source for the first attempt
+                    const tempSalt = new Uint8Array(16);
+                    for (let i = 0; i < 16; i++) {
+                        tempSalt[i] = parseInt(metaTxId.substr(i * 2, 2), 16);
+                    }
+                    
+                    // Try decrypting with chunk index -1 (meta-tx indicator)
+                    let decrypted;
+                    let metaData;
+                    
+                    // We need to try different approaches since we don't have the salt yet
+                    // The actual implementation would need to extract salt from the encrypted data
+                    // or use a standardized approach
+                    
+                    // For now, let's try to extract the salt from the beginning of the payload
+                    if (payload.length > 16) {
+                        const salt = payload.slice(0, 16);
+                        const encryptedData = payload.slice(16);
+                        
+                        const key = await deriveKey(password, salt);
+                        
+                        try {
+                            decrypted = await decryptChunk(encryptedData, key, -1);
+                            const metaDataString = new TextDecoder().decode(decrypted);
+                            metaData = JSON.parse(metaDataString);
+                        } catch (e) {
+                            log('復号化失敗 - パスワードが間違っている可能性があります', 'error');
+                            throw e;
+                        }
+                    } else {
+                        throw new Error('ペイロードが短すぎます');
+                    }
+                    
+                    // Verify this is a meta-tx
+                    if (metaData.version === "2.1" && metaData.type === "kaspa-meta-tx") {
+                        log('メタトランザクションを正常に復号化しました', 'success');
+                        
+                        // Set kaspaMetadata from meta-tx data
+                        kaspaMetadata = {
+                            version: "2.0", // Convert back to standard format
+                            kaspa: metaData.kaspa,
+                            file: metaData.file,
+                            encryption: metaData.encryption,
+                            compression: metaData.compression,
+                            chunks: metaData.chunks,
+                            metadata: metaData.metadata,
+                            metaTx: {
+                                txid: metaTxId,
+                                loadedAt: Date.now()
+                            }
+                        };
+                        
+                        // Show file info
+                        document.getElementById('fileInfo').textContent = 
+                            `ファイル名: ${kaspaMetadata.file.name}\n` +
+                            `サイズ: ${(kaspaMetadata.file.size / 1024).toFixed(1)} KB\n` +
+                            `チャンク数: ${kaspaMetadata.chunks.length}\n` +
+                            `暗号化: ${kaspaMetadata.encryption.algorithm}\n` +
+                            `圧縮: ${kaspaMetadata.compression.enabled ? kaspaMetadata.compression.algorithm : 'なし'}\n` +
+                            `作成日時: ${new Date(kaspaMetadata.metadata.createdAt).toLocaleString()}\n` +
+                            `メタTxID: ${metaTxId.substring(0, 16)}...`;
+                        
+                        // Set password for download
+                        document.getElementById('downloadPassword').value = password;
+                        document.getElementById('downloadPassword').style.display = 'none';
+                        
+                        // Show download section
+                        document.getElementById('downloadSection').style.display = 'block';
+                        
+                        log('メタTxIDからの復元準備完了！ダウンロードボタンをクリックしてください。', 'success');
+                        
+                    } else {
+                        throw new Error('これは有効なメタトランザクションではありません');
+                    }
+                    
+                } catch (error) {
+                    log(`復号化エラー: ${error.message}`, 'error');
+                    throw error;
+                }
+                
+            } catch (error) {
+                log(`メタTxID復元エラー: ${error.message}`, 'error');
             }
         };
 
