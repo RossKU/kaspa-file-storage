@@ -762,10 +762,21 @@
 
         async function encryptChunk(data, key, chunkIndex) {
             const iv = new Uint8Array(12);
-            iv[0] = (chunkIndex >> 8) & 0xFF;
-            iv[1] = chunkIndex & 0xFF;
-            for (let i = 2; i < 12; i++) {
-                iv[i] = i * 17;
+            
+            // Special handling for meta-tx (chunkIndex = -1)
+            if (chunkIndex === -1) {
+                // Use a special pattern for meta-tx
+                iv[0] = 0xFF;
+                iv[1] = 0xFF;
+                for (let i = 2; i < 12; i++) {
+                    iv[i] = 0xFF - i;
+                }
+            } else {
+                iv[0] = (chunkIndex >> 8) & 0xFF;
+                iv[1] = chunkIndex & 0xFF;
+                for (let i = 2; i < 12; i++) {
+                    iv[i] = i * 17;
+                }
             }
             
             const encrypted = await crypto.subtle.encrypt(
@@ -779,10 +790,21 @@
 
         async function decryptChunk(data, key, chunkIndex) {
             const iv = new Uint8Array(12);
-            iv[0] = (chunkIndex >> 8) & 0xFF;
-            iv[1] = chunkIndex & 0xFF;
-            for (let i = 2; i < 12; i++) {
-                iv[i] = i * 17;
+            
+            // Special handling for meta-tx (chunkIndex = -1)
+            if (chunkIndex === -1) {
+                // Use a special pattern for meta-tx
+                iv[0] = 0xFF;
+                iv[1] = 0xFF;
+                for (let i = 2; i < 12; i++) {
+                    iv[i] = 0xFF - i;
+                }
+            } else {
+                iv[0] = (chunkIndex >> 8) & 0xFF;
+                iv[1] = chunkIndex & 0xFF;
+                for (let i = 2; i < 12; i++) {
+                    iv[i] = i * 17;
+                }
             }
             
             const decrypted = await crypto.subtle.decrypt(
