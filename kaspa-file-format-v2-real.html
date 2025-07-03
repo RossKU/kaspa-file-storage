@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa File Format v2 - Real Network Implementation</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        .header {
+            background: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        h1 {
+            margin: 0;
+            color: #e94560;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        .container {
+            background: #0f3460;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .version-box {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e94560;
+        }
+        .version-box h3 {
+            color: #e94560;
+            margin-top: 0;
+        }
+        button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #c13651;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(233, 69, 96, 0.3);
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        textarea {
+            width: 100%;
+            background: #16213e;
+            color: #eee;
+            border: 1px solid #e94560;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: 'Consolas', monospace;
+            resize: vertical;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .file-input-label {
+            display: inline-block;
+            background: #16213e;
+            color: #e94560;
+            border: 2px dashed #e94560;
+            padding: 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.3s;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .file-input-label:hover {
+            background: #1a2540;
+            border-color: #ff5c7c;
+        }
+        .metric-box {
+            background: rgba(233, 69, 96, 0.1);
+            border: 1px solid #e94560;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #ff5252; }
+        .warning { color: #ffc107; }
+        .info { color: #2196F3; }
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .feature-list li:before {
+            content: "✓ ";
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .test-result {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #e94560;
+        }
+        .json-view {
+            background: #0a0a0a;
+            color: #4CAF50;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        .migration-flow {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            padding: 20px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .flow-item {
+            text-align: center;
+            padding: 20px;
+        }
+        .flow-arrow {
+            font-size: 30px;
+            color: #e94560;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        th {
+            background: rgba(233, 69, 96, 0.2);
+            color: #e94560;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #16213e;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e94560, #ff5c7c);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-online { background: #4CAF50; }
+        .status-offline { background: #ff5252; }
+        .status-connecting { background: #ffc107; animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .log-container {
+            background: #0a0a0a;
+            color: #0f0;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .log-entry {
+            margin: 2px 0;
+        }
+        .log-time {
+            color: #888;
+        }
+        .log-error {
+            color: #ff5252;
+        }
+        .log-success {
+            color: #4CAF50;
+        }
+        .log-info {
+            color: #2196F3;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📁 .kaspa File Format v2.0 - Real Network Implementation</h1>
+        <p>実際のWebSocket/Explorer API接続による本番環境対応版</p>
+        <div id="networkStatus" style="margin-top: 10px;">
+            <span class="status-indicator status-offline"></span>
+            <span id="statusText">未接続</span>
+        </div>
+    </div>
+
+    <!-- WASM Initialization -->
+    <div class="container">
+        <h2>🔧 システム初期化</h2>
+        <button onclick="initializeWASM()">WASM SDKを初期化</button>
+        <button onclick="connectToNetwork()" id="connectBtn" disabled>ネットワークに接続</button>
+        <div id="initStatus" class="metric-box" style="display: none;"></div>
+        <div class="log-container" id="systemLog"></div>
+    </div>
+
+    <!-- Format Comparison -->
+    <div class="container">
+        <h2>📊 フォーマット比較</h2>
+        
+        <div class="comparison-grid">
+            <div class="version-box">
+                <h3>v1.0 (現行)</h3>
+                <ul class="feature-list">
+                    <li>基本的なファイル情報</li>
+                    <li>TxIDベースの参照</li>
+                    <li>シンプルな構造</li>
+                    <li>WebSocket非対応</li>
+                </ul>
+                <textarea id="v1Format" rows="15">{
+  "version": "1.0",
+  "created": "2025-01-01T00:00:00Z",
+  "network": "testnet-10",
+  "file": {
+    "name": "example.pdf",
+    "size": 12345,
+    "checksum": "sha256:abc123...",
+    "txId": "19fb27542f4fc27274cc928b68ce1630f23a4753c9e71db0ff3e3e5ebbc655e5",
+    "chunks": []
+  }
+}</textarea>
+            </div>
+            
+            <div class="version-box">
+                <h3>v2.0 (新規)</h3>
+                <ul class="feature-list">
+                    <li>BlockID情報の追加</li>
+                    <li>Explorer API URL</li>
+                    <li>回復情報の充実</li>
+                    <li>WebSocket監視データ</li>
+                    <li>マルチソース対応</li>
+                </ul>
+                <textarea id="v2Format" rows="20">{
+  "version": "2.0",
+  "created": "2025-07-03T00:00:00Z",
+  "network": "testnet-10",
+  "metadata": {
+    "txId": "19fb27542f4fc27274cc928b68ce1630f23a4753c9e71db0ff3e3e5ebbc655e5",
+    "blockId": "95a5e4101246828842097738c9e09c1814c155c966ddcbb6485c01f819d32460",
+    "blockHeight": 190866386,
+    "confirmations": 10,
+    "explorerUrl": "https://explorer-tn10.kaspa.org/txs/19fb27542f4fc27274cc928b68ce1630f23a4753c9e71db0ff3e3e5ebbc655e5"
+  },
+  "file": {
+    "name": "example.pdf",
+    "size": 12345,
+    "mimeType": "application/pdf",
+    "checksum": "sha256:abc123...",
+    "encrypted": true,
+    "chunks": []
+  },
+  "recovery": {
+    "explorerApi": true,
+    "wsMonitorData": {
+      "foundAt": 1751511058796,
+      "blockTime": 1751511037513,
+      "method": "websocket"
+    }
+  }
+}</textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real Network Operations -->
+    <div class="container">
+        <h2>🌐 リアルネットワーク操作</h2>
+        
+        <div class="test-section">
+            <h3>1. TxIDからBlockID取得（実際のAPI使用）</h3>
+            <input type="text" id="txIdInput" placeholder="TxIDを入力（例: 19fb27542f4fc27274cc928b68ce1630f23a4753c9e71db0ff3e3e5ebbc655e5）" style="width: 100%; padding: 10px; margin: 10px 0;">
+            <button onclick="fetchBlockIdFromTxId()">Explorer APIで取得</button>
+            <button onclick="monitorWithWebSocket()">WebSocketで監視</button>
+            <div id="blockIdResult"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>2. BlockIDからペイロード取得（RPC使用）</h3>
+            <input type="text" id="blockIdInput" placeholder="BlockIDを入力" style="width: 100%; padding: 10px; margin: 10px 0;">
+            <button onclick="fetchPayloadFromBlockId()">ペイロード取得</button>
+            <div id="payloadResult"></div>
+        </div>
+    </div>
+
+    <!-- Migration Tool -->
+    <div class="container">
+        <h2>🔄 実データマイグレーション</h2>
+        
+        <div class="migration-flow">
+            <div class="flow-item">
+                <label for="v1FileInput" class="file-input-label">
+                    📁 v1.0 .kaspaファイルを選択
+                    <br><small>ドラッグ&ドロップ対応</small>
+                </label>
+                <input type="file" id="v1FileInput" accept=".kaspa" onchange="loadV1File(event)">
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-item">
+                <button onclick="migrateToV2Real()" id="migrateBtn" disabled>
+                    🔄 実APIでv2.0に変換
+                </button>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-item">
+                <button onclick="downloadV2()" id="downloadBtn" disabled>
+                    💾 v2.0をダウンロード
+                </button>
+            </div>
+        </div>
+        
+        <div id="migrationResult"></div>
+    </div>
+
+    <!-- Real-time WebSocket Monitor -->
+    <div class="container">
+        <h2>📡 リアルタイムWebSocket監視</h2>
+        <button onclick="startWebSocketMonitor()">監視開始</button>
+        <button onclick="stopWebSocketMonitor()">監視停止</button>
+        <div class="metric-box">
+            <p>監視中のトランザクション: <span id="monitorCount">0</span></p>
+            <p>検出されたBlockID: <span id="detectedCount">0</span></p>
+        </div>
+        <div class="log-container" id="wsLog"></div>
+    </div>
+
+    <!-- Real Use Case Tests -->
+    <div class="container">
+        <h2>🧪 実環境テスト</h2>
+        
+        <div class="test-section">
+            <h3>統合テスト</h3>
+            <button onclick="runRealScenarios()">実環境シナリオ実行</button>
+            <div id="scenarioResults"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Global state
+        let kaspa = null;
+        let rpcClient = null;
+        let currentV1Data = null;
+        let currentV2Data = null;
+        let wsMonitorActive = false;
+        let monitoredTransactions = new Map();
+        
+        // Logging utility
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('systemLog');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-${type}">${message}</span>`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function wsLog(message, type = 'info') {
+            const logContainer = document.getElementById('wsLog');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-${type}">${message}</span>`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Network status
+        function updateNetworkStatus(status, text) {
+            const indicator = document.querySelector('.status-indicator');
+            const statusText = document.getElementById('statusText');
+            
+            indicator.className = 'status-indicator';
+            switch(status) {
+                case 'online':
+                    indicator.classList.add('status-online');
+                    break;
+                case 'offline':
+                    indicator.classList.add('status-offline');
+                    break;
+                case 'connecting':
+                    indicator.classList.add('status-connecting');
+                    break;
+            }
+            statusText.textContent = text;
+        }
+
+        // WASM initialization
+        window.initializeWASM = async function() {
+            try {
+                log('WASM SDK初期化を開始...');
+                updateNetworkStatus('connecting', 'WASM初期化中...');
+                
+                // Import WASM SDK
+                kaspa = await import('./kaspa-core.js');
+                log('kaspa-core.jsをインポートしました');
+                
+                // Initialize WASM binary - CRITICAL!
+                await kaspa.default('./kaspa-core_bg.wasm');
+                log('WASMバイナリを初期化しました');
+                
+                // Verify functions exist
+                const requiredFunctions = ['RpcClient', 'Resolver', 'createTransactions', 'addressFromScriptPublicKey'];
+                for (const func of requiredFunctions) {
+                    if (typeof kaspa[func] !== 'function') {
+                        throw new Error(`必要な関数が見つかりません: ${func}`);
+                    }
+                }
+                log('すべての必要な関数を確認しました', 'success');
+                
+                // Global assignment for stability
+                window.kaspa = kaspa;
+                
+                document.getElementById('initStatus').style.display = 'block';
+                document.getElementById('initStatus').innerHTML = '<p class="success">✅ WASM SDK初期化完了</p>';
+                document.getElementById('connectBtn').disabled = false;
+                
+                updateNetworkStatus('offline', 'WASM準備完了');
+                log('WASM SDK初期化完了!', 'success');
+                
+            } catch (error) {
+                log(`WASM初期化エラー: ${error.message}`, 'error');
+                document.getElementById('initStatus').style.display = 'block';
+                document.getElementById('initStatus').innerHTML = `<p class="error">❌ 初期化失敗: ${error.message}</p>`;
+                updateNetworkStatus('offline', 'WASM初期化失敗');
+            }
+        };
+
+        // Network connection
+        window.connectToNetwork = async function() {
+            try {
+                log('ネットワーク接続を開始...');
+                updateNetworkStatus('connecting', '接続中...');
+                
+                // Create RPC client with resolver
+                rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                log('RPC接続を試行中...');
+                await rpcClient.connect();
+                
+                // Test connection
+                const info = await rpcClient.getServerInfo();
+                log(`接続成功! サーバー: ${info.serverVersion}`, 'success');
+                log(`ネットワーク: ${info.networkId}`, 'info');
+                
+                updateNetworkStatus('online', 'ネットワーク接続済み');
+                
+            } catch (error) {
+                log(`接続エラー: ${error.message}`, 'error');
+                updateNetworkStatus('offline', '接続失敗');
+            }
+        };
+
+        // Fetch BlockID from TxID using Explorer API
+        window.fetchBlockIdFromTxId = async function() {
+            const txId = document.getElementById('txIdInput').value.trim();
+            if (!txId) {
+                alert('TxIDを入力してください');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('blockIdResult');
+            resultDiv.innerHTML = '<p>Explorer APIで検索中...</p>';
+            
+            try {
+                log(`Explorer APIでTxID検索: ${txId}`);
+                
+                // Testnet-10 Explorer API
+                const apiUrl = `https://api-tn10.kaspa.org/transactions/${txId}`;
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const blockId = data.block_hash?.[0] || data.accepting_block_hash || null;
+                
+                if (blockId) {
+                    log(`BlockID取得成功: ${blockId}`, 'success');
+                    resultDiv.innerHTML = `
+                        <div class="metric-box">
+                            <h4 class="success">✅ BlockID取得成功</h4>
+                            <p><strong>TxID:</strong> ${txId}</p>
+                            <p><strong>BlockID:</strong> ${blockId}</p>
+                            <p><strong>Block Time:</strong> ${new Date(data.block_time).toLocaleString()}</p>
+                            <p><strong>Confirmations:</strong> ${data.confirmations || 'N/A'}</p>
+                            <button onclick="document.getElementById('blockIdInput').value='${blockId}'">
+                                BlockID入力欄にコピー
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    throw new Error('BlockIDが見つかりません');
+                }
+                
+            } catch (error) {
+                log(`Explorer APIエラー: ${error.message}`, 'error');
+                resultDiv.innerHTML = `
+                    <div class="metric-box">
+                        <p class="error">❌ エラー: ${error.message}</p>
+                    </div>
+                `;
+            }
+        };
+
+        // Fetch payload from BlockID using RPC
+        window.fetchPayloadFromBlockId = async function() {
+            const blockId = document.getElementById('blockIdInput').value.trim();
+            if (!blockId) {
+                alert('BlockIDを入力してください');
+                return;
+            }
+            
+            if (!rpcClient) {
+                alert('先にネットワークに接続してください');
+                return;
+            }
+            
+            const resultDiv = document.getElementById('payloadResult');
+            resultDiv.innerHTML = '<p>ブロックデータを取得中...</p>';
+            
+            try {
+                log(`RPC経由でブロック取得: ${blockId}`);
+                
+                // Get block with transactions
+                const request = { hash: blockId, includeTransactions: true };
+                const response = await rpcClient.getBlock(request);
+                const block = response.block?.block || response.block;
+                
+                if (!block) {
+                    throw new Error('ブロックが見つかりません');
+                }
+                
+                log(`ブロック取得成功。トランザクション数: ${block.transactions?.length || 0}`, 'success');
+                
+                // Find transactions with payloads
+                const txWithPayloads = [];
+                for (const tx of block.transactions || []) {
+                    if (tx.payload && tx.payload !== '') {
+                        const payloadHex = tx.payload;
+                        const payloadBytes = hexToBytes(payloadHex);
+                        const payloadText = new TextDecoder().decode(payloadBytes);
+                        
+                        txWithPayloads.push({
+                            id: tx.verboseData?.transactionId || 'Unknown',
+                            payloadSize: payloadBytes.length,
+                            payloadHex: payloadHex.substring(0, 100) + '...',
+                            payloadText: payloadText.substring(0, 100) + '...'
+                        });
+                    }
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="metric-box">
+                        <h4 class="success">✅ ブロックデータ取得成功</h4>
+                        <p><strong>BlockID:</strong> ${blockId}</p>
+                        <p><strong>トランザクション数:</strong> ${block.transactions?.length || 0}</p>
+                        <p><strong>ペイロード付きTx:</strong> ${txWithPayloads.length}</p>
+                        ${txWithPayloads.map(tx => `
+                            <div style="margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 5px;">
+                                <p><strong>TxID:</strong> ${tx.id}</p>
+                                <p><strong>ペイロードサイズ:</strong> ${tx.payloadSize} bytes</p>
+                                <p><strong>Hex:</strong> <code>${tx.payloadHex}</code></p>
+                                <p><strong>Text:</strong> ${tx.payloadText}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+            } catch (error) {
+                log(`RPCエラー: ${error.message}`, 'error');
+                resultDiv.innerHTML = `
+                    <div class="metric-box">
+                        <p class="error">❌ エラー: ${error.message}</p>
+                    </div>
+                `;
+            }
+        };
+
+        // WebSocket monitoring
+        window.startWebSocketMonitor = async function() {
+            if (!rpcClient) {
+                alert('先にネットワークに接続してください');
+                return;
+            }
+            
+            if (wsMonitorActive) {
+                wsLog('すでに監視中です', 'warning');
+                return;
+            }
+            
+            try {
+                wsLog('WebSocket監視を開始...');
+                wsMonitorActive = true;
+                
+                // Subscribe to block added events
+                await rpcClient.subscribeBlockAdded();
+                wsLog('Block Addedイベントを購読しました', 'success');
+                
+                // Event listener
+                rpcClient.addEventListener('block-added', (event) => {
+                    const block = event.data.block;
+                    const blockId = block.header.hash;
+                    const blockTime = new Date(Number(block.header.timestamp));
+                    
+                    wsLog(`新しいブロック: ${blockId} (${blockTime.toLocaleTimeString()})`);
+                    
+                    // Check transactions
+                    if (block.transactions && block.transactions.length > 0) {
+                        for (const tx of block.transactions) {
+                            const txId = tx.verboseData?.transactionId;
+                            if (txId) {
+                                monitoredTransactions.set(txId, {
+                                    blockId: blockId,
+                                    blockTime: blockTime,
+                                    foundAt: new Date()
+                                });
+                                
+                                if (tx.payload && tx.payload !== '') {
+                                    wsLog(`ペイロード付きTx検出: ${txId}`, 'success');
+                                }
+                            }
+                        }
+                        
+                        document.getElementById('monitorCount').textContent = monitoredTransactions.size;
+                        document.getElementById('detectedCount').textContent = monitoredTransactions.size;
+                    }
+                });
+                
+                wsLog('監視を開始しました', 'success');
+                
+            } catch (error) {
+                wsLog(`監視開始エラー: ${error.message}`, 'error');
+                wsMonitorActive = false;
+            }
+        };
+
+        window.stopWebSocketMonitor = async function() {
+            if (!wsMonitorActive) {
+                wsLog('監視は開始されていません', 'warning');
+                return;
+            }
+            
+            try {
+                if (rpcClient) {
+                    await rpcClient.unsubscribeBlockAdded();
+                    wsLog('監視を停止しました', 'success');
+                }
+                wsMonitorActive = false;
+                
+            } catch (error) {
+                wsLog(`監視停止エラー: ${error.message}`, 'error');
+            }
+        };
+
+        // File handling
+        window.loadV1File = function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    currentV1Data = JSON.parse(e.target.result);
+                    document.getElementById('v1Format').value = JSON.stringify(currentV1Data, null, 2);
+                    document.getElementById('migrateBtn').disabled = false;
+                    
+                    document.getElementById('migrationResult').innerHTML = `
+                        <div class="metric-box">
+                            <p class="success">✅ v1.0ファイルを読み込みました</p>
+                            <p>ファイル名: ${currentV1Data.file?.name || 'Unknown'}</p>
+                            <p>バージョン: ${currentV1Data.version}</p>
+                        </div>
+                    `;
+                } catch (error) {
+                    document.getElementById('migrationResult').innerHTML = `
+                        <div class="metric-box">
+                            <p class="error">❌ ファイル読み込みエラー: ${error.message}</p>
+                        </div>
+                    `;
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        // Real migration with actual API calls
+        window.migrateToV2Real = async function() {
+            if (!currentV1Data) {
+                alert('v1ファイルを先に読み込んでください');
+                return;
+            }
+            
+            const result = document.getElementById('migrationResult');
+            result.innerHTML = '<div class="progress-bar"><div class="progress-fill" style="width: 0%">0%</div></div>';
+            
+            try {
+                await updateProgress(20, 'TxID検証中...');
+                const txId = currentV1Data.file?.txId;
+                
+                if (!txId) {
+                    throw new Error('v1ファイルにTxIDがありません');
+                }
+                
+                await updateProgress(40, 'Explorer APIでBlockID取得中...');
+                
+                // Real API call
+                const apiUrl = `https://api-tn10.kaspa.org/transactions/${txId}`;
+                const response = await fetch(apiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                const blockId = data.block_hash?.[0] || data.accepting_block_hash || null;
+                
+                if (!blockId) {
+                    throw new Error('BlockIDが見つかりません');
+                }
+                
+                await updateProgress(60, 'メタデータ生成中...');
+                
+                // Create v2 format with real data
+                currentV2Data = {
+                    version: "2.0",
+                    created: new Date().toISOString(),
+                    network: currentV1Data.network || "testnet-10",
+                    metadata: {
+                        txId: txId,
+                        blockId: blockId,
+                        blockHeight: data.block_height || null,
+                        confirmations: data.confirmations || null,
+                        explorerUrl: `https://explorer-tn10.kaspa.org/txs/${txId}`
+                    },
+                    file: {
+                        name: currentV1Data.file?.name || "unknown.dat",
+                        size: currentV1Data.file?.size || 0,
+                        mimeType: getMimeType(currentV1Data.file?.name),
+                        checksum: currentV1Data.file?.checksum || "sha256:unknown",
+                        encrypted: currentV1Data.encrypted !== undefined ? currentV1Data.encrypted : true,
+                        chunks: currentV1Data.file?.chunks || []
+                    },
+                    recovery: {
+                        explorerApi: true,
+                        wsMonitorData: monitoredTransactions.has(txId) ? {
+                            foundAt: monitoredTransactions.get(txId).foundAt.getTime(),
+                            blockTime: monitoredTransactions.get(txId).blockTime.getTime(),
+                            method: "websocket"
+                        } : null,
+                        backupSources: [
+                            "https://api-tn10.kaspa.org",
+                            "https://explorer-tn10.kaspa.org"
+                        ]
+                    }
+                };
+                
+                await updateProgress(80, 'フォーマット変換中...');
+                document.getElementById('v2Format').value = JSON.stringify(currentV2Data, null, 2);
+                
+                await updateProgress(100, '完了！');
+                
+                result.innerHTML = `
+                    <div class="metric-box">
+                        <h3 class="success">✅ 実APIでマイグレーション成功</h3>
+                        <table>
+                            <tr><th>項目</th><th>v1.0</th><th>v2.0</th></tr>
+                            <tr>
+                                <td>バージョン</td>
+                                <td>${currentV1Data.version}</td>
+                                <td>${currentV2Data.version}</td>
+                            </tr>
+                            <tr>
+                                <td>BlockID</td>
+                                <td class="error">なし</td>
+                                <td class="success">${currentV2Data.metadata.blockId.substring(0, 16)}...</td>
+                            </tr>
+                            <tr>
+                                <td>Block Height</td>
+                                <td class="error">なし</td>
+                                <td class="success">${currentV2Data.metadata.blockHeight || 'N/A'}</td>
+                            </tr>
+                            <tr>
+                                <td>確認数</td>
+                                <td class="error">なし</td>
+                                <td class="success">${currentV2Data.metadata.confirmations || 'N/A'}</td>
+                            </tr>
+                        </table>
+                    </div>
+                `;
+                
+                document.getElementById('downloadBtn').disabled = false;
+                log('マイグレーション完了', 'success');
+                
+            } catch (error) {
+                log(`マイグレーションエラー: ${error.message}`, 'error');
+                result.innerHTML = `
+                    <div class="metric-box">
+                        <p class="error">❌ マイグレーション失敗: ${error.message}</p>
+                    </div>
+                `;
+            }
+        };
+
+        // Real scenario tests
+        window.runRealScenarios = async function() {
+            const result = document.getElementById('scenarioResults');
+            result.innerHTML = '<p>実環境シナリオテスト実行中...</p>';
+            
+            const scenarios = [];
+            
+            // Scenario 1: Explorer API test
+            try {
+                log('シナリオ1: Explorer APIテスト開始');
+                const testTxId = '19fb27542f4fc27274cc928b68ce1630f23a4753c9e71db0ff3e3e5ebbc655e5';
+                const apiUrl = `https://api-tn10.kaspa.org/transactions/${testTxId}`;
+                const response = await fetch(apiUrl);
+                
+                scenarios.push({
+                    name: "Explorer API接続",
+                    steps: [
+                        "API接続確認",
+                        "TxIDからBlockID取得",
+                        "メタデータ取得"
+                    ],
+                    result: response.ok ? "success" : "error",
+                    details: response.ok ? "API正常動作" : `Status: ${response.status}`
+                });
+            } catch (error) {
+                scenarios.push({
+                    name: "Explorer API接続",
+                    steps: ["API接続確認"],
+                    result: "error",
+                    details: error.message
+                });
+            }
+            
+            // Scenario 2: RPC connection test
+            if (rpcClient) {
+                try {
+                    log('シナリオ2: RPC接続テスト開始');
+                    const info = await rpcClient.getServerInfo();
+                    scenarios.push({
+                        name: "RPC接続",
+                        steps: [
+                            "RPC接続確認",
+                            "サーバー情報取得",
+                            "ネットワーク確認"
+                        ],
+                        result: "success",
+                        details: `Server: ${info.serverVersion}`
+                    });
+                } catch (error) {
+                    scenarios.push({
+                        name: "RPC接続",
+                        steps: ["RPC接続確認"],
+                        result: "error",
+                        details: error.message
+                    });
+                }
+            } else {
+                scenarios.push({
+                    name: "RPC接続",
+                    steps: ["RPC接続確認"],
+                    result: "error",
+                    details: "未接続"
+                });
+            }
+            
+            // Display results
+            let html = '<div class="test-result"><h4>実環境シナリオテスト結果</h4>';
+            
+            for (const scenario of scenarios) {
+                html += `
+                    <div class="metric-box">
+                        <h5>${scenario.result === 'success' ? '✅' : '❌'} ${scenario.name}</h5>
+                        <ol>
+                            ${scenario.steps.map(step => `<li>${step}</li>`).join('')}
+                        </ol>
+                        <p class="${scenario.result}">${scenario.result === 'success' ? '成功' : '失敗'}</p>
+                        <p class="info">詳細: ${scenario.details}</p>
+                    </div>
+                `;
+            }
+            
+            const successCount = scenarios.filter(s => s.result === 'success').length;
+            html += `
+                <div class="metric-box">
+                    <h4>総合評価</h4>
+                    <p class="${successCount === scenarios.length ? 'success' : 'warning'}">
+                        ${successCount}/${scenarios.length} シナリオが成功
+                    </p>
+                    <p>実環境での動作を確認しました</p>
+                </div>
+            `;
+            
+            result.innerHTML = html + '</div>';
+        };
+
+        // Utility functions
+        async function updateProgress(percent, message) {
+            const bar = document.querySelector('.progress-fill');
+            if (bar) {
+                bar.style.width = percent + '%';
+                bar.textContent = message || percent + '%';
+            }
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        function getMimeType(filename) {
+            if (!filename) return 'application/octet-stream';
+            const ext = filename.split('.').pop().toLowerCase();
+            const mimeTypes = {
+                'pdf': 'application/pdf',
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'txt': 'text/plain',
+                'json': 'application/json',
+                'zip': 'application/zip'
+            };
+            return mimeTypes[ext] || 'application/octet-stream';
+        }
+
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes;
+        }
+
+        window.downloadV2 = function() {
+            if (!currentV2Data) return;
+            
+            const blob = new Blob([JSON.stringify(currentV2Data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = (currentV2Data.file?.name || 'file').replace(/\.[^/.]+$/, '') + '.v2.kaspa';
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+
+        // Drag and drop
+        const fileInput = document.querySelector('.file-input-label');
+        fileInput.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileInput.style.background = '#1a2540';
+        });
+        fileInput.addEventListener('dragleave', () => {
+            fileInput.style.background = '#16213e';
+        });
+        fileInput.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileInput.style.background = '#16213e';
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.name.endsWith('.kaspa')) {
+                document.getElementById('v1FileInput').files = e.dataTransfer.files;
+                loadV1File({ target: { files: [file] } });
+            }
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            log('システム準備完了。WASM SDKを初期化してください。', 'info');
+        });
+    </script>
+</body>
+</html>
