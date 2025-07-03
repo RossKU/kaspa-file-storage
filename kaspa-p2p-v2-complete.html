@@ -380,9 +380,16 @@
             <!-- Meta-TxID input option -->
             <div class="section-divider">
                 <h3>🔗 メタTxIDから復元</h3>
-                <input type="text" id="metaTxIdInput" placeholder="メタTxIDを入力（64文字の16進数）" style="width: 100%;">
+                <input type="text" id="metaTxIdInput" placeholder="メタTxID または TxID:BlockID を入力" style="width: 100%;">
                 <input type="password" id="metaTxPassword" placeholder="パスワード" style="width: 100%; margin-top: 10px;">
                 <button onclick="loadFromMetaTxId()" style="margin-top: 10px;">メタTxIDから復元</button>
+                <div class="info" style="margin-top: 10px; font-size: 12px;">
+                    <p>📌 対応フォーマット:</p>
+                    <ul style="margin: 5px 0; padding-left: 20px;">
+                        <li>TxID:BlockID形式（推奨、REST API不要）</li>
+                        <li>TxIDのみ（REST API必要）</li>
+                    </ul>
+                </div>
             </div>
             
             <div class="section-divider" style="margin-top: 20px;">
@@ -1274,20 +1281,44 @@
                 
                 log(`メタトランザクションを送信しました: ${metaTxId}`, 'success');
                 
+                // Wait for BlockID from WebSocket monitor
+                log(`メタトランザクションのBlockIDを待機中...`);
+                let metaBlockId = null;
+                let waitTime = 0;
+                const maxWaitTime = 30000; // 30 seconds max
+                
+                while (!metaBlockId && waitTime < maxWaitTime) {
+                    if (monitoredTransactions.has(metaTxId)) {
+                        metaBlockId = monitoredTransactions.get(metaTxId).blockId;
+                        break;
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    waitTime += 500;
+                }
+                
+                let metaTxReference = metaTxId;
+                if (metaBlockId) {
+                    log(`BlockID取得成功: ${metaBlockId}`, 'success');
+                    metaTxReference = `${metaTxId}:${metaBlockId}`;
+                } else {
+                    log(`BlockID取得タイムアウト - メタTxIDのみで保存`, 'warning');
+                }
+                
                 // Show meta-tx result
                 document.getElementById('generateKaspaSection').innerHTML = `
                     <div class="container" style="background: #1a3d2e; border: 2px solid #49EACB;">
                         <h3>🎉 メタトランザクション作成完了！</h3>
                         <div class="metric-box">
-                            <p><strong>メタTxID:</strong></p>
-                            <p style="word-break: break-all; font-family: monospace; color: #49EACB;">${metaTxId}</p>
-                            <button onclick="navigator.clipboard.writeText('${metaTxId}').then(() => log('メタTxIDをコピーしました', 'success'))">
+                            <p><strong>${metaBlockId ? 'メタTxID + BlockID:' : 'メタTxID:'}</strong></p>
+                            <p style="word-break: break-all; font-family: monospace; color: #49EACB; font-size: 12px;">${metaTxReference}</p>
+                            <button onclick="navigator.clipboard.writeText('${metaTxReference}').then(() => log('コピーしました', 'success'))">
                                 📋 コピー
                             </button>
                         </div>
                         <div class="info">
-                            <p>このメタTxIDとパスワードだけでファイルを復元できます。</p>
+                            <p>この${metaBlockId ? 'TxID:BlockID' : 'メタTxID'}とパスワードだけでファイルを復元できます。</p>
                             <p>.kaspaファイルは不要です！</p>
+                            ${metaBlockId ? '<p class="success">✅ REST API不要で復元可能</p>' : '<p class="warning">⚠️ REST APIが必要です</p>'}
                         </div>
                         <button onclick="generateKaspaFile()" style="margin-top: 10px;">
                             📄 念のため.kaspaファイルも生成
@@ -1299,6 +1330,8 @@
                 // Add meta-tx to metadata for .kaspa file generation
                 kaspaMetadata.metaTx = {
                     txid: metaTxId,
+                    blockId: metaBlockId,
+                    reference: metaTxReference,
                     createdAt: Date.now()
                 };
                 
@@ -1391,11 +1424,29 @@
 
         // Load from Meta-TxID
         window.loadFromMetaTxId = async function() {
-            const metaTxId = document.getElementById('metaTxIdInput').value.trim();
+            const metaTxIdInput = document.getElementById('metaTxIdInput').value.trim();
             const password = document.getElementById('metaTxPassword').value;
+            
+            // Check if input contains BlockID (format: txid:blockid)
+            let metaTxId, blockId;
+            if (metaTxIdInput.includes(':')) {
+                const parts = metaTxIdInput.split(':');
+                metaTxId = parts[0];
+                blockId = parts[1];
+                log(`TxID:BlockID形式で復元: ${metaTxId.substring(0, 16)}...:${blockId.substring(0, 16)}...`, 'info');
+            } else {
+                metaTxId = metaTxIdInput;
+                blockId = null;
+                log(`メタTxIDのみで復元（REST API使用）: ${metaTxId.substring(0, 16)}...`, 'info');
+            }
             
             if (!metaTxId || metaTxId.length !== 64) {
                 log('有効なメタTxID（64文字）を入力してください', 'error');
+                return;
+            }
+            
+            if (blockId && blockId.length !== 64) {
+                log('有効なBlockID（64文字）を入力してください', 'error');
                 return;
             }
             
@@ -1410,10 +1461,46 @@
             }
             
             try {
-                log(`メタTxID ${metaTxId.substring(0, 16)}... から復元を開始`, 'info');
-                
                 // Get transaction from blockchain
                 let payload = null;
+                
+                // If we have BlockID, use RPC directly (no REST API needed)
+                if (blockId) {
+                    log(`BlockIDを使用してRPC経由で取得中...`, 'info');
+                    try {
+                        const blockResponse = await rpcClient.getBlock({
+                            hash: blockId,
+                            includeTransactions: true
+                        });
+                        
+                        const block = blockResponse?.block?.block || blockResponse?.block;
+                        if (!block) {
+                            throw new Error(`ブロックが見つかりません: ${blockId}`);
+                        }
+                        
+                        // Find the meta transaction in the block
+                        for (const tx of block.transactions || []) {
+                            const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
+                            if (txId === metaTxId) {
+                                if (tx.payload && tx.payload !== '') {
+                                    const hexPayload = tx.payload;
+                                    payload = new Uint8Array(hexPayload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                    log(`メタトランザクションをブロックから取得: ${payload.length} bytes`, 'success');
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!payload) {
+                            throw new Error(`ブロック内にメタトランザクションが見つかりません`);
+                        }
+                    } catch (rpcError) {
+                        log(`RPCエラー: ${rpcError.message}`, 'error');
+                        throw rpcError;
+                    }
+                } else {
+                    // Fall back to REST API if no BlockID provided
+                    log(`メタTxID ${metaTxId.substring(0, 16)}... からREST API経由で復元を開始`, 'info');
                 
                 try {
                     // First try to get via Explorer API (more reliable)
