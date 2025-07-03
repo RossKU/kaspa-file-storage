@@ -1231,10 +1231,9 @@
                         for (const tx of block.transactions || []) {
                             if (tx.verboseData?.transactionId === chunkMeta.txid) {
                                 if (tx.payload && tx.payload !== '') {
-                                    // Decode hex payload
+                                    // Get raw binary payload from hex
                                     const hexPayload = tx.payload;
-                                    const payloadBytes = new Uint8Array(hexPayload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-                                    payload = new TextDecoder().decode(payloadBytes);
+                                    payload = new Uint8Array(hexPayload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                                     break;
                                 }
                             }
@@ -1244,8 +1243,8 @@
                             throw new Error(`チャンク ${i + 1} のペイロードが見つかりません`);
                         }
                         
-                        // Decode and decrypt
-                        const encrypted = fromBase64(payload);
+                        // Decrypt and decompress
+                        const encrypted = payload; // Already binary Uint8Array
                         const compressed = await decryptChunk(encrypted, key, i);
                         const original = kaspaMetadata.compression.enabled ? lzDecompress(compressed) : compressed;
                         
