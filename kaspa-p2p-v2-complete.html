@@ -1218,11 +1218,19 @@
                 
                 let result;
                 try {
+                    // Calculate safe amount based on payload size
+                    // Rule: Larger payload needs larger amount to satisfy storage mass requirements
+                    const baseAmount = 100000n; // 0.001 KAS
+                    const payloadFactor = BigInt(Math.ceil(metaPayload.length / 100)); // Factor based on payload size
+                    const safeAmount = baseAmount * payloadFactor;
+                    
+                    log(`Using amount: ${safeAmount} sompi for ${metaPayload.length} bytes payload`);
+                    
                     result = await kaspa.createTransactions({
                         entries: formattedUtxos,
                         outputs: [{
                             address: address.toString(),
-                            amount: 100000n
+                            amount: safeAmount
                         }],
                         changeAddress: address.toString(),
                         priorityFee: 10000n,
