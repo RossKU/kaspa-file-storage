@@ -311,10 +311,8 @@
     </div>
 
     <script type="module">
-        // Import Kaspa WASM SDK
-        import * as kaspa from './kaspa-core.js';
-
         // Global variables
+        let kaspa = null;
         let rpcClient = null;
         let isConnected = false;
         let watchList = new Map(); // TxID -> metadata
@@ -330,7 +328,17 @@
         // Initialize
         window.addEventListener('load', async () => {
             try {
-                await kaspa.initWASM32Bindings();
+                // Import Kaspa WASM SDK
+                kaspa = await import('./kaspa-core.js');
+                console.log('✅ Module imported');
+                
+                // Initialize WASM binary - CRITICAL!
+                await kaspa.default('./kaspa-core_bg.wasm');
+                console.log('✅ WASM binary initialized');
+                
+                // Make kaspa globally available
+                window.kaspa = kaspa;
+                
                 console.log('✅ Kaspa WASM SDK initialized');
                 loadFromLocalStorage();
                 updateUI();
@@ -359,20 +367,15 @@
                 statusIndicator.className = 'status-indicator connecting';
                 connectionStatus.textContent = '接続中...';
                 
-                // Determine RPC endpoint
-                const rpcUrl = network === 'testnet-10' 
-                    ? 'wss://testnet-10.kaspa.ws'
-                    : 'wss://mainnet.kaspa.ws';
-                
-                // Create RPC client
+                // Create RPC client using Resolver
                 rpcClient = new kaspa.RpcClient({
-                    url: rpcUrl,
-                    encoding: 'borsh',
-                    resolver: kaspa.resolver
+                    resolver: new kaspa.Resolver(),
+                    networkId: network
                 });
 
                 // Connect
                 await rpcClient.connect();
+                console.log('✅ RPC connected:', rpcClient.url);
                 
                 // Subscribe to block notifications
                 await rpcClient.subscribeBlockAdded();
