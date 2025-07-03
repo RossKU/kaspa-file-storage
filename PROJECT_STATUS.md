@@ -519,3 +519,35 @@ Fetch → Base64 → Decrypt → Decompress → Chunk → Assemble → File
   "foundAt": 1751511058796
 }
 ```
+
+### 今後の技術的課題と対応方針
+
+#### WebSocket監視方式の影響分析（2025-07-03）
+KaspaがTxIDから直接データ取得できない制約により、以下の大規模な変更が必要：
+
+1. **アーキテクチャの根本的変更**
+   - Before: TxID → データ（直接取得）
+   - After: TxID → BlockID → データ（2段階プロセス）
+
+2. **ユーザー体験への影響**
+   - WebSocket監視の必須化
+   - 1分以内の操作制約
+   - 複雑性の増加
+
+3. **データ構造の変更**
+   ```javascript
+   // 新しい必須フィールド
+   fileRecord = {
+     txId: "...",
+     blockId: "...",  // 新規必須！
+     // BlockIDなしではデータ取得不可
+   }
+   ```
+
+4. **統合前の検証計画**
+   - Phase 1: BlockID経由でのペイロード取得検証
+   - Phase 2: Explorer API完全性テスト
+   - Phase 3: エラーケース網羅とパフォーマンステスト
+   - Phase 4: 統合プロトタイプ作成
+   
+   詳細は[KASPA_WEBSOCKET_INTEGRATION_PLAN.md](./KASPA_WEBSOCKET_INTEGRATION_PLAN.md)参照
