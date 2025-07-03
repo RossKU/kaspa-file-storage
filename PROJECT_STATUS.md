@@ -470,3 +470,40 @@ Fetch → Base64 → Decrypt → Decompress → Chunk → Assemble → File
 - Kaspaは従来のブロックチェーンと異なるBlockDAG構造
 - トランザクションの重複包含と仮想チェーンによる順序決定
 - 16時間後のプルーニングでもTx証明は残る
+
+### WebSocket監視システムの実装と修正
+- **実装ファイル**: `kaspa-websocket-block-monitor.html`
+- **URL**: https://rossku.github.io/kaspa-file-storage/kaspa-websocket-block-monitor.html
+- **実装内容**:
+  1. リアルタイムブロック監視機能
+  2. TxID監視リスト管理
+  3. TxID→BlockIDマッピング作成
+  4. LocalStorage/JSONエクスポート機能
+
+#### 技術的な課題と解決
+1. **WASM初期化エラー**
+   - 問題: `__wbindgen_add_to_stack_pointer`エラー
+   - 原因: `kaspa.default('./kaspa-core_bg.wasm')`の呼び出し不足
+   - 解決: `kaspa-blockchain-upload.html`のパターンに基づいて修正
+
+2. **RPC接続エラー**
+   - 問題: ハードコードされたWebSocket URLが失敗
+   - 解決: Resolverを使用して自動的にノードを発見
+   ```javascript
+   const rpcClient = new kaspa.RpcClient({
+       resolver: new kaspa.Resolver(),
+       networkId: network
+   });
+   ```
+
+3. **トランザクションID取得問題**
+   - 初期仮定: `tx.id`、`tx.transactionId`、`tx.txId`、`tx.hash`
+   - SDK仕様調査結果: トランザクションIDは`tx.verboseData.transactionId`に存在
+   - 解決: verboseDataから正しく取得するように修正
+
+4. **マッチング問題（調査中）**
+   - 現象: 監視リストに追加したTxIDがマッチしない
+   - デバッグ機能追加:
+     - 画面上に表示されるデバッグログパネル
+     - トランザクション構造の詳細ログ
+     - 比較プロセスの可視化

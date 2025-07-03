@@ -640,6 +640,99 @@ rpc.addEventListener("block-added", (event) => {
 2. **ローカルインデックス** - プライバシー保護、自分のTxのみ
 3. **WebSocket監視** - リアルタイム紐付け、外部依存なし
 
+## 📅 2025年7月3日（続き）- WebSocket監視システムの実装
+
+### 実装ファイル
+- **`kaspa-websocket-block-monitor.html`** - リアルタイムブロック監視システム
+- **URL**: https://rossku.github.io/kaspa-file-storage/kaspa-websocket-block-monitor.html
+
+### 実装機能
+1. **リアルタイムブロック監視**
+   - testnet-10/mainnet対応
+   - 10ブロック/秒の高速処理
+   - WebSocket経由でブロック通知受信
+
+2. **TxID監視リスト**
+   - 64文字16進数の検証
+   - 複数TxID同時監視
+   - リアルタイムステータス更新
+
+3. **TxID→BlockIDマッピング**
+   - 自動的にBlockIDを記録
+   - LocalStorage永続化
+   - JSON/エクスポート機能
+
+4. **統計情報**
+   - 受信ブロック数
+   - 処理済みトランザクション数
+   - マッチ数
+   - ブロック/秒
+
+### 技術的な課題と解決
+
+#### 1. WASM初期化エラー
+**問題**: `__wbindgen_add_to_stack_pointer`エラー
+```javascript
+// 誤った初期化
+import * as kaspa from './kaspa-core.js';
+await kaspa.initWASM32Bindings();
+```
+
+**解決**: `kaspa-blockchain-upload.html`のパターンを採用
+```javascript
+// 正しい初期化
+kaspa = await import('./kaspa-core.js');
+await kaspa.default('./kaspa-core_bg.wasm');
+window.kaspa = kaspa;
+```
+
+#### 2. RPC接続の修正
+**問題**: ハードコードされたURLが失敗
+```javascript
+// 失敗するパターン
+const rpcUrl = 'wss://testnet-10.kaspa.ws';
+```
+
+**解決**: Resolverによる自動ノード発見
+```javascript
+const rpcClient = new kaspa.RpcClient({
+    resolver: new kaspa.Resolver(),
+    networkId: network
+});
+```
+
+#### 3. トランザクションID取得の修正
+**SDK仕様調査結果**:
+- `ITransaction`インターフェースには直接IDフィールドなし
+- `ITransactionVerboseData`に`transactionId`が存在
+- ブロック通知では`tx.verboseData.transactionId`からアクセス
+
+**デバッグで判明した構造**:
+```javascript
+// トランザクションオブジェクトのキー
+tx keys: version, inputs, outputs, lockTime, subnetworkId, gas, payload, mass, verboseData
+
+// verboseDataのキー
+verboseData keys: transactionId, hash, computeMass, blockHash, blockTime
+```
+
+#### 4. デバッグ機能の追加
+- 画面上に表示される専用デバッグログパネル
+- F12不要でモバイル環境でも確認可能
+- トグルボタンで表示/非表示切り替え
+
+### 現在の課題（調査中）
+**マッチング問題**: 監視リストに追加したTxIDがマッチしない
+- トランザクションIDは正しく取得できている
+- 監視リストへの追加も正常
+- 比較ロジックの詳細デバッグ中
+
+### 次のステップ
+1. マッチング問題の解決
+2. メインアプリとの統合
+3. アップロード時の自動監視開始
+4. BlockIDを利用した検索機能の実装
+
 ### 技術的洞察
 - Kaspaは1秒10ブロックの高速性のため、TxIDインデックスを持たない
 - プルーニング（16時間後）でもTx証明は暗号学的に保持される
