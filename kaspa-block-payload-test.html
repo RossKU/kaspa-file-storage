@@ -427,10 +427,33 @@
                 // Debug: Show block structure
                 logStep('Block structure keys: ' + Object.keys(block).join(', '), 'info');
                 
-                // Display block info
-                displayBlockInfo(block);
-                
-                return block;
+                // Check if block data is nested
+                if (block.block) {
+                    logStep('Block data is nested in block.block', 'info');
+                    logStep('Actual block keys: ' + Object.keys(block.block).join(', '), 'info');
+                    
+                    // Log the structure for debugging
+                    logStep('Block structure sample: ' + JSON.stringify({
+                        hasBlock: !!block.block,
+                        hasHeader: !!(block.block && block.block.header),
+                        hasTransactions: !!(block.block && block.block.transactions),
+                        transactionCount: block.block && block.block.transactions ? block.block.transactions.length : 0
+                    }), 'info');
+                    
+                    // Extract the actual block data
+                    const actualBlock = block.block;
+                    
+                    // Display block info
+                    displayBlockInfo(actualBlock);
+                    
+                    return actualBlock;
+                } else {
+                    logStep('Block data is not nested', 'info');
+                    // Display block info
+                    displayBlockInfo(block);
+                    
+                    return block;
+                }
                 
             } catch (error) {
                 logStep(`詳細エラー情報: ${error.toString()}`, 'error');
@@ -578,17 +601,36 @@
             const container = document.getElementById('blockData');
             container.innerHTML = '';
 
+            // First, log the actual structure
+            logStep('Displaying block with structure: ' + JSON.stringify(Object.keys(block || {})), 'info');
+            
             const infoDiv = document.createElement('div');
             infoDiv.className = 'result-item';
+            
+            // Check if block has header
+            if (!block || !block.header) {
+                infoDiv.innerHTML = `
+                    <strong>Block Structure Error:</strong><br>
+                    Missing header. Available keys: ${block ? Object.keys(block).join(', ') : 'null block'}<br>
+                `;
+                container.appendChild(infoDiv);
+                
+                // Show raw structure for debugging
+                const rawDiv = document.createElement('div');
+                rawDiv.className = 'json-display';
+                rawDiv.textContent = JSON.stringify(block, null, 2);
+                container.appendChild(rawDiv);
+                return;
+            }
             
             // Basic block info
             infoDiv.innerHTML = `
                 <strong>Block Information:</strong><br>
-                Hash: ${block.header.hash}<br>
+                Hash: ${block.header.hash || 'N/A'}<br>
                 Height: ${block.header.blueScore || 'N/A'}<br>
-                Timestamp: ${new Date(parseInt(block.header.timestamp)).toLocaleString()}<br>
+                Timestamp: ${block.header.timestamp ? new Date(parseInt(block.header.timestamp)).toLocaleString() : 'N/A'}<br>
                 Transaction Count: ${block.transactions ? block.transactions.length : 0}<br>
-                Version: ${block.header.version}<br>
+                Version: ${block.header.version || 'N/A'}<br>
             `;
 
             container.appendChild(infoDiv);
@@ -601,9 +643,12 @@
                     hash: block.header.hash,
                     blueScore: block.header.blueScore,
                     timestamp: block.header.timestamp,
-                    version: block.header.version
+                    version: block.header.version,
+                    allHeaderKeys: Object.keys(block.header)
                 },
-                transactionCount: block.transactions ? block.transactions.length : 0
+                transactionCount: block.transactions ? block.transactions.length : 0,
+                hasTransactions: !!block.transactions,
+                blockKeys: Object.keys(block)
             }, null, 2);
             container.appendChild(structDiv);
         }
