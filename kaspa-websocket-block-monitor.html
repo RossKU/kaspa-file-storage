@@ -248,8 +248,10 @@
                 </select>
                 <button id="connectBtn" onclick="toggleConnection()">接続</button>
                 <button id="clearBtn" onclick="clearAll()">クリア</button>
+                <button onclick="toggleDebugLog()">デバッグログ</button>
             </div>
             <div id="errorMsg" class="error" style="display: none;"></div>
+        <div id="debugLog" style="background: #333; color: #0f0; padding: 10px; margin-top: 10px; font-family: monospace; font-size: 10px; max-height: 200px; overflow-y: auto; display: none;"></div>
         </div>
 
         <!-- Watch List -->
@@ -324,6 +326,7 @@
             startTime: null,
             lastBlockTime: null
         };
+        let debugLogs = [];
 
         // Initialize
         window.addEventListener('load', async () => {
@@ -452,6 +455,8 @@
             if (block.transactions && block.transactions.length > 0 && stats.blocksReceived === 1) {
                 console.log('First block transaction structure:', block.transactions[0]);
                 console.log('Block structure:', block);
+                addDebugLog('First block tx structure: ' + JSON.stringify(block.transactions[0], null, 2));
+                addDebugLog('Block keys: ' + Object.keys(block).join(', '));
             }
             
             // Check transactions in the block
@@ -468,6 +473,7 @@
                             txId: tx.txId,
                             hash: tx.hash
                         });
+                        addDebugLog(`Block #${stats.blocksReceived} tx fields: id=${tx.id}, transactionId=${tx.transactionId}, txId=${tx.txId}, hash=${tx.hash}`);
                     }
                     
                     // Try multiple possible ID fields
@@ -485,6 +491,7 @@
                                 watchId: firstWatchId,
                                 match: watchList.has(normalizedTxId)
                             });
+                            addDebugLog(`Comparing: txId=${normalizedTxId.substring(0,10)}... watchId=${firstWatchId.substring(0,10)}... match=${watchList.has(normalizedTxId)}`);
                         }
                         
                         // Check if this transaction is in our watch list
@@ -795,7 +802,35 @@
         function clearError() {
             document.getElementById('errorMsg').style.display = 'none';
         }
+        
+        // Add debug log
+        function addDebugLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugLogs.push(`[${timestamp}] ${message}`);
+            if (debugLogs.length > 100) {
+                debugLogs.shift(); // Keep only last 100 logs
+            }
+            updateDebugDisplay();
+        }
+        
+        // Update debug display
+        function updateDebugDisplay() {
+            const debugEl = document.getElementById('debugLog');
+            if (debugEl) {
+                debugEl.style.display = 'block';
+                debugEl.innerHTML = debugLogs.join('<br>');
+                debugEl.scrollTop = debugEl.scrollHeight;
+            }
+        }
 
+        // Toggle debug log visibility
+        window.toggleDebugLog = function() {
+            const debugEl = document.getElementById('debugLog');
+            if (debugEl) {
+                debugEl.style.display = debugEl.style.display === 'none' ? 'block' : 'none';
+            }
+        };
+        
         // Make functions available globally
         window.kaspaWebSocketMonitor = {
             watchList,
