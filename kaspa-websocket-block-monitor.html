@@ -473,11 +473,25 @@
                             txId: tx.txId,
                             hash: tx.hash
                         });
-                        addDebugLog(`Block #${stats.blocksReceived} tx fields: id=${tx.id}, transactionId=${tx.transactionId}, txId=${tx.txId}, hash=${tx.hash}`);
+                        
+                        // Log the actual transaction object structure
+                        if (typeof tx === 'string') {
+                            addDebugLog(`Block #${stats.blocksReceived} tx is string: ${tx}`);
+                        } else if (typeof tx === 'object') {
+                            addDebugLog(`Block #${stats.blocksReceived} tx keys: ${Object.keys(tx || {}).join(', ')}`);
+                            addDebugLog(`Block #${stats.blocksReceived} tx content: ${JSON.stringify(tx).substring(0, 200)}...`);
+                        } else {
+                            addDebugLog(`Block #${stats.blocksReceived} tx type: ${typeof tx}`);
+                        }
                     }
                     
                     // Try multiple possible ID fields
-                    const txId = tx.id || tx.transactionId || tx.txId || tx.hash;
+                    let txId = tx.id || tx.transactionId || tx.txId || tx.hash;
+                    
+                    // If tx is a string, it might be the ID itself
+                    if (typeof tx === 'string') {
+                        txId = tx;
+                    }
                     
                     if (txId) {
                         // Normalize to lowercase for comparison
