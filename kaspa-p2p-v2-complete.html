@@ -1157,12 +1157,18 @@
                 // Handle password
                 const passwordSection = document.getElementById('passwordSection');
                 if (kaspaMetadata.auth?.passwordIncluded) {
-                    passwordSection.innerHTML = `
-                        <div class="metric-box">
-                            <p class="success">✅ パスワードは.kaspaファイルに含まれています</p>
-                        </div>
-                    `;
+                    // Keep the password input field but hide it
+                    document.getElementById('downloadPassword').style.display = 'none';
                     document.getElementById('downloadPassword').value = kaspaMetadata.auth.password;
+                    
+                    // Show info message
+                    const infoDiv = document.createElement('div');
+                    infoDiv.className = 'metric-box';
+                    infoDiv.innerHTML = '<p class="success">✅ パスワードは.kaspaファイルに含まれています</p>';
+                    passwordSection.insertBefore(infoDiv, passwordSection.firstChild);
+                } else {
+                    // Show password input
+                    document.getElementById('downloadPassword').style.display = 'block';
                 }
                 
                 document.getElementById('downloadSection').style.display = 'block';
