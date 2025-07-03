@@ -573,18 +573,18 @@
                 
                 // Verify functions
                 const requiredFunctions = ['RpcClient', 'Resolver', 'createTransactions', 
-                    'PrivateKey', 'addressFromScriptPublicKey', 'createAddress'];
+                    'PrivateKey', 'addressFromScriptPublicKey', 'Address'];
                 for (const func of requiredFunctions) {
                     if (typeof kaspa[func] !== 'function') {
                         throw new Error(`必要な関数が見つかりません: ${func}`);
                     }
                 }
+                log('すべての必要な関数を確認しました', 'success');
                 
                 // Initialize wallet
                 privateKey = new kaspa.PrivateKey(config.testPrivateKey);
                 const publicKey = privateKey.toPublicKey();
-                const scriptPublicKey = kaspa.createAddress(publicKey.toAddress(config.network).toString(), config.network).toScriptPublicKey();
-                address = kaspa.addressFromScriptPublicKey(scriptPublicKey, config.network);
+                address = publicKey.toAddress(config.network);
                 
                 log(`ウォレットアドレス: ${address.toString()}`, 'success');
                 
@@ -900,7 +900,7 @@
                                 index: utxo.index
                             }));
                             
-                            const { transactions, summary } = await kaspa.createTransactions({
+                            const result = await kaspa.createTransactions({
                                 entries: formattedUtxos,
                                 outputs: [{
                                     address: address.toString(),
@@ -913,11 +913,9 @@
                             });
                             
                             // Sign transaction
-                            const transaction = transactions[0];
-                            const pendingTx = kaspa.PendingTransaction.fromNetworkTransaction(transaction, [privateKey], config.network);
-                            
-                            const signedTx = await pendingTx.sign([privateKey]);
-                            txid = await pendingTx.submit(rpcClient);
+                            const transaction = result.transactions[0];
+                            transaction.sign([privateKey]);
+                            const txid = await transaction.submit(rpcClient);
                             
                             log(`Chunk ${i + 1} TxID: ${txid}`, 'success');
                             
