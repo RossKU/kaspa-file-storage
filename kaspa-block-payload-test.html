@@ -615,10 +615,19 @@
                 `;
                 container.appendChild(infoDiv);
                 
-                // Show raw structure for debugging
+                // Show raw structure for debugging (handle BigInt)
                 const rawDiv = document.createElement('div');
                 rawDiv.className = 'json-display';
-                rawDiv.textContent = JSON.stringify(block, null, 2);
+                try {
+                    rawDiv.textContent = JSON.stringify(block, (key, value) => {
+                        if (typeof value === 'bigint') {
+                            return value.toString();
+                        }
+                        return value;
+                    }, 2);
+                } catch (e) {
+                    rawDiv.textContent = `Error displaying raw data: ${e.message}`;
+                }
                 container.appendChild(rawDiv);
                 return;
             }
@@ -635,21 +644,31 @@
 
             container.appendChild(infoDiv);
 
-            // Show block structure
+            // Show block structure (handle BigInt)
             const structDiv = document.createElement('div');
             structDiv.className = 'json-display';
-            structDiv.textContent = JSON.stringify({
-                header: {
-                    hash: block.header.hash,
-                    blueScore: block.header.blueScore,
-                    timestamp: block.header.timestamp,
-                    version: block.header.version,
-                    allHeaderKeys: Object.keys(block.header)
-                },
-                transactionCount: block.transactions ? block.transactions.length : 0,
-                hasTransactions: !!block.transactions,
-                blockKeys: Object.keys(block)
-            }, null, 2);
+            try {
+                structDiv.textContent = JSON.stringify({
+                    header: {
+                        hash: block.header.hash,
+                        blueScore: block.header.blueScore,
+                        timestamp: block.header.timestamp,
+                        version: block.header.version,
+                        allHeaderKeys: Object.keys(block.header)
+                    },
+                    transactionCount: block.transactions ? block.transactions.length : 0,
+                    hasTransactions: !!block.transactions,
+                    blockKeys: Object.keys(block)
+                }, (key, value) => {
+                    // Handle BigInt serialization
+                    if (typeof value === 'bigint') {
+                        return value.toString();
+                    }
+                    return value;
+                }, 2);
+            } catch (e) {
+                structDiv.textContent = `Error displaying structure: ${e.message}`;
+            }
             container.appendChild(structDiv);
         }
 
