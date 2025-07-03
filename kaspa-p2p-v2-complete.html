@@ -1194,32 +1194,52 @@
                 
                 log(`${entries.length} UTXOs available for meta-tx`);
                 
-                const formattedUtxos = entries.map(utxo => ({
-                    address: address.toString(),
-                    outpoint: {
-                        transactionId: utxo.outpoint.transactionId,
-                        index: utxo.outpoint.index
-                    },
-                    scriptPublicKey: utxo.scriptPublicKey,
-                    amount: BigInt(utxo.amount),
-                    isCoinbase: utxo.isCoinbase || false,
-                    blockDaaScore: BigInt(utxo.blockDaaScore)
-                }));
-                
-                const result = await kaspa.createTransactions({
-                    entries: formattedUtxos,
-                    outputs: [{
-                        address: address.toString(),
-                        amount: 100000n
-                    }],
-                    changeAddress: address.toString(),
-                    priorityFee: 10000n,
-                    networkId: config.network,
-                    payload: metaPayload
+                const formattedUtxos = entries.map(utxo => {
+                    try {
+                        return {
+                            address: address.toString(),
+                            outpoint: {
+                                transactionId: utxo.outpoint.transactionId,
+                                index: utxo.outpoint.index
+                            },
+                            scriptPublicKey: utxo.scriptPublicKey,
+                            amount: BigInt(utxo.amount),
+                            isCoinbase: utxo.isCoinbase || false,
+                            blockDaaScore: BigInt(utxo.blockDaaScore)
+                        };
+                    } catch (e) {
+                        log(`UTXO formatting error: ${e.message}`, 'error');
+                        console.error('UTXO:', utxo);
+                        throw e;
+                    }
                 });
                 
+                log(`Creating meta-tx with ${formattedUtxos.length} UTXOs, payload size: ${metaPayload.length} bytes`);
+                
+                let result;
+                try {
+                    result = await kaspa.createTransactions({
+                        entries: formattedUtxos,
+                        outputs: [{
+                            address: address.toString(),
+                            amount: 100000n
+                        }],
+                        changeAddress: address.toString(),
+                        priorityFee: 10000n,
+                        networkId: config.network,
+                        payload: metaPayload
+                    });
+                } catch (e) {
+                    log(`createTransactions error: ${e.message || e}`, 'error');
+                    throw e;
+                }
+                
+                if (!result) {
+                    throw new Error('createTransactions returned null/undefined');
+                }
+                
                 if (!result.transactions || result.transactions.length === 0) {
-                    throw new Error('メタトランザクション生成失敗');
+                    throw new Error('メタトランザクション生成失敗 - no transactions in result');
                 }
                 
                 const pendingTx = result.transactions[0];
@@ -1257,7 +1277,14 @@
                 };
                 
             } catch (error) {
-                log(`メタトランザクション作成エラー: ${error.message}`, 'error');
+                log(`メタトランザクション作成エラー: ${error.message || error}`, 'error');
+                console.error('Meta-tx creation error:', error);
+                
+                // Try to log more details
+                if (error.stack) {
+                    console.error('Error stack:', error.stack);
+                }
+                
                 // Fallback to normal .kaspa generation
                 document.getElementById('generateKaspaSection').style.display = 'block';
             }
