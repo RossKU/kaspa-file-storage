@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa Transaction Index System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .container {
+            background: #2a2a2a;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            color: #4CAF50;
+            text-align: center;
+        }
+        .version {
+            text-align: center;
+            color: #888;
+            margin-top: -10px;
+            margin-bottom: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #333;
+            border-radius: 5px;
+            border: 1px solid #444;
+        }
+        .section h3 {
+            color: #4CAF50;
+            margin-top: 0;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            background: #333;
+            border: 1px solid #444;
+        }
+        .error {
+            background: #5a2a2a;
+            border-color: #f44336;
+            color: #ff9999;
+        }
+        .success {
+            background: #2a5a2a;
+            border-color: #4CAF50;
+            color: #99ff99;
+        }
+        .info {
+            background: #2a2a5a;
+            border-color: #2196F3;
+            color: #9999ff;
+        }
+        input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background: #333;
+            color: #fff;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        pre {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .tx-index-entry {
+            background: #3a3a3a;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #555;
+        }
+        .tx-index-entry strong {
+            color: #4CAF50;
+        }
+        .code {
+            font-family: monospace;
+            background: #1a1a1a;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Kaspa Transaction Index System</h1>
+        <div class="version">Version: 1.0.0 - Local Transaction Index</div>
+        
+        <div class="section">
+            <h3>📤 File Upload with Index</h3>
+            <p>ファイルをアップロードすると、トランザクションIDとブロック情報を自動的にローカルに保存します。</p>
+            <input type="file" id="fileInput" placeholder="Select file to upload">
+            <div id="fileInfo"></div>
+            <button onclick="initializeWASM()" id="initBtn">1. Initialize WASM</button>
+            <button onclick="uploadFileWithIndex()" id="uploadBtn" disabled>2. Upload & Index</button>
+        </div>
+        
+        <div class="section">
+            <h3>🔍 Transaction Search</h3>
+            <p>保存されたインデックスを使用してトランザクションを検索します。</p>
+            <input type="text" id="searchTxId" placeholder="Enter Transaction ID" value="0cd6b4b8cd551e59f5ed7180c989507d3df88dc9151121851d11a17b00cadfbf">
+            <button onclick="searchTransaction()" id="searchBtn">Search in Local Index</button>
+            <button onclick="retrieveFromBlockchain()" id="retrieveBtn" disabled>Retrieve from Blockchain</button>
+        </div>
+        
+        <div class="section">
+            <h3>📊 Local Transaction Index</h3>
+            <p>ローカルに保存されているトランザクションインデックス：</p>
+            <div id="indexList"></div>
+            <button onclick="refreshIndexList()">Refresh List</button>
+            <button onclick="exportIndex()">Export Index</button>
+            <button onclick="clearIndex()" style="background: #f44336;">Clear All Index</button>
+        </div>
+        
+        <div id="status" class="status"></div>
+        
+        <div id="results" style="display: none;">
+            <div class="section">
+                <h3>📄 Results</h3>
+                <pre id="resultData"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        let kaspa = null;
+        let rpcClient = null;
+        const APP_VERSION = '1.0.0';
+        
+        // Transaction Index Storage
+        const TX_INDEX_KEY = 'kaspa_tx_index';
+        
+        // Load transaction index from localStorage
+        function loadTransactionIndex() {
+            const stored = localStorage.getItem(TX_INDEX_KEY);
+            return stored ? JSON.parse(stored) : {};
+        }
+        
+        // Save transaction index to localStorage
+        function saveTransactionIndex(index) {
+            localStorage.setItem(TX_INDEX_KEY, JSON.stringify(index));
+        }
+        
+        // Add transaction to index
+        function addToIndex(txId, blockHash, blockHeight, timestamp, metadata = {}) {
+            const index = loadTransactionIndex();
+            index[txId] = {
+                blockHash,
+                blockHeight,
+                timestamp,
+                indexedAt: new Date().toISOString(),
+                ...metadata
+            };
+            saveTransactionIndex(index);
+            logMessage(`Transaction indexed: ${txId}`, 'success');
+            refreshIndexList();
+        }
+        
+        // Initialize WASM
+        window.initializeWASM = async function() {
+            try {
+                logMessage('Initializing WASM SDK...', 'info');
+                
+                kaspa = await import('./kaspa-core.js');
+                await kaspa.default('./kaspa-core_bg.wasm');
+                window.kaspa = kaspa;
+                
+                logMessage('WASM SDK initialized successfully!', 'success');
+                document.getElementById('uploadBtn').disabled = false;
+                document.getElementById('initBtn').disabled = true;
+                
+            } catch (error) {
+                logMessage(`WASM initialization failed: ${error.message}`, 'error');
+            }
+        };
+        
+        // Upload file and index transaction
+        window.uploadFileWithIndex = async function() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                logMessage('Please select a file', 'error');
+                return;
+            }
+            
+            if (file.size > 24 * 1024) {
+                logMessage(`File too large: ${(file.size / 1024).toFixed(2)}KB (max 24KB)`, 'error');
+                return;
+            }
+            
+            try {
+                logMessage('Preparing file upload...', 'info');
+                
+                // Read file
+                const fileData = await readFileAsArrayBuffer(file);
+                
+                // Create RPC client
+                rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                await rpcClient.connect();
+                logMessage(`Connected to: ${rpcClient.url}`, 'success');
+                
+                // Get current block info BEFORE transaction
+                const currentDaaScore = await rpcClient.getVirtualDaaScore();
+                logMessage(`Current DAA Score: ${currentDaaScore}`, 'info');
+                
+                // Prepare transaction
+                const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                const privateKey = new kaspa.PrivateKey(testKeyHex);
+                const keypair = privateKey.toKeypair();
+                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                // Get UTXOs
+                const utxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+                const utxoEntries = utxoResponse.entries || [];
+                
+                if (utxoEntries.length === 0) {
+                    throw new Error('No UTXOs available');
+                }
+                
+                // Format UTXOs
+                const formattedUtxos = utxoEntries.map(utxo => ({
+                    address: address.toString(),
+                    outpoint: {
+                        transactionId: utxo.outpoint.transactionId,
+                        index: utxo.outpoint.index
+                    },
+                    scriptPublicKey: utxo.scriptPublicKey,
+                    amount: BigInt(utxo.amount),
+                    isCoinbase: utxo.isCoinbase || false,
+                    blockDaaScore: BigInt(utxo.blockDaaScore)
+                }));
+                
+                // Create transaction with file payload
+                const transactionResult = await kaspa.createTransactions({
+                    entries: formattedUtxos,
+                    outputs: [{
+                        address: address.toString(),
+                        amount: 100000000n // 1 KAS
+                    }],
+                    changeAddress: address.toString(),
+                    priorityFee: 10000n,
+                    networkId: "testnet-10",
+                    payload: fileData
+                });
+                
+                const pendingTx = transactionResult.transactions[0];
+                
+                // Sign and submit
+                await pendingTx.sign([privateKey]);
+                const txId = await pendingTx.submit(rpcClient);
+                
+                logMessage(`Transaction submitted: ${txId}`, 'success');
+                
+                // Wait a moment for transaction to be included
+                logMessage('Waiting for transaction confirmation...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                // Try to get transaction from mempool first
+                let blockHash = null;
+                let blockHeight = null;
+                
+                try {
+                    const mempoolEntry = await rpcClient.getMempoolEntry(txId);
+                    if (mempoolEntry) {
+                        logMessage('Transaction found in mempool', 'info');
+                    }
+                } catch (e) {
+                    logMessage('Transaction not in mempool, checking blocks...', 'info');
+                }
+                
+                // Subscribe to new blocks to catch our transaction
+                // For now, we'll store with estimated block info
+                const estimatedBlockHeight = Math.floor(currentDaaScore / 1000); // Rough estimate
+                
+                // Store in index with metadata
+                addToIndex(txId, blockHash || 'pending', blockHeight || estimatedBlockHeight, Date.now(), {
+                    fileName: file.name,
+                    fileSize: file.size,
+                    fileType: file.type,
+                    payloadSize: fileData.length,
+                    uploadedAt: new Date().toISOString()
+                });
+                
+                logMessage(`File uploaded successfully! TxID: ${txId}`, 'success');
+                
+                // Copy to clipboard
+                if (navigator.clipboard) {
+                    await navigator.clipboard.writeText(txId);
+                    logMessage('Transaction ID copied to clipboard', 'info');
+                }
+                
+                await rpcClient.disconnect();
+                
+            } catch (error) {
+                logMessage(`Upload failed: ${error.message}`, 'error');
+                console.error('Upload error:', error);
+            }
+        };
+        
+        // Search transaction in local index
+        window.searchTransaction = function() {
+            const txId = document.getElementById('searchTxId').value.trim();
+            
+            if (!txId) {
+                logMessage('Please enter a transaction ID', 'error');
+                return;
+            }
+            
+            const index = loadTransactionIndex();
+            const txInfo = index[txId];
+            
+            if (txInfo) {
+                logMessage('Transaction found in local index!', 'success');
+                displayResults({
+                    transactionId: txId,
+                    ...txInfo
+                });
+                
+                // Enable blockchain retrieval
+                document.getElementById('retrieveBtn').disabled = false;
+                document.getElementById('retrieveBtn').setAttribute('data-txid', txId);
+                document.getElementById('retrieveBtn').setAttribute('data-blockhash', txInfo.blockHash);
+                
+            } else {
+                logMessage('Transaction not found in local index', 'error');
+                displayResults({
+                    error: 'Transaction not found in local index',
+                    suggestion: 'This transaction was not uploaded from this device or index was cleared'
+                });
+            }
+        };
+        
+        // Retrieve transaction from blockchain using block info
+        window.retrieveFromBlockchain = async function() {
+            const btn = document.getElementById('retrieveBtn');
+            const txId = btn.getAttribute('data-txid');
+            const blockHash = btn.getAttribute('data-blockhash');
+            
+            if (!txId) {
+                logMessage('No transaction selected', 'error');
+                return;
+            }
+            
+            try {
+                logMessage('Connecting to blockchain...', 'info');
+                
+                if (!rpcClient || !rpcClient.isConnected) {
+                    rpcClient = new kaspa.RpcClient({
+                        resolver: new kaspa.Resolver(),
+                        networkId: 'testnet-10'
+                    });
+                    await rpcClient.connect();
+                }
+                
+                logMessage(`Connected to: ${rpcClient.url}`, 'success');
+                
+                // If we have a valid block hash, try to get the block
+                if (blockHash && blockHash !== 'pending') {
+                    try {
+                        logMessage(`Retrieving block: ${blockHash}`, 'info');
+                        const blockResponse = await rpcClient.getBlock(blockHash, true);
+                        
+                        if (blockResponse && blockResponse.block) {
+                            const block = blockResponse.block;
+                            
+                            // Search for our transaction in the block
+                            const transaction = block.transactions.find(tx => {
+                                // Check if verboseData exists and has transactionId
+                                if (tx.verboseData && tx.verboseData.transactionId === txId) {
+                                    return true;
+                                }
+                                // Also check if we can compute the ID
+                                try {
+                                    const computedId = kaspa.Transaction.fromRaw(tx).id;
+                                    return computedId === txId;
+                                } catch (e) {
+                                    return false;
+                                }
+                            });
+                            
+                            if (transaction) {
+                                logMessage('Transaction found in block!', 'success');
+                                
+                                // Decode payload if exists
+                                if (transaction.payload) {
+                                    const payloadHex = transaction.payload;
+                                    const payloadBytes = new Uint8Array(payloadHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                    const payloadText = new TextDecoder().decode(payloadBytes);
+                                    
+                                    displayResults({
+                                        transactionId: txId,
+                                        blockHash: blockHash,
+                                        payload: transaction.payload,
+                                        payloadDecoded: payloadText,
+                                        payloadSize: payloadBytes.length,
+                                        transaction: transaction
+                                    });
+                                }
+                            } else {
+                                logMessage('Transaction not found in block', 'error');
+                            }
+                        }
+                    } catch (blockError) {
+                        logMessage(`Failed to retrieve block: ${blockError.message}`, 'error');
+                    }
+                } else {
+                    // Try mempool
+                    try {
+                        const mempoolEntry = await rpcClient.getMempoolEntry(txId);
+                        if (mempoolEntry && mempoolEntry.transaction) {
+                            logMessage('Transaction found in mempool!', 'success');
+                            displayResults({
+                                transactionId: txId,
+                                status: 'unconfirmed',
+                                transaction: mempoolEntry.transaction
+                            });
+                        }
+                    } catch (e) {
+                        logMessage('Transaction not found in mempool or blockchain', 'error');
+                    }
+                }
+                
+            } catch (error) {
+                logMessage(`Blockchain retrieval failed: ${error.message}`, 'error');
+                console.error('Retrieval error:', error);
+            }
+        };
+        
+        // Refresh index list display
+        window.refreshIndexList = function() {
+            const index = loadTransactionIndex();
+            const listDiv = document.getElementById('indexList');
+            
+            const entries = Object.entries(index);
+            
+            if (entries.length === 0) {
+                listDiv.innerHTML = '<p style="color: #888;">No transactions indexed yet</p>';
+                return;
+            }
+            
+            listDiv.innerHTML = entries.map(([txId, info]) => `
+                <div class="tx-index-entry">
+                    <strong>TxID:</strong> <span class="code">${txId.substring(0, 20)}...${txId.substring(txId.length - 20)}</span><br>
+                    <strong>Block Hash:</strong> <span class="code">${info.blockHash === 'pending' ? 'pending' : info.blockHash.substring(0, 20) + '...'}</span><br>
+                    <strong>Indexed:</strong> ${new Date(info.indexedAt).toLocaleString()}<br>
+                    ${info.fileName ? `<strong>File:</strong> ${info.fileName} (${(info.fileSize / 1024).toFixed(2)}KB)<br>` : ''}
+                    <button onclick="document.getElementById('searchTxId').value='${txId}'; searchTransaction();">Load</button>
+                </div>
+            `).join('');
+        };
+        
+        // Export index as JSON
+        window.exportIndex = function() {
+            const index = loadTransactionIndex();
+            const dataStr = JSON.stringify(index, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(dataBlob);
+            link.download = `kaspa-tx-index-${Date.now()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            logMessage('Index exported successfully', 'success');
+        };
+        
+        // Clear all index
+        window.clearIndex = function() {
+            if (confirm('Are you sure you want to clear all transaction index? This cannot be undone.')) {
+                localStorage.removeItem(TX_INDEX_KEY);
+                refreshIndexList();
+                logMessage('Transaction index cleared', 'success');
+            }
+        };
+        
+        // Helper functions
+        async function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(new Uint8Array(e.target.result));
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        function logMessage(message, type = '') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = 'status';
+            if (type) {
+                statusEl.classList.add(type);
+            }
+            console.log(`[${APP_VERSION}] ${message}`);
+        }
+        
+        function displayResults(data) {
+            document.getElementById('results').style.display = 'block';
+            document.getElementById('resultData').textContent = JSON.stringify(data, null, 2);
+        }
+        
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const fileInfo = `Selected: ${file.name} (${(file.size / 1024).toFixed(2)}KB)`;
+                document.getElementById('fileInfo').textContent = fileInfo;
+            }
+        });
+        
+        // Initialize on load
+        window.addEventListener('load', () => {
+            refreshIndexList();
+            logMessage('Transaction Index System ready', 'info');
+        });
+    </script>
+</body>
+</html>
