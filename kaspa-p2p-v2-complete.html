@@ -915,9 +915,16 @@
                             });
                             
                             // Sign and submit transaction
-                            const transaction = result.transactions[0];
-                            const pendingTx = new kaspa.PendingTransaction(transaction, [privateKey], config.network);
+                            if (!result.transactions || result.transactions.length === 0) {
+                                throw new Error('No transactions generated');
+                            }
+                            
+                            const pendingTx = result.transactions[0];
+                            
+                            // Sign the transaction
                             await pendingTx.sign([privateKey]);
+                            
+                            // Submit to network
                             txid = await pendingTx.submit(rpcClient);
                             
                             log(`Chunk ${i + 1} TxID: ${txid}`, 'success');
