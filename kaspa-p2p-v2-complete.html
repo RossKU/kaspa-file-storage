@@ -1406,7 +1406,18 @@
                         // First, check if there's a direct payload field
                         if (data.payload) {
                             log(`Found direct payload field: ${data.payload.substring(0, 50)}...`, 'info');
-                            payload = new Uint8Array(data.payload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                            // The payload is already a hex string, convert it to bytes
+                            const hexString = data.payload;
+                            payload = new Uint8Array(hexString.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                            
+                            // Debug: Check if the payload looks like double-encoded hex
+                            const firstBytes = Array.from(payload.slice(0, 20)).map(b => String.fromCharCode(b)).join('');
+                            if (/^[0-9a-fA-F]+$/.test(firstBytes)) {
+                                log('Warning: Payload appears to be double-encoded hex, decoding again...', 'warning');
+                                // It's double-encoded, decode it again
+                                const actualHex = new TextDecoder().decode(payload);
+                                payload = new Uint8Array(actualHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                            }
                         } else if (data.outputs && data.outputs.length > 0) {
                             // Extract payload from transaction outputs
                             log(`Checking ${data.outputs.length} outputs for payload...`, 'info');
