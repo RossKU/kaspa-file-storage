@@ -912,10 +912,11 @@
                                 payload: payloadBytes
                             });
                             
-                            // Sign transaction
+                            // Sign and submit transaction
                             const transaction = result.transactions[0];
-                            transaction.sign([privateKey]);
-                            const txid = await transaction.submit(rpcClient);
+                            const pendingTx = new kaspa.PendingTransaction(transaction, [privateKey], config.network);
+                            await pendingTx.sign([privateKey]);
+                            txid = await pendingTx.submit(rpcClient);
                             
                             log(`Chunk ${i + 1} TxID: ${txid}`, 'success');
                             
@@ -963,7 +964,8 @@
                             
                         } catch (error) {
                             retries++;
-                            log(`Chunk ${i + 1} エラー (試行 ${retries}/${config.retryCount}): ${error.message}`, 'error');
+                            log(`Chunk ${i + 1} エラー (試行 ${retries}/${config.retryCount}): ${error.message || error}`, 'error');
+                            console.error('Full error:', error);
                             if (retries >= config.retryCount) {
                                 document.getElementById(`chunk-status-${i}`).innerHTML = '<span class="error">❌ 失敗</span>';
                                 throw error;
