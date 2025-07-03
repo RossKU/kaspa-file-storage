@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa Block Payload Test - BlockIDからのデータ取得検証</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #49c8ff;
+        }
+
+        .section {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .section h2 {
+            color: #49c8ff;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .test-case {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .control-panel {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-family: monospace;
+            min-width: 300px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #49c8ff;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #3ab5ec;
+        }
+
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+
+        .status.success {
+            background: #1a4d1a;
+            border: 1px solid #44ff44;
+            color: #88ff88;
+        }
+
+        .status.error {
+            background: #4d1a1a;
+            border: 1px solid #ff4444;
+            color: #ff8888;
+        }
+
+        .status.info {
+            background: #1a3d4d;
+            border: 1px solid #4488ff;
+            color: #88bbff;
+        }
+
+        .result-section {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+        }
+
+        .json-display {
+            background: #0a0a0a;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 0.85em;
+            white-space: pre;
+        }
+
+        .payload-display {
+            background: #0a0a0a;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            background: #222;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+
+        .log-entry.error {
+            background: #3d1a1a;
+            color: #ff8888;
+        }
+
+        .log-entry.success {
+            background: #1a3d1a;
+            color: #88ff88;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Kaspa Block Payload Test</h1>
+        <p style="text-align: center; margin-bottom: 20px;">BlockIDからトランザクションペイロードを取得する検証ツール</p>
+
+        <!-- Test Cases -->
+        <div class="section">
+            <h2>📋 テストケース</h2>
+            <div class="test-case">
+                <strong>実際のデータ（WebSocketモニターで取得）:</strong><br>
+                TxID: 19fb27542f4fc27274cc928b68ce1630f23a4753c9e71db0ff3e3e5ebbc655e5<br>
+                BlockID: 95a5e4101246828842097738c9e09c1814c155c966ddcbb6485c01f819d32460<br>
+                Network: testnet-10
+            </div>
+            <button onclick="loadTestCase()">テストケースを読み込む</button>
+        </div>
+
+        <!-- Manual Input -->
+        <div class="section">
+            <h2>🔧 手動入力</h2>
+            <div class="control-panel">
+                <select id="networkSelect">
+                    <option value="testnet-10">Testnet-10</option>
+                    <option value="mainnet">Mainnet</option>
+                </select>
+                <input type="text" id="blockIdInput" placeholder="BlockID (64文字の16進数)">
+                <input type="text" id="txIdInput" placeholder="TxID (64文字の16進数) - オプション">
+                <button onclick="testBlockPayload()">テスト実行</button>
+            </div>
+            <div id="statusMsg"></div>
+        </div>
+
+        <!-- Test Steps -->
+        <div class="section">
+            <h2>📊 テストステップ</h2>
+            <div id="testSteps" class="result-section">
+                <div class="log-entry">テスト待機中...</div>
+            </div>
+        </div>
+
+        <!-- Block Data -->
+        <div class="section">
+            <h2>📦 ブロックデータ</h2>
+            <div id="blockData" class="result-section">
+                <div style="color: #666;">ブロックデータ未取得</div>
+            </div>
+        </div>
+
+        <!-- Transaction Analysis -->
+        <div class="section">
+            <h2>💎 トランザクション分析</h2>
+            <div id="txAnalysis" class="result-section">
+                <div style="color: #666;">トランザクション未分析</div>
+            </div>
+        </div>
+
+        <!-- Payload Extraction -->
+        <div class="section">
+            <h2>📄 ペイロード抽出結果</h2>
+            <div id="payloadResult" class="result-section">
+                <div style="color: #666;">ペイロード未抽出</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Global variables
+        let kaspa = null;
+        let rpcClient = null;
+        let testResults = {
+            blockRetrieval: false,
+            txFound: false,
+            payloadExtracted: false,
+            dataDecoded: false
+        };
+
+        // Initialize
+        window.addEventListener('load', async () => {
+            try {
+                // Import Kaspa WASM SDK
+                kaspa = await import('./kaspa-core.js');
+                logStep('✅ Kaspa module imported', 'success');
+                
+                // Initialize WASM binary
+                await kaspa.default('./kaspa-core_bg.wasm');
+                logStep('✅ WASM binary initialized', 'success');
+                
+                // Make kaspa globally available
+                window.kaspa = kaspa;
+                
+                showStatus('✅ Kaspa WASM SDK準備完了', 'success');
+            } catch (error) {
+                logStep('❌ WASM初期化エラー: ' + error.message, 'error');
+                showStatus('WASM SDK初期化エラー: ' + error.message, 'error');
+            }
+        });
+
+        // Load test case
+        window.loadTestCase = function() {
+            document.getElementById('blockIdInput').value = '95a5e4101246828842097738c9e09c1814c155c966ddcbb6485c01f819d32460';
+            document.getElementById('txIdInput').value = '19fb27542f4fc27274cc928b68ce1630f23a4753c9e71db0ff3e3e5ebbc655e5';
+            document.getElementById('networkSelect').value = 'testnet-10';
+            showStatus('テストケースを読み込みました', 'info');
+        };
+
+        // Main test function
+        window.testBlockPayload = async function() {
+            const network = document.getElementById('networkSelect').value;
+            const blockId = document.getElementById('blockIdInput').value.trim();
+            const targetTxId = document.getElementById('txIdInput').value.trim();
+
+            // Validate input
+            if (!blockId || !/^[0-9a-f]{64}$/i.test(blockId)) {
+                showStatus('無効なBlockID形式です（64文字の16進数）', 'error');
+                return;
+            }
+
+            // Clear previous results
+            clearResults();
+            logStep('=== テスト開始 ===', 'info');
+            logStep(`Network: ${network}`, 'info');
+            logStep(`BlockID: ${blockId}`, 'info');
+            if (targetTxId) {
+                logStep(`Target TxID: ${targetTxId}`, 'info');
+            }
+
+            try {
+                // Step 1: Connect to RPC
+                await connectToRPC(network);
+
+                // Step 2: Get block data
+                const block = await getBlockData(blockId);
+
+                // Step 3: Analyze transactions
+                const transactions = await analyzeTransactions(block, targetTxId);
+
+                // Step 4: Extract payload
+                await extractPayloads(transactions);
+
+                // Summary
+                showTestSummary();
+
+            } catch (error) {
+                logStep('❌ テストエラー: ' + error.message, 'error');
+                showStatus('テスト失敗: ' + error.message, 'error');
+            }
+        };
+
+        // Connect to RPC
+        async function connectToRPC(network) {
+            logStep('📡 RPC接続開始...', 'info');
+            
+            try {
+                // Create RPC client
+                rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: network
+                });
+
+                // Connect
+                await rpcClient.connect();
+                logStep(`✅ RPC接続成功: ${rpcClient.url}`, 'success');
+                
+            } catch (error) {
+                throw new Error('RPC接続失敗: ' + error.message);
+            }
+        }
+
+        // Get block data
+        async function getBlockData(blockId) {
+            logStep('📦 ブロックデータ取得中...', 'info');
+            
+            try {
+                // Get block with verbose data
+                const block = await rpcClient.getBlock(blockId, true);
+                
+                if (!block) {
+                    throw new Error('ブロックが見つかりません');
+                }
+
+                testResults.blockRetrieval = true;
+                logStep('✅ ブロックデータ取得成功', 'success');
+                
+                // Display block info
+                displayBlockInfo(block);
+                
+                return block;
+                
+            } catch (error) {
+                throw new Error('ブロック取得失敗: ' + error.message);
+            }
+        }
+
+        // Analyze transactions
+        async function analyzeTransactions(block, targetTxId) {
+            logStep('💎 トランザクション分析中...', 'info');
+            
+            const transactions = [];
+            const txContainer = document.getElementById('txAnalysis');
+            txContainer.innerHTML = '';
+
+            if (!block.transactions || block.transactions.length === 0) {
+                logStep('⚠️ ブロックにトランザクションがありません', 'error');
+                return transactions;
+            }
+
+            logStep(`📊 トランザクション数: ${block.transactions.length}`, 'info');
+
+            // Analyze each transaction
+            for (let i = 0; i < block.transactions.length; i++) {
+                const tx = block.transactions[i];
+                
+                // Get transaction ID
+                let txId = null;
+                if (typeof tx === 'string') {
+                    txId = tx;
+                } else if (tx.verboseData && tx.verboseData.transactionId) {
+                    txId = tx.verboseData.transactionId;
+                } else if (tx.id) {
+                    txId = tx.id;
+                }
+
+                // Check if this is the target transaction
+                const isTarget = targetTxId && txId && txId.toLowerCase() === targetTxId.toLowerCase();
+                
+                const txInfo = {
+                    index: i,
+                    txId: txId,
+                    isTarget: isTarget,
+                    hasPayload: false,
+                    payloadSize: 0,
+                    payload: null
+                };
+
+                // Check for payload
+                if (tx.payload && tx.payload.length > 0) {
+                    txInfo.hasPayload = true;
+                    txInfo.payloadSize = tx.payload.length;
+                    txInfo.payload = tx.payload;
+                }
+
+                transactions.push(txInfo);
+
+                // Display transaction info
+                displayTransactionInfo(txInfo);
+
+                if (isTarget) {
+                    testResults.txFound = true;
+                    logStep(`✅ ターゲットトランザクション発見: ${txId}`, 'success');
+                }
+            }
+
+            return transactions;
+        }
+
+        // Extract payloads
+        async function extractPayloads(transactions) {
+            logStep('📄 ペイロード抽出中...', 'info');
+            
+            const payloadContainer = document.getElementById('payloadResult');
+            payloadContainer.innerHTML = '';
+
+            const payloadTxs = transactions.filter(tx => tx.hasPayload);
+            
+            if (payloadTxs.length === 0) {
+                logStep('⚠️ ペイロードを持つトランザクションがありません', 'error');
+                return;
+            }
+
+            for (const tx of payloadTxs) {
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'result-item';
+                
+                resultDiv.innerHTML = `
+                    <strong>Transaction #${tx.index}</strong> ${tx.isTarget ? '🎯 (ターゲット)' : ''}<br>
+                    <small>TxID: ${tx.txId || 'N/A'}</small><br>
+                    <small>Payload Size: ${tx.payloadSize} bytes</small>
+                `;
+
+                // Display raw payload
+                const payloadDiv = document.createElement('div');
+                payloadDiv.className = 'payload-display';
+                payloadDiv.innerHTML = `<strong>Raw Payload (Hex):</strong><br>${tx.payload}`;
+                resultDiv.appendChild(payloadDiv);
+
+                // Try to decode payload
+                try {
+                    // Convert hex to bytes
+                    const bytes = hexToBytes(tx.payload);
+                    
+                    // Try Base64 decode
+                    const base64 = bytesToBase64(bytes);
+                    const decodedDiv = document.createElement('div');
+                    decodedDiv.className = 'payload-display';
+                    decodedDiv.innerHTML = `<strong>Base64:</strong><br>${base64}`;
+                    resultDiv.appendChild(decodedDiv);
+
+                    // Try UTF-8 decode
+                    try {
+                        const text = new TextDecoder().decode(bytes);
+                        if (isPrintable(text)) {
+                            const textDiv = document.createElement('div');
+                            textDiv.className = 'payload-display';
+                            textDiv.innerHTML = `<strong>Text:</strong><br>${text}`;
+                            resultDiv.appendChild(textDiv);
+                        }
+                    } catch (e) {
+                        // Not valid UTF-8
+                    }
+
+                    testResults.payloadExtracted = true;
+                    if (tx.isTarget) {
+                        testResults.dataDecoded = true;
+                        logStep('✅ ターゲットペイロード抽出成功', 'success');
+                    }
+
+                } catch (error) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'status error';
+                    errorDiv.textContent = 'デコードエラー: ' + error.message;
+                    resultDiv.appendChild(errorDiv);
+                }
+
+                payloadContainer.appendChild(resultDiv);
+            }
+        }
+
+        // Display block info
+        function displayBlockInfo(block) {
+            const container = document.getElementById('blockData');
+            container.innerHTML = '';
+
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'result-item';
+            
+            // Basic block info
+            infoDiv.innerHTML = `
+                <strong>Block Information:</strong><br>
+                Hash: ${block.header.hash}<br>
+                Height: ${block.header.blueScore || 'N/A'}<br>
+                Timestamp: ${new Date(parseInt(block.header.timestamp)).toLocaleString()}<br>
+                Transaction Count: ${block.transactions ? block.transactions.length : 0}<br>
+                Version: ${block.header.version}<br>
+            `;
+
+            container.appendChild(infoDiv);
+
+            // Show block structure
+            const structDiv = document.createElement('div');
+            structDiv.className = 'json-display';
+            structDiv.textContent = JSON.stringify({
+                header: {
+                    hash: block.header.hash,
+                    blueScore: block.header.blueScore,
+                    timestamp: block.header.timestamp,
+                    version: block.header.version
+                },
+                transactionCount: block.transactions ? block.transactions.length : 0
+            }, null, 2);
+            container.appendChild(structDiv);
+        }
+
+        // Display transaction info
+        function displayTransactionInfo(txInfo) {
+            const container = document.getElementById('txAnalysis');
+            
+            const txDiv = document.createElement('div');
+            txDiv.className = 'result-item';
+            if (txInfo.isTarget) {
+                txDiv.style.border = '1px solid #44ff44';
+            }
+
+            txDiv.innerHTML = `
+                <strong>Transaction #${txInfo.index}</strong> ${txInfo.isTarget ? '🎯' : ''}<br>
+                TxID: ${txInfo.txId || 'N/A'}<br>
+                Has Payload: ${txInfo.hasPayload ? '✅' : '❌'}<br>
+                ${txInfo.hasPayload ? `Payload Size: ${txInfo.payloadSize} bytes` : ''}
+            `;
+
+            container.appendChild(txDiv);
+        }
+
+        // Show test summary
+        function showTestSummary() {
+            const allPassed = Object.values(testResults).every(v => v);
+            
+            if (allPassed) {
+                logStep('🎉 すべてのテストに成功しました！', 'success');
+                showStatus('✅ BlockIDからのペイロード取得に成功しました', 'success');
+            } else {
+                const failed = Object.entries(testResults)
+                    .filter(([k, v]) => !v)
+                    .map(([k, v]) => k);
+                logStep(`⚠️ 一部のテストが失敗: ${failed.join(', ')}`, 'error');
+                showStatus('一部のテストが失敗しました', 'error');
+            }
+        }
+
+        // Utility functions
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes;
+        }
+
+        function bytesToBase64(bytes) {
+            const binary = String.fromCharCode.apply(null, bytes);
+            return btoa(binary);
+        }
+
+        function isPrintable(str) {
+            return /^[\x20-\x7E\s]*$/.test(str);
+        }
+
+        function logStep(message, type = 'info') {
+            const container = document.getElementById('testSteps');
+            if (container.children.length === 1 && 
+                container.children[0].textContent === 'テスト待機中...') {
+                container.innerHTML = '';
+            }
+
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('statusMsg');
+            statusEl.className = `status ${type}`;
+            statusEl.textContent = message;
+            statusEl.style.display = 'block';
+        }
+
+        function clearResults() {
+            document.getElementById('testSteps').innerHTML = '';
+            document.getElementById('blockData').innerHTML = '<div style="color: #666;">ブロックデータ未取得</div>';
+            document.getElementById('txAnalysis').innerHTML = '<div style="color: #666;">トランザクション未分析</div>';
+            document.getElementById('payloadResult').innerHTML = '<div style="color: #666;">ペイロード未抽出</div>';
+            
+            // Reset test results
+            testResults = {
+                blockRetrieval: false,
+                txFound: false,
+                payloadExtracted: false,
+                dataDecoded: false
+            };
+        }
+
+        // Disconnect on page unload
+        window.addEventListener('beforeunload', async () => {
+            if (rpcClient) {
+                try {
+                    await rpcClient.disconnect();
+                } catch (e) {
+                    // Ignore
+                }
+            }
+        });
+    </script>
+</body>
+</html>
