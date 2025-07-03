@@ -319,6 +319,7 @@
         let isConnected = false;
         let watchList = new Map(); // TxID -> metadata
         let mappings = new Map(); // TxID -> BlockID
+        let recentTransactions = new Map(); // TxID -> {blockId, timestamp} - 1分間のトランザクション履歴
         let stats = {
             blocksReceived: 0,
             txProcessed: 0,
@@ -444,6 +445,14 @@
             stats.blocksReceived++;
             stats.lastBlockTime = Date.now();
             
+            // 古いトランザクション履歴を削除（1分以上前のもの）
+            const oneMinuteAgo = Date.now() - 60000;
+            for (const [txId, data] of recentTransactions) {
+                if (data.timestamp < oneMinuteAgo) {
+                    recentTransactions.delete(txId);
+                }
+            }
+            
             // Log block info
             const blockEntry = document.createElement('div');
             blockEntry.className = 'block-entry';
@@ -506,6 +515,12 @@
                     if (txId) {
                         // Normalize to lowercase for comparison
                         const normalizedTxId = txId.toLowerCase();
+                        
+                        // 現在のトランザクションを履歴に追加
+                        recentTransactions.set(normalizedTxId, {
+                            blockId: block.header.hash,
+                            timestamp: Date.now()
+                        });
                         
                         // Debug: Log comparison when watch list has items
                         if (watchList.size > 0) {
@@ -604,6 +619,23 @@
                 found: false,
                 blockId: null
             });
+            
+            // 過去1分間の履歴をチェック
+            if (recentTransactions.has(txId)) {
+                const txData = recentTransactions.get(txId);
+                const timeDiff = Date.now() - txData.timestamp;
+                addDebugLog(`✅ 履歴で発見！ TxID: ${txId}, ${(timeDiff/1000).toFixed(1)}秒前のブロック`);
+                
+                // マッピングを保存
+                mappings.set(txId, txData.blockId);
+                stats.matchesFound++;
+                
+                // UIを更新
+                updateWatchListItem(txId, txData.blockId);
+                updateMappingsList();
+                
+                showError(`✅ 履歴から発見！${(timeDiff/1000).toFixed(0)}秒前のトランザクションです`, 'success');
+            }
             
             input.value = '';
             updateWatchList();

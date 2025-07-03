@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kaspa Transaction Test - Auto Initialize</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .result { background: #2a2a2a; padding: 15px; margin: 10px 0; border-radius: 8px; overflow-x: auto; }
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .warning { color: #fbbf24; }
+        .info { color: #60a5fa; }
+        button { 
+            padding: 15px 25px; 
+            margin: 10px; 
+            font-size: 16px; 
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .danger { background: #dc2626; color: white; }
+        .danger:hover:not(:disabled) { background: #b91c1c; }
+        .safe { background: #10b981; color: white; }
+        .safe:hover:not(:disabled) { background: #059669; }
+        .primary { background: #3b82f6; color: white; }
+        .primary:hover:not(:disabled) { background: #2563eb; }
+        .status-bar {
+            background: #374151;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #6b7280;
+        }
+        .status-dot.active { background: #10b981; }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #374151;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .version {
+            background: #8b5cf6;
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Kaspa Transaction Test - Auto Initialize</h1>
+        <div class="version">v1.0.0 | Auto WASM Init | 2025-07-03</div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-dot" id="wasmStatus"></div>
+                <span>WASM SDK</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="connectionStatus"></div>
+                <span>RPC Connection</span>
+            </div>
+            <div class="status-item">
+                <div class="status-dot" id="balanceStatus"></div>
+                <span>Balance</span>
+            </div>
+            <div class="status-item" id="initProgress">
+                <div class="loading"></div>
+                <span>Initializing...</span>
+            </div>
+        </div>
+        
+        <div style="background: #fbbf24; color: #000; padding: 15px; margin: 10px 0; border-radius: 6px;">
+            <h3>⚠️ REAL BLOCKCHAIN TESTING</h3>
+            <p>This tool performs actual Kaspa testnet transactions. Real funds will be spent.</p>
+            <p><strong>Network:</strong> Kaspa Testnet-10</p>
+            <p><strong>Current Balance:</strong> <span id="currentBalance">Loading...</span></p>
+        </div>
+        
+        <div>
+            <button class="primary" onclick="testConnection()" id="testBtn" disabled>Test RPC Connection</button>
+            <button class="safe" onclick="sendSmallTransaction()" id="smallTxBtn" disabled>Send 1 KAS (Safe Test)</button>
+            <button class="danger" onclick="executeRealTransaction()" id="realTxBtn" disabled>🚨 Send 5 KAS (Real Transaction)</button>
+        </div>
+        
+        <div class="result" id="testOutput">
+            <div class="info">⏳ Initializing WASM SDK automatically...</div>
+        </div>
+    </div>
+
+    <script type="module">
+        let kaspa = null;
+        let testResults = [];
+        let isInitialized = false;
+        let privateKey = null;
+        let address = null;
+        
+        function logTest(testName, result, details = '', type = 'info') {
+            const status = result ? '✅' : '❌';
+            const message = `${status} ${testName}: ${result ? 'PASS' : 'FAIL'} ${details}`;
+            testResults.push(`<div class="${type}">${message}</div>`);
+            console.log(message);
+            updateDisplay();
+        }
+        
+        function updateDisplay() {
+            document.getElementById('testOutput').innerHTML = testResults.join('');
+        }
+        
+        function updateStatus(id, active) {
+            const dot = document.getElementById(id);
+            if (dot) {
+                if (active) {
+                    dot.classList.add('active');
+                } else {
+                    dot.classList.remove('active');
+                }
+            }
+        }
+        
+        function setButtonsEnabled(enabled) {
+            document.getElementById('testBtn').disabled = !enabled;
+            document.getElementById('smallTxBtn').disabled = !enabled;
+            document.getElementById('realTxBtn').disabled = !enabled;
+        }
+        
+        // Auto-initialize on page load
+        async function autoInitialize() {
+            testResults = [];
+            logTest('Starting automatic initialization', true, '', 'info');
+            
+            try {
+                // Initialize WASM
+                logTest('Loading Kaspa WASM SDK', true, '', 'info');
+                kaspa = await import('./kaspa-core.js');
+                
+                // Initialize WASM binary
+                await kaspa.default('./kaspa-core_bg.wasm');
+                
+                logTest('WASM module imported', !!kaspa, '', 'success');
+                updateStatus('wasmStatus', true);
+                
+                if (!kaspa.PrivateKey || !kaspa.RpcClient || !kaspa.createTransactions) {
+                    throw new Error('Essential SDK functions not available');
+                }
+                
+                // Setup test wallet
+                const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                privateKey = new kaspa.PrivateKey(testKeyHex);
+                const keypair = privateKey.toKeypair();
+                address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                logTest('Test wallet initialized', true, address.toString().substring(0, 30) + '...', 'success');
+                
+                // Test connection and get balance
+                await testConnectionInternal();
+                
+                isInitialized = true;
+                document.getElementById('initProgress').innerHTML = '<span style="color: #10b981;">✅ Ready</span>';
+                setButtonsEnabled(true);
+                
+                logTest('=== AUTO-INITIALIZATION COMPLETE ===', true, 'All systems ready', 'success');
+                
+            } catch (error) {
+                logTest('Auto-initialization failed', false, error.message, 'error');
+                document.getElementById('initProgress').innerHTML = '<span style="color: #f87171;">❌ Failed</span>';
+                isInitialized = false;
+            }
+        }
+        
+        // Internal connection test
+        async function testConnectionInternal() {
+            try {
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                await rpcClient.connect();
+                updateStatus('connectionStatus', true);
+                
+                if (rpcClient.isConnected) {
+                    const serverInfo = await rpcClient.getServerInfo();
+                    logTest('RPC connected', true, `${rpcClient.url}, Synced: ${serverInfo.isSynced}`, 'success');
+                    
+                    // Get balance
+                    const balanceInfo = await rpcClient.getBalanceByAddress(address.toString());
+                    const balance = BigInt(balanceInfo.balance || 0);
+                    const balanceKAS = Number(balance) / 100000000;
+                    
+                    document.getElementById('currentBalance').textContent = `${balanceKAS.toFixed(2)} KAS`;
+                    updateStatus('balanceStatus', balance > 0n);
+                    
+                    logTest('Current balance', true, `${balanceKAS.toFixed(2)} KAS`, balance > 0n ? 'success' : 'warning');
+                    
+                    // Check UTXOs
+                    const utxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+                    const utxos = utxoResponse.entries || [];
+                    logTest('Available UTXOs', true, `${utxos.length} UTXOs found`, 'info');
+                    
+                    await rpcClient.disconnect();
+                }
+                
+            } catch (error) {
+                updateStatus('connectionStatus', false);
+                throw error;
+            }
+        }
+        
+        // Public connection test
+        window.testConnection = async function() {
+            if (!isInitialized) {
+                logTest('Connection test skipped', false, 'Not initialized', 'error');
+                return;
+            }
+            
+            testResults = [];
+            logTest('=== RPC CONNECTION TEST ===', true, '', 'info');
+            
+            try {
+                await testConnectionInternal();
+                logTest('=== CONNECTION TEST PASSED ===', true, 'Ready for transactions', 'success');
+            } catch (error) {
+                logTest('Connection test failed', false, error.message, 'error');
+            }
+        };
+        
+        // Send small transaction (1 KAS)
+        window.sendSmallTransaction = async function() {
+            if (!isInitialized) {
+                logTest('Transaction skipped', false, 'Not initialized', 'error');
+                return;
+            }
+            
+            testResults = [];
+            logTest('=== SMALL TRANSACTION TEST (1 KAS) ===', true, '', 'info');
+            
+            try {
+                await executeTransaction(100000000n, 'SMALL-TEST'); // 1 KAS
+            } catch (error) {
+                logTest('Small transaction failed', false, error.message, 'error');
+            }
+        };
+        
+        // Execute real transaction (5 KAS)
+        window.executeRealTransaction = async function() {
+            if (!isInitialized) {
+                logTest('Real transaction skipped', false, 'Not initialized', 'error');
+                return;
+            }
+            
+            const confirmed = confirm(
+                '🚨 REAL BLOCKCHAIN TRANSACTION 🚨\n\n' +
+                'This will send 5 KAS to yourself on Kaspa testnet.\n' +
+                'Real testnet funds will be spent for transaction fees.\n\n' +
+                'Amount to send: 5 KAS\n' +
+                'Expected fee: ~0.0001 KAS\n\n' +
+                'Continue with REAL transaction?'
+            );
+            
+            if (!confirmed) {
+                logTest('Real transaction cancelled', false, 'User cancelled', 'warning');
+                return;
+            }
+            
+            testResults = [];
+            logTest('=== REAL BLOCKCHAIN TRANSACTION (5 KAS) ===', true, '🚨 SPENDING ACTUAL FUNDS', 'warning');
+            
+            try {
+                await executeTransaction(500000000n, 'REAL-TX'); // 5 KAS
+            } catch (error) {
+                logTest('Real transaction failed', false, error.message, 'error');
+            }
+        };
+        
+        // Shared transaction execution
+        async function executeTransaction(amount, payloadPrefix) {
+            const rpcClient = new kaspa.RpcClient({
+                resolver: new kaspa.Resolver(),
+                networkId: 'testnet-10'
+            });
+            
+            await rpcClient.connect();
+            logTest('RPC connected', true, rpcClient.url, 'info');
+            
+            // Get UTXOs
+            const utxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+            const utxoEntries = utxoResponse.entries || [];
+            logTest('UTXOs retrieved', true, `${utxoEntries.length} UTXOs`, 'info');
+            
+            // Transaction settings
+            const priorityFee = 10000n; // 0.0001 KAS
+            
+            logTest('Transfer amount', true, `${Number(amount) / 100000000} KAS`, 'info');
+            logTest('Priority fee', true, `${Number(priorityFee) / 100000000} KAS`, 'info');
+            
+            // Create payload
+            const payload = `${payloadPrefix}-${Date.now()}`;
+            const payloadBytes = new TextEncoder().encode(payload);
+            logTest('Payload created', true, `${payloadBytes.length} bytes: "${payload}"`, 'info');
+            
+            // Format UTXOs
+            const formattedUtxos = utxoEntries.map(utxo => ({
+                address: address.toString(),
+                outpoint: {
+                    transactionId: utxo.outpoint.transactionId,
+                    index: utxo.outpoint.index
+                },
+                scriptPublicKey: utxo.scriptPublicKey,
+                amount: BigInt(utxo.amount),
+                isCoinbase: utxo.isCoinbase || false,
+                blockDaaScore: BigInt(utxo.blockDaaScore)
+            }));
+            
+            // Create transaction
+            logTest('Creating transaction...', true, '', 'info');
+            const transactionResult = await kaspa.createTransactions({
+                entries: formattedUtxos,
+                outputs: [{
+                    address: address.toString(),
+                    amount: amount
+                }],
+                changeAddress: address.toString(),
+                priorityFee: priorityFee,
+                networkId: "testnet-10",
+                payload: payloadBytes
+            });
+            
+            logTest('Transaction created', !!transactionResult, `${transactionResult.transactions?.length || 0} transactions`, 'success');
+            
+            if (!transactionResult?.transactions?.length) {
+                throw new Error('No pending transactions generated');
+            }
+            
+            const pendingTx = transactionResult.transactions[0];
+            
+            // Show fee
+            if (transactionResult.summary) {
+                const actualFee = transactionResult.summary.fees;
+                logTest('Actual fee calculated', true, `${Number(actualFee) / 100000000} KAS`, 'info');
+            }
+            
+            // Sign transaction
+            logTest('Signing transaction...', true, '', 'info');
+            await pendingTx.sign([privateKey]);
+            logTest('Transaction signed', true, 'Cryptographic signature applied', 'success');
+            
+            // Get TxID before submission
+            const txid = pendingTx.id;
+            logTest('Transaction ID (pre-submit)', true, txid, 'info');
+            
+            // Submit to blockchain
+            logTest('Submitting to blockchain...', true, '🚨 FINAL STEP', 'warning');
+            const submittedTxId = await pendingTx.submit(rpcClient);
+            
+            // Success!
+            logTest('🎉 TRANSACTION SUCCESSFUL! 🎉', true, 'Submitted to Kaspa testnet', 'success');
+            logTest('Transaction ID', true, submittedTxId, 'success');
+            logTest('Block explorer', true, `https://explorer.kaspa.org/txs/${submittedTxId}`, 'info');
+            logTest('Status', true, 'Awaiting block confirmation (1-2 seconds)', 'info');
+            
+            await rpcClient.disconnect();
+        }
+        
+        // Start auto-initialization when page loads
+        window.addEventListener('DOMContentLoaded', autoInitialize);
+        
+    </script>
+</body>
+</html>

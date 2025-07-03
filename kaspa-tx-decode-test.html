@@ -113,7 +113,7 @@
     <div class="container">
         <h1>Kaspa Transaction Decode Test</h1>
         <div style="text-align: center; color: #888; margin-top: -10px; margin-bottom: 20px;">
-            Version: 1.0.4 (Debug)
+            Version: 1.0.6 (REST Proxy Support)
         </div>
         
         <div class="input-group">
@@ -131,6 +131,7 @@
             <button onclick="connectToNetwork()" id="connectBtn" disabled>2. Connect to Network</button>
             <button onclick="fetchTransaction()" id="fetchBtn" disabled>3. Fetch Transaction</button>
             <button onclick="fetchFromExplorer()" style="background: #2196F3;">3b. Fetch from Explorer API</button>
+            <button onclick="fetchFromRestProxy()" style="background: #FF6600;">3c. Fetch via REST Proxy</button>
             <button onclick="decodePayload()" id="decodeBtn" disabled>4. Decode Payload</button>
         </div>
         
@@ -162,6 +163,21 @@
             <div id="fileInfo"></div>
             <button onclick="downloadFile()" id="downloadBtn" style="display: none;">Download File</button>
         </div>
+        
+        <div class="result-section" style="margin-top: 20px; background: #3a3a3a;">
+            <h3 style="color: #FF6600;">WASM SDK Transaction Retrieval Methods</h3>
+            <div style="color: #ccc;">
+                <p><strong>Available Methods:</strong></p>
+                <ul>
+                    <li><code>getMempoolEntry(txId)</code> - Retrieves unconfirmed transactions from mempool</li>
+                    <li><code>getBlock(blockHash)</code> - Retrieves a block with all its transactions (requires block hash)</li>
+                    <li><code>getVirtualChainFromBlock()</code> - Gets accepted transaction IDs from a block</li>
+                    <li><code>wallet.transactionsDataGet()</code> - Retrieves wallet transaction history</li>
+                </ul>
+                <p><strong>SDK Limitation:</strong> There is no direct <code>getTransaction(txId)</code> method for confirmed transactions. This is by design - you must know which block contains the transaction.</p>
+                <p><strong>For Confirmed Transactions:</strong> Use the Explorer API button or maintain your own transaction index.</p>
+            </div>
+        </div>
     </div>
 
     <script type="module">
@@ -171,7 +187,7 @@
         let decodedFileData = null;
 
         // Version info for debugging
-        const APP_VERSION = '1.0.4';
+        const APP_VERSION = '1.0.6';
         console.log(`=== Kaspa Transaction Decode Test v${APP_VERSION} ===`);
         console.log('Debug mode enabled - All operations will be logged');
         console.log('Page loaded at:', new Date().toISOString());
@@ -334,46 +350,63 @@
                 
                 console.log(`\n[${APP_VERSION}] === Fetching transaction ===`);
                 console.log('Transaction ID:', txId);
-                updateStatus('Fetching transaction from blockchain...', 'loading');
+                updateStatus('Searching for transaction...', 'loading');
                 
                 // Check if RPC client is connected
                 console.log('RPC client connected:', rpcClient?.isConnected);
                 
-                // Try different methods to get transaction
-                console.log('Attempting to fetch transaction...');
+                console.log('\n=== WASM SDK Transaction Retrieval Methods ===');
+                console.log('1. getMempoolEntry - for unconfirmed transactions');
+                console.log('2. getBlock(blockHash) - requires knowing the block');
+                console.log('3. getVirtualChainFromBlock - can get accepted transaction IDs');
+                console.log('4. wallet.transactionsDataGet - for wallet transaction history');
                 
-                // Note: Kaspa RPC doesn't have getTransaction method
-                // We need to use the block explorer API or find the transaction in a block
-                console.log('Note: Kaspa RPC does not have a direct getTransaction method');
-                console.log('Available RPC methods related to blocks/transactions:');
-                console.log('- getBlock, getBlocks');
-                console.log('- getMempoolEntry, getMempoolEntries');
-                console.log('- getUtxosByAddresses');
-                
-                // Try to get from mempool first (already implemented below)
-                
-                // Method 2: Try alternative approach
+                // Method 1: Try getMempoolEntry for unconfirmed transactions
+                console.log('\nTrying getMempoolEntry (for unconfirmed transactions)...');
                 try {
-                    console.log('Trying alternative: searching in mempool...');
-                    const mempoolEntry = await rpcClient.getMempoolEntry({
-                        transactionId: txId,
-                        includeOrphanPool: true,
-                        filterTransactionPool: true
-                    });
-                    console.log('Mempool entry:', mempoolEntry);
+                    const mempoolEntry = await rpcClient.getMempoolEntry(txId);
+                    console.log('getMempoolEntry response:', mempoolEntry);
                     
-                    if (mempoolEntry) {
+                    if (mempoolEntry && mempoolEntry.transaction) {
+                        console.log('Transaction found in mempool!');
+                        
+                        // Check if transaction has payload
+                        if (mempoolEntry.transaction.payload) {
+                            const payloadHex = mempoolEntry.transaction.payload;
+                            console.log(`Payload (hex): ${payloadHex}`);
+                            
+                            // Try to decode payload
+                            try {
+                                const payloadBytes = new Uint8Array(payloadHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                const payloadText = new TextDecoder().decode(payloadBytes);
+                                console.log(`Payload (decoded text): ${payloadText}`);
+                            } catch (e) {
+                                console.log('Could not decode payload as text');
+                            }
+                        }
+                        
                         processTransactionData({ transaction: mempoolEntry.transaction });
                         return;
                     }
                 } catch (e) {
-                    console.error('getMempoolEntry failed:', e);
+                    console.log('Not found in mempool:', e.message);
                 }
                 
-                throw new Error('Transaction not found in blockchain or mempool');
+                // For confirmed transactions
+                console.log('\n=== Transaction not in mempool (likely confirmed) ===');
+                console.log('For confirmed transactions, the SDK requires:');
+                console.log('1. Block hash/height where transaction was included');
+                console.log('2. Or use wallet transaction history if available');
+                console.log('3. Or maintain your own transaction index');
+                
+                updateStatus('Transaction not found in mempool. Use Explorer API button for confirmed transactions.', 'error');
+                
+                console.log('\nSDK Limitation: No direct getTransaction(txId) for confirmed transactions');
+                console.log('This is a known limitation of the Kaspa WASM SDK');
+                console.log('The blockchain design requires knowing the block to retrieve a transaction');
                 
             } catch (error) {
-                updateStatus(`Failed to fetch transaction: ${error.message}`, 'error');
+                updateStatus(`Error: ${error.message}`, 'error');
                 console.error('=== Fetch error details ===');
                 console.error('Error type:', error.constructor.name);
                 console.error('Error message:', error.message);
@@ -567,6 +600,66 @@
             updateStatus('Console cleared', 'success');
         };
         
+        window.fetchFromRestProxy = async function() {
+            try {
+                const txId = document.getElementById('txId').value.trim();
+                if (!txId) {
+                    throw new Error('Please enter a transaction ID');
+                }
+                
+                console.log(`\n[${APP_VERSION}] === Fetching via REST Proxy ===`);
+                console.log('Transaction ID:', txId);
+                updateStatus('Fetching from Kaspa REST Proxy...', 'loading');
+                
+                // Use kaspa-rest-proxy
+                const proxyUrl = `https://proxy.kaspa.ws/transactions/${txId}`;
+                console.log('REST Proxy URL:', proxyUrl);
+                
+                try {
+                    const response = await fetch(proxyUrl);
+                    console.log('REST Proxy response status:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`REST Proxy returned ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('REST Proxy data:', data);
+                    
+                    // Check if transaction has payload
+                    if (data && data.payload) {
+                        currentTransaction = {
+                            transaction: data
+                        };
+                        processTransactionData(currentTransaction);
+                        updateStatus('Data retrieved via REST Proxy (direct from Kaspa network)', 'success');
+                        
+                        // Log block information if available
+                        if (data.blockHash) {
+                            console.log('Block Hash:', data.blockHash);
+                            console.log('Block Time:', data.blockTime);
+                        }
+                    } else {
+                        throw new Error('No payload found in REST proxy response');
+                    }
+                    
+                } catch (proxyError) {
+                    console.error('REST Proxy error:', proxyError);
+                    updateStatus(`REST Proxy error: ${proxyError.message}`, 'error');
+                    
+                    // Note about CORS
+                    if (proxyError.message.includes('Failed to fetch')) {
+                        console.log('Note: CORS error likely. REST proxy may not allow browser requests.');
+                        updateStatus('CORS error: REST proxy may not allow direct browser requests', 'error');
+                    }
+                }
+                
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`, 'error');
+                console.error('REST Proxy fetch error:', error);
+            }
+        };
+        
         window.fetchFromExplorer = async function() {
             try {
                 const txId = document.getElementById('txId').value.trim();
@@ -574,9 +667,40 @@
                     throw new Error('Please enter a transaction ID');
                 }
                 
-                console.log(`\n[${APP_VERSION}] === Fetching from Explorer API ===`);
+                console.log(`\n[${APP_VERSION}] === Alternative: Block Search Method ===`);
                 console.log('Transaction ID:', txId);
-                updateStatus('Fetching from Kaspa Explorer API...', 'loading');
+                updateStatus('Searching for transaction in recent blocks...', 'loading');
+                
+                // Alternative approach: Search recent blocks
+                if (rpcClient && rpcClient.isConnected) {
+                    console.log('Attempting to search recent blocks for transaction...');
+                    
+                    try {
+                        // Get current block count
+                        const blockCount = await rpcClient.getBlockCount();
+                        console.log('Current block count:', blockCount);
+                        
+                        // Get virtual chain info
+                        const virtualChainInfo = await rpcClient.getVirtualChainFromBlock({
+                            startHash: null,
+                            includeAcceptedTransactionIds: true
+                        });
+                        console.log('Virtual chain info:', virtualChainInfo);
+                        
+                        // Try to get recent blocks and search for our transaction
+                        console.log('Note: This would require iterating through many blocks');
+                        console.log('SDK limitation: Cannot efficiently search for a specific TxID');
+                        
+                        updateStatus('SDK limitation: Cannot search historical transactions efficiently', 'error');
+                        
+                    } catch (rpcError) {
+                        console.error('RPC search error:', rpcError);
+                    }
+                }
+                
+                // Fallback to Explorer API (with clear indication)
+                console.log('\n=== Using Explorer API as last resort ===');
+                updateStatus('Using Explorer API (no direct network method available)...', 'loading');
                 
                 // Try Kaspa Explorer API
                 const explorerUrl = `https://api.kaspa.org/transactions/${txId}`;
@@ -601,6 +725,7 @@
                             }
                         };
                         processTransactionData(currentTransaction);
+                        updateStatus('Data retrieved via Explorer API (not direct network)', 'success');
                     } else {
                         throw new Error('No payload found in explorer response');
                     }
@@ -624,6 +749,7 @@
                                 }
                             };
                             processTransactionData(currentTransaction);
+                            updateStatus('Data retrieved via Testnet Explorer API', 'success');
                         } else {
                             throw new Error('No payload found in testnet explorer');
                         }
@@ -633,8 +759,8 @@
                 }
                 
             } catch (error) {
-                updateStatus(`Failed to fetch from explorer: ${error.message}`, 'error');
-                console.error('Explorer fetch error:', error);
+                updateStatus(`Error: ${error.message}`, 'error');
+                console.error('Fetch error:', error);
             }
         };
         
