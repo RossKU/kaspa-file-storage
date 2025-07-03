@@ -1189,15 +1189,21 @@
                 log(`メタデータサイズ: ${metaDataBytes.length} bytes → 暗号化後: ${metaPayload.length} bytes (salt含む)`);
                 
                 // Upload meta-tx to blockchain
-                const { entries } = await rpcClient.getUtxosByAddresses([address.toString()]);
+                const utxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+                const entries = utxoResponse.entries || [];
+                
+                log(`${entries.length} UTXOs available for meta-tx`);
+                
                 const formattedUtxos = entries.map(utxo => ({
-                    address: utxo.address,
+                    address: address.toString(),
                     outpoint: {
                         transactionId: utxo.outpoint.transactionId,
                         index: utxo.outpoint.index
                     },
-                    amount: utxo.utxoEntry.amount,
-                    scriptPublicKey: utxo.utxoEntry.scriptPublicKey
+                    scriptPublicKey: utxo.scriptPublicKey,
+                    amount: BigInt(utxo.amount),
+                    isCoinbase: utxo.isCoinbase || false,
+                    blockDaaScore: BigInt(utxo.blockDaaScore)
                 }));
                 
                 const result = await kaspa.createTransactions({
