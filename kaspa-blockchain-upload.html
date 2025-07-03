@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Kaspa Blockchain File Upload</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        .result { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+        .success { color: green; }
+        .error { color: red; }
+        button { padding: 15px 25px; margin: 10px; font-size: 16px; }
+        .danger { background: #e74c3c; color: white; }
+        .safe { background: #27ae60; color: white; }
+        .info { background: #3498db; color: white; }
+    </style>
+</head>
+<body>
+    <h1>📁 Kaspa Blockchain File Upload</h1>
+    <div style="background: #8b5cf6; color: white; padding: 5px 15px; border-radius: 4px; display: inline-block; font-size: 12px; margin: 10px 0;">
+        Version 1.0.2 | 2025-07-03 00:15 JST | Enhanced WASM Debug
+    </div>
+    
+    <div style="background: #fff3cd; padding: 15px; margin: 10px 0; border-left: 4px solid #ffc107;">
+        <h3>⚠️ REAL BLOCKCHAIN UPLOAD</h3>
+        <p>This tool uploads files to Kaspa testnet blockchain. Real funds will be spent.</p>
+        <p><strong>Current Balance:</strong> ~979 KAS (testnet)</p>
+        <p><strong>Network:</strong> Kaspa Testnet-10</p>
+        <p><strong>Max File Size:</strong> 24KB</p>
+    </div>
+    
+    <div style="background: #e3f2fd; padding: 15px; margin: 10px 0; border-left: 4px solid #2196f3;">
+        <h3>📤 File Selection</h3>
+        <input type="file" id="fileInput" style="margin: 10px 0;">
+        <div id="fileInfo" style="margin: 10px 0;"></div>
+    </div>
+    
+    <div>
+        <button class="info" onclick="testConnection()">Test RPC Connection</button>
+        <button class="danger" onclick="uploadFile()" id="uploadBtn" disabled>🚨 UPLOAD FILE TO BLOCKCHAIN</button>
+    </div>
+    
+    <div class="result" id="testOutput"></div>
+
+    <script type="module">
+        let kaspa = null;
+        let testResults = [];
+        let isInitialized = false;
+        let selectedFile = null;
+        
+        function logTest(testName, result, details = '') {
+            const status = result ? '✅' : '❌';
+            const message = `${status} ${testName}: ${result ? 'PASS' : 'FAIL'} ${details}`;
+            testResults.push(message);
+            console.log(message);
+            updateDisplay();
+        }
+        
+        function updateDisplay() {
+            document.getElementById('testOutput').innerHTML = testResults.join('<br>');
+        }
+        
+        // ファイル読み込みヘルパー
+        async function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(new Uint8Array(e.target.result));
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        // 1. WASM SDK初期化
+        window.initializeWasm = async function() {
+            testResults = [];
+            logTest('Starting Kaspa WASM SDK initialization', true);
+            
+            try {
+                kaspa = await import('./kaspa-core.js');
+                logTest('WASM module imported', !!kaspa);
+                
+                // Initialize WASM binary - CRITICAL!
+                await kaspa.default('./kaspa-core_bg.wasm');
+                logTest('WASM binary initialized', true);
+                
+                // Make kaspa globally available
+                window.kaspa = kaspa;
+                
+                // Verify WASM is loaded correctly
+                logTest('Verifying WASM functions...', true);
+                logTest('  - PrivateKey', !!kaspa.PrivateKey, typeof kaspa.PrivateKey);
+                logTest('  - RpcClient', !!kaspa.RpcClient, typeof kaspa.RpcClient);
+                logTest('  - createTransactions', !!kaspa.createTransactions, typeof kaspa.createTransactions);
+                
+                if (!kaspa.PrivateKey || !kaspa.RpcClient || !kaspa.createTransactions) {
+                    throw new Error('Essential SDK functions not available');
+                }
+                
+                logTest('Essential functions verified', true, 'PrivateKey, RpcClient, createTransactions');
+                isInitialized = true;
+                logTest('=== WASM SDK READY ===', true, 'Proceed to connection test');
+                
+            } catch (error) {
+                logTest('WASM initialization failed', false, error.message);
+                isInitialized = false;
+            }
+        };
+        
+        // 2. RPC接続テスト
+        window.testConnection = async function() {
+            if (!isInitialized) {
+                logTest('Connection test skipped', false, 'Initialize WASM first');
+                return;
+            }
+            
+            logTest('=== RPC CONNECTION TEST ===', true);
+            
+            try {
+                // テストキー作成
+                const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                const privateKey = new kaspa.PrivateKey(testKeyHex);
+                const keypair = privateKey.toKeypair();
+                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                logTest('Test address generated', true, address.toString().substring(0, 30) + '...');
+                
+                // RPC接続 (Resolver使用)
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                logTest('Connecting to testnet...', true);
+                await rpcClient.connect();
+                
+                if (rpcClient.isConnected) {
+                    const serverInfo = await rpcClient.getServerInfo();
+                    logTest('RPC connected', true, `${rpcClient.url}, Synced: ${serverInfo.isSynced}`);
+                    
+                    // 残高確認
+                    const balanceInfo = await rpcClient.getBalanceByAddress(address.toString());
+                    const balance = BigInt(balanceInfo.balance || 0);
+                    logTest('Current balance', true, `${balance / 100000000n} KAS`);
+                    
+                    // UTXO確認
+                    const utxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+                    const utxos = utxoResponse.entries || [];
+                    logTest('Available UTXOs', true, `${utxos.length} UTXOs found`);
+                    
+                    if (balance > 0n && utxos.length > 0) {
+                        logTest('=== CONNECTION TEST PASSED ===', true, 'Ready for real transaction');
+                    } else {
+                        logTest('Insufficient funds', false, 'Need testnet KAS to proceed');
+                    }
+                    
+                    await rpcClient.disconnect();
+                    
+                } else {
+                    logTest('RPC connection failed', false, 'Could not establish connection');
+                }
+                
+            } catch (error) {
+                logTest('Connection test failed', false, error.message);
+            }
+        };
+        
+        // ファイルアップロード実行
+        window.uploadFile = async function() {
+            if (!isInitialized) {
+                logTest('Upload skipped', false, 'Initialize WASM first');
+                return;
+            }
+            
+            if (!selectedFile) {
+                logTest('Upload skipped', false, 'No file selected');
+                return;
+            }
+            
+            // 確認プロンプト
+            const fileSizeKB = (selectedFile.size / 1024).toFixed(2);
+            const estimatedFee = (0.00005 + (selectedFile.size / 1024) * 0.00001).toFixed(6);
+            
+            const confirmed = confirm(
+                '🚨 REAL BLOCKCHAIN UPLOAD 🚨\\n\\n' +
+                `File: ${selectedFile.name}\\n` +
+                `Size: ${fileSizeKB}KB\\n\\n` +
+                'This will upload your file to Kaspa testnet blockchain.\\n' +
+                'Real testnet funds will be spent for transaction fees.\\n\\n' +
+                'Current balance: ~979 KAS\\n' +
+                'Amount to send: 1 KAS (minimum)\\n' +
+                `Estimated fee: ~${estimatedFee} KAS\\n\\n` +
+                'Continue with REAL upload?'
+            );
+            
+            if (!confirmed) {
+                logTest('Upload cancelled', false, 'User cancelled');
+                return;
+            }
+            
+            logTest('=== REAL BLOCKCHAIN FILE UPLOAD ===', true, '🚨 UPLOADING FILE TO BLOCKCHAIN');
+            
+            // ファイルを読み込む
+            const fileData = await readFileAsArrayBuffer(selectedFile);
+            
+            try {
+                // プライベートキー・アドレス準備
+                const testKeyHex = 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef';
+                const privateKey = new kaspa.PrivateKey(testKeyHex);
+                const keypair = privateKey.toKeypair();
+                const address = keypair.toAddress(kaspa.NetworkType.Testnet);
+                
+                logTest('Transaction sender/recipient', true, address.toString().substring(0, 30) + '...');
+                
+                // RPC接続
+                const rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: 'testnet-10'
+                });
+                
+                await rpcClient.connect();
+                logTest('RPC connected', true, rpcClient.url);
+                
+                // 残高・UTXO取得
+                const balanceInfo = await rpcClient.getBalanceByAddress(address.toString());
+                const currentBalance = BigInt(balanceInfo.balance || 0);
+                logTest('Current balance', true, `${currentBalance / 100000000n} KAS`);
+                
+                const utxoResponse = await rpcClient.getUtxosByAddresses([address.toString()]);
+                const utxoEntries = utxoResponse.entries || [];
+                logTest('UTXOs retrieved', true, `${utxoEntries.length} UTXOs`);
+                
+                // トランザクション設定
+                const transferAmount = 100000000n; // 1 KAS (minimum for storage mass)
+                const priorityFee = 10000n; // 0.0001 KAS
+                
+                logTest('Transfer amount', true, `${transferAmount / 100000000n} KAS`);
+                logTest('Priority fee', true, `${priorityFee / 100000000n} KAS`);
+                
+                // ファイルデータをペイロードとして使用
+                const payloadBytes = fileData;
+                logTest('File payload prepared', true, `${payloadBytes.length} bytes from ${selectedFile.name}`);
+                
+                // UTXO形式変換
+                const formattedUtxos = utxoEntries.map(utxo => ({
+                    address: address.toString(),
+                    outpoint: {
+                        transactionId: utxo.outpoint.transactionId,
+                        index: utxo.outpoint.index
+                    },
+                    scriptPublicKey: utxo.scriptPublicKey, // 直接使用
+                    amount: BigInt(utxo.amount),
+                    isCoinbase: utxo.isCoinbase || false,
+                    blockDaaScore: BigInt(utxo.blockDaaScore)
+                }));
+                
+                // トランザクション作成
+                logTest('Creating transaction...', true);
+                const transactionResult = await kaspa.createTransactions({
+                    entries: formattedUtxos,
+                    outputs: [{
+                        address: address.toString(),
+                        amount: transferAmount
+                    }],
+                    changeAddress: address.toString(),
+                    priorityFee: priorityFee,
+                    networkId: "testnet-10",
+                    payload: payloadBytes
+                });
+                
+                logTest('Transaction created', !!transactionResult, `${transactionResult.transactions?.length || 0} transactions`);
+                
+                if (!transactionResult?.transactions?.length) {
+                    throw new Error('No pending transactions generated');
+                }
+                
+                const pendingTx = transactionResult.transactions[0];
+                
+                // 手数料確認
+                if (transactionResult.summary) {
+                    const actualFee = transactionResult.summary.fees;
+                    logTest('Actual fee calculated', true, `${actualFee / 100000000n} KAS`);
+                }
+                
+                // 署名
+                logTest('Signing transaction...', true);
+                await pendingTx.sign([privateKey]);
+                logTest('Transaction signed', true, 'Cryptographic signature applied');
+                
+                // ブロックチェーン送信
+                logTest('Submitting to blockchain...', true, '🚨 FINAL STEP');
+                const txid = await pendingTx.submit(rpcClient);
+                
+                // 成功！
+                logTest('🎉 FILE UPLOAD SUCCESSFUL! 🎉', true, 'File uploaded to Kaspa testnet');
+                logTest('Transaction ID', true, txid);
+                logTest('File Name', true, selectedFile.name);
+                logTest('File Size', true, `${(selectedFile.size / 1024).toFixed(2)}KB`);
+                logTest('Block explorer', true, `https://explorer-tn10.kaspa.org/txs/${txid}`);
+                logTest('💾 SAVE THIS TXID', true, 'You need this to download your file later!');
+                
+                // TxIDをクリップボードにコピー
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(txid).then(() => {
+                        logTest('Clipboard', true, 'TxID copied to clipboard');
+                    });
+                }
+                
+                await rpcClient.disconnect();
+                
+            } catch (error) {
+                logTest('File upload failed', false, error.message);
+                console.error('Upload error:', error);
+            }
+        };
+        
+        // ファイル選択ハンドラー
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.size > 24 * 1024) {
+                    logTest('File size check', false, `File too large: ${(file.size / 1024).toFixed(2)}KB (max 24KB)`);
+                    selectedFile = null;
+                    document.getElementById('uploadBtn').disabled = true;
+                } else {
+                    selectedFile = file;
+                    const fileInfo = `
+                        <strong>Selected File:</strong> ${file.name}<br>
+                        <strong>Size:</strong> ${(file.size / 1024).toFixed(2)}KB<br>
+                        <strong>Type:</strong> ${file.type || 'unknown'}
+                    `;
+                    document.getElementById('fileInfo').innerHTML = fileInfo;
+                    logTest('File selected', true, `${file.name} (${(file.size / 1024).toFixed(2)}KB)`);
+                    
+                    // Enable upload button if initialized
+                    if (isInitialized) {
+                        document.getElementById('uploadBtn').disabled = false;
+                    }
+                }
+            }
+        });
+        
+        // 自動表示更新とWASM初期化
+        window.addEventListener('load', () => {
+            updateDisplay();
+            // 自動的にWASM SDKを初期化
+            initializeWasm();
+        });
+        
+    </script>
+</body>
+</html>
