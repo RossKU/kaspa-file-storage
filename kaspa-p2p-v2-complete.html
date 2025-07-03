@@ -1269,7 +1269,7 @@
                         log(`Block extracted: ${!!block}`, 'info');
                         
                         if (!block) {
-                            log(`Block structure: response=${JSON.stringify(response).substring(0, 200)}...`, 'error');
+                            log(`Block not found in response structure`, 'error');
                             throw new Error(`ブロックが見つかりません: ${chunkMeta.blockId}`);
                         }
                         
@@ -1280,11 +1280,13 @@
                         
                         if (txCount === 0) {
                             log(`警告: トランザクションが含まれていません`, 'warning');
-                            log(`Block structure: ${JSON.stringify(block).substring(0, 300)}...`, 'warning');
+                            // BigIntを含む可能性があるのでJSON.stringifyは避ける
+                            log(`Block has header.hash: ${block.header?.hash}`, 'warning');
                         }
                         
                         for (const tx of block.transactions || []) {
-                            log(`Checking transaction: ${JSON.stringify(tx).substring(0, 100)}...`, 'info');
+                            // BigIntを含む可能性があるのでJSON.stringifyは避ける
+                            log(`Checking transaction...`, 'info');
                             const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
                             log(`Transaction ID variants: verboseData.transactionId=${tx.verboseData?.transactionId}, tx.id=${tx.id}, tx.transactionId=${tx.transactionId}`, 'info');
                             
