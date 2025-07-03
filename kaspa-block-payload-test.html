@@ -359,30 +359,51 @@
                 // Try different methods
                 let block = null;
                 
-                // Method 1: Try getBlock with hash
+                // Method 1: Try getBlock with GetBlockRequest object
                 try {
-                    logStep('Method 1: getBlock(hash)を試行中...', 'info');
-                    block = await rpcClient.getBlock(blockId);
+                    logStep('Method 1: getBlock({hash, includeTransactions: true})を試行中...', 'info');
+                    const request = {
+                        hash: blockId,
+                        includeTransactions: true
+                    };
+                    block = await rpcClient.getBlock(request);
                     logStep('Method 1: 成功', 'success');
                 } catch (e1) {
                     logStep(`Method 1 エラー: ${e1.toString()}`, 'error');
                     
-                    // Method 2: Try getBlock with includeTransactions flag
+                    // Method 2: Try with includeTransactions false
                     try {
-                        logStep('Method 2: getBlock(hash, includeTransactions=true)を試行中...', 'info');
-                        block = await rpcClient.getBlock(blockId, true);
-                        logStep('Method 2: 成功', 'success');
+                        logStep('Method 2: getBlock({hash, includeTransactions: false})を試行中...', 'info');
+                        const request = {
+                            hash: blockId,
+                            includeTransactions: false
+                        };
+                        block = await rpcClient.getBlock(request);
+                        logStep('Method 2: 成功（トランザクションなし）', 'success');
+                        
+                        // If successful without transactions, try to get them separately
+                        logStep('トランザクションを別途取得中...', 'info');
+                        // This might need additional RPC calls
+                        
                     } catch (e2) {
                         logStep(`Method 2 エラー: ${e2.toString()}`, 'error');
                         
-                        // Method 3: Try getBlockByHash if available
-                        if (rpcClient.getBlockByHash) {
+                        // Method 3: Try different request format
+                        try {
+                            logStep('Method 3: getBlock with minimal request を試行中...', 'info');
+                            block = await rpcClient.getBlock({ hash: blockId });
+                            logStep('Method 3: 成功', 'success');
+                        } catch (e3) {
+                            logStep(`Method 3 エラー: ${e3.toString()}`, 'error');
+                            
+                            // Method 4: Check if block exists in current DAG
                             try {
-                                logStep('Method 3: getBlockByHash(hash)を試行中...', 'info');
-                                block = await rpcClient.getBlockByHash(blockId);
-                                logStep('Method 3: 成功', 'success');
-                            } catch (e3) {
-                                logStep(`Method 3 エラー: ${e3.toString()}`, 'error');
+                                logStep('Method 4: getBlockTemplate経由で情報取得を試行中...', 'info');
+                                // This is a workaround to check if the block is known
+                                const template = await rpcClient.getBlockTemplate();
+                                logStep(`Block template取得、parent blocks: ${template.parentHashes ? template.parentHashes.length : 0}`, 'info');
+                            } catch (e4) {
+                                logStep(`Method 4 エラー: ${e4.toString()}`, 'error');
                             }
                         }
                     }
