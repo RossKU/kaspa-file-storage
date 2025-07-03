@@ -481,18 +481,26 @@
                             addDebugLog(`Block #${stats.blocksReceived} tx is string: ${tx}`);
                         } else if (typeof tx === 'object') {
                             addDebugLog(`Block #${stats.blocksReceived} tx keys: ${Object.keys(tx || {}).join(', ')}`);
-                            addDebugLog(`Block #${stats.blocksReceived} tx content: ${JSON.stringify(tx).substring(0, 200)}...`);
+                            
+                            // Check verboseData for transaction ID
+                            if (tx.verboseData) {
+                                addDebugLog(`Block #${stats.blocksReceived} verboseData keys: ${Object.keys(tx.verboseData).join(', ')}`);
+                                addDebugLog(`Block #${stats.blocksReceived} verboseData.transactionId: ${tx.verboseData.transactionId}`);
+                            }
                         } else {
                             addDebugLog(`Block #${stats.blocksReceived} tx type: ${typeof tx}`);
                         }
                     }
                     
-                    // Try multiple possible ID fields
-                    let txId = tx.id || tx.transactionId || tx.txId || tx.hash;
+                    // Try to get transaction ID from verboseData (SDK spec)
+                    let txId = null;
                     
-                    // If tx is a string, it might be the ID itself
                     if (typeof tx === 'string') {
+                        // If tx is a string, it might be the ID itself
                         txId = tx;
+                    } else if (tx && tx.verboseData && tx.verboseData.transactionId) {
+                        // Get transaction ID from verboseData as per SDK spec
+                        txId = tx.verboseData.transactionId;
                     }
                     
                     if (txId) {
