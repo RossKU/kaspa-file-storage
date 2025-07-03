@@ -455,7 +455,9 @@
             if (block.transactions && block.transactions.length > 0 && stats.blocksReceived === 1) {
                 console.log('First block transaction structure:', block.transactions[0]);
                 console.log('Block structure:', block);
-                addDebugLog('First block tx structure: ' + JSON.stringify(block.transactions[0], null, 2));
+                addDebugLog('First tx type: ' + typeof block.transactions[0]);
+                addDebugLog('First tx value: ' + JSON.stringify(block.transactions[0], null, 2));
+                addDebugLog('All txs: ' + JSON.stringify(block.transactions.slice(0, 3)));
                 addDebugLog('Block keys: ' + Object.keys(block).join(', '));
             }
             
