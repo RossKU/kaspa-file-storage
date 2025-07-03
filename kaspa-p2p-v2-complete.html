@@ -1251,10 +1251,25 @@
                             hash: chunkMeta.blockId, 
                             includeTransactions: true 
                         };
-                        const response = await rpcClient.getBlock(request);
-                        const block = response.block?.block || response.block;
+                        log(`RPC getBlock request: ${JSON.stringify(request)}`, 'info');
+                        
+                        let response;
+                        try {
+                            response = await rpcClient.getBlock(request);
+                            log(`RPC getBlock response received`, 'info');
+                            log(`Response type: ${typeof response}`, 'info');
+                            log(`Response keys: ${Object.keys(response || {}).join(', ')}`, 'info');
+                        } catch (rpcError) {
+                            log(`RPC getBlock error: ${rpcError.message || rpcError}`, 'error');
+                            log(`Error type: ${rpcError.constructor.name}`, 'error');
+                            throw rpcError;
+                        }
+                        
+                        const block = response?.block?.block || response?.block;
+                        log(`Block extracted: ${!!block}`, 'info');
                         
                         if (!block) {
+                            log(`Block structure: response=${JSON.stringify(response).substring(0, 200)}...`, 'error');
                             throw new Error(`ブロックが見つかりません: ${chunkMeta.blockId}`);
                         }
                         
@@ -1263,25 +1278,40 @@
                         const txCount = block.transactions?.length || 0;
                         log(`ブロック内のトランザクション数: ${txCount}`, 'info');
                         
+                        if (txCount === 0) {
+                            log(`警告: トランザクションが含まれていません`, 'warning');
+                            log(`Block structure: ${JSON.stringify(block).substring(0, 300)}...`, 'warning');
+                        }
+                        
                         for (const tx of block.transactions || []) {
-                            const txId = tx.verboseData?.transactionId || tx.id;
+                            log(`Checking transaction: ${JSON.stringify(tx).substring(0, 100)}...`, 'info');
+                            const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
+                            log(`Transaction ID variants: verboseData.transactionId=${tx.verboseData?.transactionId}, tx.id=${tx.id}, tx.transactionId=${tx.transactionId}`, 'info');
+                            
                             if (txId === chunkMeta.txid) {
                                 log(`TxID一致: ${txId.substring(0, 16)}...`, 'info');
+                                log(`tx.payload exists: ${!!tx.payload}, length: ${tx.payload?.length || 0}`, 'info');
+                                
                                 if (tx.payload && tx.payload !== '') {
                                     // Get raw binary payload from hex (blockchain stores as hex)
                                     const hexPayload = tx.payload;
                                     log(`ペイロード長: ${hexPayload.length} 文字 (hex)`, 'info');
+                                    log(`最初の100文字: ${hexPayload.substring(0, 100)}...`, 'info');
+                                    
                                     // Blockchain stores binary payloads as hex strings
                                     try {
                                         payload = new Uint8Array(hexPayload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                                         log(`Hex decode成功: ${payload.length} バイト (生バイナリ)`, 'info');
                                     } catch (e) {
+                                        log(`Hex decode error details: ${e.stack || e}`, 'error');
                                         throw new Error(`ペイロードのデコードに失敗: ${e.message}`);
                                     }
                                     break;
                                 } else {
                                     log(`警告: ペイロードが空です (TxID: ${txId})`, 'warning');
                                 }
+                            } else {
+                                log(`TxID不一致: ${txId} !== ${chunkMeta.txid}`, 'info');
                             }
                         }
                         
