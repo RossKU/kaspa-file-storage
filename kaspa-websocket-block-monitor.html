@@ -448,22 +448,57 @@
             let matchFound = false;
             const matches = [];
             
+            // Debug: Log first transaction structure
+            if (block.transactions && block.transactions.length > 0 && stats.blocksReceived === 1) {
+                console.log('First block transaction structure:', block.transactions[0]);
+                console.log('Block structure:', block);
+            }
+            
             // Check transactions in the block
             if (block.transactions && block.transactions.length > 0) {
                 stats.txProcessed += block.transactions.length;
                 
                 for (const tx of block.transactions) {
-                    // Check if this transaction is in our watch list
-                    if (watchList.has(tx.id)) {
-                        matchFound = true;
-                        matches.push(tx.id);
-                        stats.matchesFound++;
+                    // Debug: Log transaction ID formats
+                    if (stats.blocksReceived <= 5) {
+                        console.log('Transaction:', tx);
+                        console.log('Possible ID fields:', {
+                            id: tx.id,
+                            transactionId: tx.transactionId,
+                            txId: tx.txId,
+                            hash: tx.hash
+                        });
+                    }
+                    
+                    // Try multiple possible ID fields
+                    const txId = tx.id || tx.transactionId || tx.txId || tx.hash;
+                    
+                    if (txId) {
+                        // Normalize to lowercase for comparison
+                        const normalizedTxId = txId.toLowerCase();
                         
-                        // Save mapping
-                        mappings.set(tx.id, block.header.hash);
+                        // Debug: Log comparison for first few blocks
+                        if (stats.blocksReceived <= 5 && watchList.size > 0) {
+                            const firstWatchId = Array.from(watchList.keys())[0];
+                            console.log('Comparing:', {
+                                txId: normalizedTxId,
+                                watchId: firstWatchId,
+                                match: watchList.has(normalizedTxId)
+                            });
+                        }
                         
-                        // Update watch list UI
-                        updateWatchListItem(tx.id, block.header.hash);
+                        // Check if this transaction is in our watch list
+                        if (watchList.has(normalizedTxId)) {
+                            matchFound = true;
+                            matches.push(normalizedTxId);
+                            stats.matchesFound++;
+                            
+                            // Save mapping
+                            mappings.set(normalizedTxId, block.header.hash);
+                            
+                            // Update watch list UI
+                            updateWatchListItem(normalizedTxId, block.header.hash);
+                        }
                     }
                 }
             }
