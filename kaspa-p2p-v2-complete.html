@@ -892,12 +892,14 @@
                             
                             const formattedUtxos = entries.map(utxo => ({
                                 address: address.toString(),
-                                amount: utxo.amount,
+                                outpoint: {
+                                    transactionId: utxo.outpoint.transactionId,
+                                    index: utxo.outpoint.index
+                                },
                                 scriptPublicKey: utxo.scriptPublicKey,
-                                blockDaaScore: utxo.blockDaaScore,
-                                isCoinbase: utxo.isCoinbase,
-                                transactionId: utxo.transactionId,
-                                index: utxo.index
+                                amount: BigInt(utxo.amount),
+                                isCoinbase: utxo.isCoinbase || false,
+                                blockDaaScore: BigInt(utxo.blockDaaScore)
                             }));
                             
                             const result = await kaspa.createTransactions({
