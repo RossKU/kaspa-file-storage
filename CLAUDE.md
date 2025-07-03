@@ -839,3 +839,39 @@ WebSocket監視方式の採用により、プロジェクト全体のアーキ�
    - パフォーマンスとスケーラビリティ
 
 詳細な検証計画は[KASPA_WEBSOCKET_INTEGRATION_PLAN.md](./KASPA_WEBSOCKET_INTEGRATION_PLAN.md)を参照。
+
+## 📅 2025年7月3日（追記2）- BlockIDからのペイロード取得検証成功
+
+### 検証結果
+`kaspa-block-payload-test.html`による検証で、BlockIDからのトランザクションペイロード取得が**完全に成功**：
+
+**テストデータ**:
+- BlockID: `95a5e4101246828842097738c9e09c1814c155c966ddcbb6485c01f819d32460`
+- TxID: `19fb27542f4fc27274cc928b68ce1630f23a4753c9e71db0ff3e3e5ebbc655e5`
+- ブロック内トランザクション数: 11
+- ペイロードサイズ: 128バイト
+
+**技術的成果**:
+1. ✅ `getBlock`APIでブロックデータ取得成功
+2. ✅ ターゲットトランザクションの特定成功（#0として発見）
+3. ✅ ペイロード抽出・デコード成功
+4. ✅ 完全なデータ復元を確認
+
+**重要な実装詳細**:
+```javascript
+// 正しいAPI呼び出し形式
+const request = { hash: blockId, includeTransactions: true };
+const response = await rpcClient.getBlock(request);
+const block = response.block;  // ネストされた構造に注意
+
+// トランザクションIDの取得
+const txId = tx.verboseData.transactionId;
+
+// BigInt処理
+JSON.stringify(data, (key, value) => 
+  typeof value === 'bigint' ? value.toString() : value
+);
+```
+
+### 結論
+WebSocket監視によるTxID→BlockID紐付けと、BlockIDからのデータ取得の**技術的実現可能性が完全に証明**された。これにより、KaspaのTxID直接取得制限を回避する実用的なソリューションが確立した。

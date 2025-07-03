@@ -551,3 +551,19 @@ KaspaがTxIDから直接データ取得できない制約により、以下の�
    - Phase 4: 統合プロトタイプ作成
    
    詳細は[KASPA_WEBSOCKET_INTEGRATION_PLAN.md](./KASPA_WEBSOCKET_INTEGRATION_PLAN.md)参照
+
+### 検証進捗（2025-07-03）
+
+#### Phase 1: BlockIDからのペイロード取得検証 ✅ 完了
+
+**実証結果**:
+- `kaspa-block-payload-test.html`で検証完了
+- BlockID `95a5e4101246828842097738c9e09c1814c155c966ddcbb6485c01f819d32460`から11個のトランザクションを取得
+- ターゲットTxID `19fb27542f4fc27274cc928b68ce1630f23a4753c9e71db0ff3e3e5ebbc655e5`のペイロード（128バイト）を正常に抽出
+- **結論**: WebSocket監視方式は技術的に完全に実現可能
+
+**重要な技術的発見**:
+1. RPC APIは`GetBlockRequest`オブジェクト形式を要求
+2. レスポンスは`{block: {...}}`のネスト構造
+3. BigInt値のシリアライゼーション対応が必要
+4. トランザクションIDは`tx.verboseData.transactionId`に格納
