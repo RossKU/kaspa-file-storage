@@ -1132,15 +1132,39 @@
 
         // Load .kaspa file
         window.loadKaspaFile = async function(event) {
-            const file = event.target.files[0];
+            log('=== loadKaspaFile 開始 ===', 'info');
+            log(`event: ${event}`, 'info');
+            log(`event.target: ${event?.target}`, 'info');
+            log(`event.target.files: ${event?.target?.files}`, 'info');
+            log(`files.length: ${event?.target?.files?.length || 0}`, 'info');
+            
+            const file = event?.target?.files?.[0];
+            log(`file: ${file}`, 'info');
+            
+            if (file) {
+                log(`file.name: ${file.name}`, 'info');
+                log(`file.type: ${file.type}`, 'info');
+                log(`file.size: ${file.size} bytes`, 'info');
+                log(`endsWith('.kaspa'): ${file.name.endsWith('.kaspa')}`, 'info');
+                log(`toLowerCase().endsWith('.kaspa'): ${file.name.toLowerCase().endsWith('.kaspa')}`, 'info');
+            }
+            
             if (!file || !file.name.endsWith('.kaspa')) {
                 log('有効な.kaspaファイルを選択してください', 'error');
+                log(`理由: file=${!!file}, name=${file?.name}, endsWith=${file?.name?.endsWith('.kaspa')}`, 'error');
                 return;
             }
             
             try {
+                log('ファイル内容を読み込み中...', 'info');
                 const content = await file.text();
+                log(`ファイル内容の長さ: ${content.length} 文字`, 'info');
+                log(`最初の100文字: ${content.substring(0, 100)}...`, 'info');
+                
                 kaspaMetadata = JSON.parse(content);
+                log('JSON parse成功', 'info');
+                log(`kaspaMetadata.version: ${kaspaMetadata.version}`, 'info');
+                log(`kaspaMetadata.chunks: ${kaspaMetadata.chunks?.length || 0} chunks`, 'info');
                 
                 if (!kaspaMetadata.version || !kaspaMetadata.chunks) {
                     throw new Error('無効な.kaspaファイル形式');
@@ -1443,10 +1467,25 @@
             e.preventDefault();
             e.currentTarget.classList.remove('dragover');
             
+            log('=== handleKaspaDrop 開始 ===', 'info');
+            log(`e.dataTransfer.files: ${e.dataTransfer.files}`, 'info');
+            log(`files.length: ${e.dataTransfer.files.length}`, 'info');
+            
             const file = e.dataTransfer.files[0];
+            log(`file: ${file}`, 'info');
+            
+            if (file) {
+                log(`file.name: ${file.name}`, 'info');
+                log(`file.type: ${file.type}`, 'info');
+                log(`file.size: ${file.size} bytes`, 'info');
+                log(`endsWith('.kaspa'): ${file.name.endsWith('.kaspa')}`, 'info');
+            }
+            
             if (file && file.name.endsWith('.kaspa')) {
                 document.getElementById('kaspaFileInput').files = e.dataTransfer.files;
                 loadKaspaFile({ target: { files: [file] } });
+            } else {
+                log('ドロップされたファイルは.kaspaファイルではありません', 'error');
             }
         };
 
@@ -1498,6 +1537,18 @@
                     historyDiv.innerHTML = '<p>アップロード履歴はありません</p>';
                 }
             }, 5000);
+            
+            // Debug: Add event listener to file input
+            const kaspaFileInput = document.getElementById('kaspaFileInput');
+            if (kaspaFileInput) {
+                log('kaspaFileInput要素が見つかりました', 'info');
+                kaspaFileInput.addEventListener('change', (e) => {
+                    log('=== kaspaFileInput change event ===', 'info');
+                    log(`Event fired, files: ${e.target.files?.length || 0}`, 'info');
+                });
+            } else {
+                log('警告: kaspaFileInput要素が見つかりません', 'error');
+            }
             
             log('🚀 Kaspa P2P v2.0 準備完了！', 'info');
             log('システムを初期化してください', 'info');
