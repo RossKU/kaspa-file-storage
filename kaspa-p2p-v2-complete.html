@@ -1220,6 +1220,8 @@
                         `チャンク ${i + 1}/${kaspaMetadata.chunks.length} を取得中...`;
                     
                     try {
+                        log(`チャンク ${i + 1}: BlockID ${chunkMeta.blockId.substring(0, 16)}...`, 'info');
+                        
                         // Get block data
                         const request = { 
                             hash: chunkMeta.blockId, 
@@ -1234,13 +1236,34 @@
                         
                         // Find transaction with matching TxID
                         let payload = null;
+                        const txCount = block.transactions?.length || 0;
+                        log(`ブロック内のトランザクション数: ${txCount}`, 'info');
+                        
                         for (const tx of block.transactions || []) {
-                            if (tx.verboseData?.transactionId === chunkMeta.txid) {
+                            const txId = tx.verboseData?.transactionId || tx.id;
+                            if (txId === chunkMeta.txid) {
+                                log(`TxID一致: ${txId.substring(0, 16)}...`, 'info');
                                 if (tx.payload && tx.payload !== '') {
                                     // Get raw binary payload from hex
                                     const hexPayload = tx.payload;
-                                    payload = new Uint8Array(hexPayload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                    log(`ペイロード長: ${hexPayload.length} 文字`, 'info');
+                                    // Check if it's already hex or needs conversion
+                                    try {
+                                        // First try to decode as hex
+                                        payload = new Uint8Array(hexPayload.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+                                        log(`Hex decode成功: ${payload.length} バイト`, 'info');
+                                    } catch (e) {
+                                        // If hex decode fails, assume it might be base64
+                                        log(`Hex decode failed for chunk ${i + 1}, trying base64...`, 'warning');
+                                        try {
+                                            payload = fromBase64(hexPayload);
+                                        } catch (e2) {
+                                            throw new Error(`Failed to decode payload for chunk ${i + 1}`);
+                                        }
+                                    }
                                     break;
+                                } else {
+                                    log(`警告: ペイロードが空です (TxID: ${txId})`, 'warning');
                                 }
                             }
                         }
