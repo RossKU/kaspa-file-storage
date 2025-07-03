@@ -508,14 +508,25 @@
                         const normalizedTxId = txId.toLowerCase();
                         
                         // Debug: Log comparison for first few blocks
-                        if (stats.blocksReceived <= 5 && watchList.size > 0) {
+                        if (stats.blocksReceived <= 10 && watchList.size > 0) {
                             const firstWatchId = Array.from(watchList.keys())[0];
                             console.log('Comparing:', {
                                 txId: normalizedTxId,
                                 watchId: firstWatchId,
                                 match: watchList.has(normalizedTxId)
                             });
-                            addDebugLog(`Comparing: txId=${normalizedTxId.substring(0,10)}... watchId=${firstWatchId.substring(0,10)}... match=${watchList.has(normalizedTxId)}`);
+                            addDebugLog(`Comparing: txId=${normalizedTxId} with watchList`);
+                            addDebugLog(`  - normalizedTxId: ${normalizedTxId}`);
+                            addDebugLog(`  - firstWatchId: ${firstWatchId}`);
+                            addDebugLog(`  - watchList.size: ${watchList.size}`);
+                            addDebugLog(`  - watchList has txId: ${watchList.has(normalizedTxId)}`);
+                            
+                            // Check all items in watchList
+                            for (const [watchId, metadata] of watchList) {
+                                if (normalizedTxId === watchId) {
+                                    addDebugLog(`  ✅ MATCH FOUND! ${normalizedTxId} === ${watchId}`);
+                                }
+                            }
                         }
                         
                         // Check if this transaction is in our watch list
