@@ -1502,7 +1502,7 @@
                 // Start WebSocket monitoring for transaction confirmations
                 if (!wsMonitorActive) {
                     log('WebSocket監視を開始します...', 'info');
-                    await startWebSocketMonitoring();
+                    await startMonitoring();
                 } else {
                     log('WebSocket監視は既に動作中です', 'info');
                     log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
@@ -2842,6 +2842,12 @@
                             log('RPC接続エラー - 再接続を試みます', 'error');
                             // Reinitialize RPC client
                             await initializeRpcClient();
+                            
+                            // Restart WebSocket monitoring if it was active
+                            if (wsMonitorActive) {
+                                log('WebSocket監視を再開します', 'info');
+                                await restartMonitoring();
+                            }
                         }
                     }
                 }
@@ -2878,82 +2884,115 @@
             // Make functions available globally
             window.setupWorkspace = setupWorkspace;
             window.showWorkspaceStatus = showWorkspaceStatus;
-            window.startWebSocketMonitoring = startWebSocketMonitoring;
         });
         
-        // WebSocket monitoring function
-        async function startWebSocketMonitoring() {
+        // WebSocket monitoring (from complete.html with network recovery enhancements)
+        window.startMonitoring = async function() {
+            if (!rpcClient) {
+                log('先にシステムを初期化してください', 'error');
+                return;
+            }
+            
             if (wsMonitorActive) {
-                log('WebSocket監視は既に動作中です', 'info');
+                monitorLog('すでに監視中です', 'warning');
                 return;
             }
             
             try {
-                // Initialize WebSocket connection for transaction monitoring
-                const wsUrl = config.network === 'testnet-10' 
-                    ? 'wss://kaspa-testnet-10-ws.kaspa.org' 
-                    : 'wss://kaspa-mainnet-ws.kaspa.org';
+                monitorLog('WebSocket監視を開始...');
+                log('WebSocket監視を開始しました', 'info');
+                wsMonitorActive = true;
                 
-                log(`WebSocket接続を開始: ${wsUrl}`, 'info');
-                wsConnection = new WebSocket(wsUrl);
+                await rpcClient.subscribeBlockAdded();
+                monitorLog('Block Addedイベントを購読しました', 'success');
+                log('WebSocket経由でブロック追加イベントの監視を開始', 'info');
                 
-                wsConnection.onopen = () => {
-                    log('WebSocket接続を確立しました', 'success');
-                    wsMonitorActive = true;
+                document.getElementById('monitorStartTime').textContent = new Date().toLocaleString();
+                
+                // Remove old event listeners to prevent duplicates
+                rpcClient.removeAllListeners('block-added');
+                
+                rpcClient.addEventListener('block-added', (event) => {
+                    const block = event.data.block;
+                    const blockId = block.header.hash;
+                    const blockTime = new Date(Number(block.header.timestamp));
                     
-                    // Subscribe to address notifications
-                    wsConnection.send(JSON.stringify({
-                        method: 'subscribeVirtualDaaScoreChangedNotifications',
-                        params: {}
-                    }));
+                    // Clean up old transactions (older than 90 seconds)
+                    const now = Date.now();
+                    for (const [txid, txData] of monitoredTransactions.entries()) {
+                        if (now - txData.timestamp > 90000) {
+                            monitoredTransactions.delete(txid);
+                            log(`WebSocket監視から古いトランザクションを削除: ${txid.substring(0, 16)}... (90秒経過)`, 'info');
+                        }
+                    }
                     
-                    log('WebSocket監視を開始しました', 'success');
-                    log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
-                };
-                
-                wsConnection.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        
-                        // Clean up old transactions (older than 90 seconds)
-                        const now = Date.now();
-                        for (const [txid, txData] of monitoredTransactions.entries()) {
-                            if (now - txData.timestamp > 90000) {
-                                monitoredTransactions.delete(txid);
-                                log(`WebSocket監視から古いトランザクションを削除: ${txid.substring(0, 16)}... (90秒経過)`);
+                    if (block.transactions && block.transactions.length > 0) {
+                        for (const tx of block.transactions) {
+                            const txId = tx.verboseData?.transactionId;
+                            if (txId) {
+                                monitoredTransactions.set(txId, {
+                                    blockId: blockId,
+                                    blockTime: blockTime,
+                                    foundAt: new Date(),
+                                    timestamp: now
+                                });
+                                
+                                if (tx.payload && tx.payload !== '') {
+                                    monitorLog(`ペイロード付きTx検出: ${txId}`, 'success');
+                                    log(`WebSocket: ペイロード付きトランザクション検出 - ${txId.substring(0, 16)}...`, 'info');
+                                }
                             }
                         }
                         
-                        // Process notifications
-                        if (data.method === 'notifyVirtualDaaScoreChangedNotification') {
-                            // This is a heartbeat-like notification
-                            // In a real implementation, we would check for transaction confirmations here
-                        }
-                    } catch (err) {
-                        // Ignore parse errors
+                        document.getElementById('monitoringCount').textContent = monitoredTransactions.size;
+                        document.getElementById('detectedCount').textContent = monitoredTransactions.size;
+                        
+                        log(`WebSocket: ブロック ${blockId.substring(0, 16)}... に ${block.transactions.length} トランザクション`, 'info');
                     }
-                };
+                });
                 
-                wsConnection.onerror = (error) => {
-                    log(`WebSocketエラー: ${error.message || 'Unknown error'}`, 'error');
-                    wsMonitorActive = false;
-                };
-                
-                wsConnection.onclose = () => {
-                    log('WebSocket接続が切断されました', 'warning');
-                    wsMonitorActive = false;
-                    wsConnection = null;
-                    
-                    // Clean up monitored transactions
-                    if (monitoredTransactions.size > 0) {
-                        log(`監視中のトランザクションをクリア: ${monitoredTransactions.size}件`, 'info');
-                        monitoredTransactions.clear();
-                    }
-                };
+                monitorLog('監視を開始しました', 'success');
+                log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
                 
             } catch (error) {
-                log(`WebSocket監視の開始に失敗: ${error.message}`, 'error');
+                monitorLog(`監視開始エラー: ${error.message}`, 'error');
+                log(`WebSocket監視エラー: ${error.message}`, 'error');
                 wsMonitorActive = false;
+                
+                // Network error recovery - will retry on reconnect
+                if (error.message.includes('network') || error.message.includes('connection')) {
+                    log('ネットワークエラーを検出 - 再接続時に再試行します', 'warning');
+                }
+            }
+        };
+
+        window.stopMonitoring = async function() {
+            if (!wsMonitorActive) {
+                monitorLog('監視は開始されていません', 'warning');
+                return;
+            }
+            
+            try {
+                if (rpcClient) {
+                    await rpcClient.unsubscribeBlockAdded();
+                    monitorLog('監視を停止しました', 'success');
+                    log('WebSocket監視を停止しました', 'info');
+                }
+                wsMonitorActive = false;
+                
+            } catch (error) {
+                monitorLog(`監視停止エラー: ${error.message}`, 'error');
+                log(`WebSocket監視停止エラー: ${error.message}`, 'error');
+            }
+        };
+        
+        // Restart monitoring after network recovery
+        async function restartMonitoring() {
+            if (wsMonitorActive) {
+                log('WebSocket監視の再起動を試みます', 'info');
+                await stopMonitoring();
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                await startMonitoring();
             }
         }
     </script>
