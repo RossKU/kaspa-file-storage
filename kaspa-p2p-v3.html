@@ -2738,7 +2738,7 @@
                 log(`アップロード完了! 総コスト: ${totalCost.toFixed(5)} KAS`, 'success');
                 
                 // Add to history
-                if (historyManager) {
+                if (window.historyManager) {
                     const uploadData = {
                         id: `upload_${Date.now()}`,
                         fileName: currentFile.name,
@@ -2753,7 +2753,7 @@
                         password: currentPassword || null,
                         metadata: kaspaMetadata
                     };
-                    await historyManager.addUpload(uploadData);
+                    await window.historyManager.addUpload(uploadData);
                     
                     // Delete .kprogress file if exists
                     if (progressManager && window.workspaceHandle) {
@@ -2984,6 +2984,19 @@
                     reference: metaTxReference,
                     createdAt: Date.now()
                 };
+                
+                // Update history with metaTxId
+                if (window.historyManager && window.currentFileCID) {
+                    const history = window.historyManager.getHistory();
+                    const latestUpload = history.find(h => h.cid === window.currentFileCID);
+                    if (latestUpload) {
+                        latestUpload.metaTxId = metaTxReference;
+                        // Save updated history
+                        localStorage.setItem(window.historyManager.dbName, JSON.stringify(history));
+                        await window.historyManager.saveToFile();
+                        log('[UploadHistoryManager] メタTxIDを履歴に追加しました', 'debug');
+                    }
+                }
                 
             } catch (error) {
                 log(`メタトランザクション作成エラー: ${error.message || error}`, 'error');
