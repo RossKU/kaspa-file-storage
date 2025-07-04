@@ -2909,9 +2909,6 @@
                 
                 document.getElementById('monitorStartTime').textContent = new Date().toLocaleString();
                 
-                // Remove old event listeners to prevent duplicates
-                rpcClient.removeAllListeners('block-added');
-                
                 rpcClient.addEventListener('block-added', (event) => {
                     const block = event.data.block;
                     const blockId = block.header.hash;
