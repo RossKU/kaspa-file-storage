@@ -647,7 +647,7 @@
                         
                         // Load into localStorage
                         localStorage.setItem(this.dbName, JSON.stringify(kenv.uploads || []));
-                        this.updateUI();
+                        this.updateHistoryUI();
                         log(`履歴を読み込みました: ${kenv.uploads?.length || 0}件`, 'success');
                     }
                 } catch (error) {
@@ -862,7 +862,7 @@
                             
                             localStorage.setItem(this.dbName, JSON.stringify(uniqueHistory));
                             await this.saveToFile();
-                            this.updateUI();
+                            this.updateHistoryUI();
                             
                             log(`${kenv.uploads.length}件の履歴をインポートしました`, 'success');
                         }
@@ -1527,8 +1527,8 @@
                 }
                 
                 // Load history if historyManager is initialized
-                if (historyManager && historyManager.encryptionKey) {
-                    await historyManager.loadFromFile();
+                if (window.historyManager && window.historyManager.encryptionKey) {
+                    await window.historyManager.loadFromFile();
                 }
                 
                 // Update UI to show workspace status
@@ -1778,9 +1778,10 @@
                 document.getElementById('uploadBtn').disabled = false;
                 
                 // Initialize history manager
-                historyManager = new UploadHistoryManager();
-                await historyManager.initialize(privateKeyHex);
-                historyManager.updateUI();
+                if (window.historyManager) {
+                    await window.historyManager.initialize(config.testPrivateKey);
+                    window.historyManager.updateHistoryUI();
+                }
                 
                 updateNetworkStatus('online', 'オンライン');
                 
