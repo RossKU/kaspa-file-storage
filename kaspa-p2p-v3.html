@@ -84,6 +84,42 @@
             cursor: not-allowed;
             transform: none;
         }
+        .small-button {
+            background: #16213e;
+            color: #49EACB;
+            border: 1px solid #49EACB;
+            padding: 8px 16px;
+            font-size: 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .small-button:hover {
+            background: #49EACB;
+            color: #16213e;
+        }
+        .history-item {
+            background: #16213e;
+            border: 1px solid #333;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        .history-item:hover {
+            border-color: #e94560;
+        }
+        .history-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .history-item-actions button {
+            margin-left: 5px;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
         input[type="text"], input[type="password"], input[type="number"], select, textarea {
             width: 100%;
             background: #16213e;
@@ -300,6 +336,7 @@
         <button class="tab-btn active" onclick="switchTab('upload')">📤 Upload</button>
         <button class="tab-btn" onclick="switchTab('download')">📥 Download</button>
         <button class="tab-btn" onclick="switchTab('monitor')">📡 Monitor</button>
+        <button class="tab-btn" onclick="switchTab('history')">📜 History</button>
         <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
     </div>
 
@@ -480,6 +517,33 @@
         </div>
     </div>
 
+    <!-- History Tab -->
+    <div id="history-tab" class="tab-content">
+        <div class="container">
+            <h2>📜 アップロード履歴</h2>
+            
+            <div class="metric-box">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3>履歴管理</h3>
+                    <div>
+                        <button onclick="window.historyManager?.exportKenv()" class="small-button">📥 .kenvエクスポート</button>
+                        <button onclick="window.historyManager?.importKenv()" class="small-button">📤 .kenvインポート</button>
+                    </div>
+                </div>
+                
+                <div id="historyStats" style="margin-bottom: 15px; padding: 10px; background: #0f3460; border-radius: 5px;">
+                    <span>総アップロード: <strong id="totalUploads">0</strong></span> | 
+                    <span>総容量: <strong id="totalSize">0 KB</strong></span> | 
+                    <span>総コスト: <strong id="totalCost">0 KAS</strong></span>
+                </div>
+                
+                <div id="historyList" style="max-height: 400px; overflow-y: auto;">
+                    <!-- 履歴アイテムがここに動的に追加される -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Settings Tab -->
     <div id="settings-tab" class="tab-content">
         <div class="container">
@@ -540,7 +604,328 @@
         let wsReconnectInterval = null;
         let workspaceHandle = null; // File System Access API directory handle
         let progressFileMap = new Map(); // Map of filename -> {cid, fileHandle}
+        let historyManager = null; // Upload history manager
         
+        // Upload History Manager Class
+        class UploadHistoryManager {
+            constructor() {
+                this.dbName = 'kaspa-upload-history';
+                this.fileName = 'kaspa-uploads.kenv';
+                this.maxSize = 100 * 1024 * 1024; // 100MB
+                this.archiveSize = 10 * 1024 * 1024; // 10MB chunks
+                this.encryptionKey = null;
+            }
+            
+            async initialize(privateKey) {
+                // Derive encryption key from private key
+                const keyData = new TextEncoder().encode(privateKey);
+                const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+                this.encryptionKey = await crypto.subtle.importKey(
+                    'raw',
+                    hashBuffer,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['encrypt', 'decrypt']
+                );
+                
+                // Load existing history from workspace
+                if (window.workspaceHandle) {
+                    await this.loadFromFile();
+                }
+            }
+            
+            async loadFromFile() {
+                try {
+                    const fileHandle = await window.workspaceHandle.getFileHandle(this.fileName);
+                    const file = await fileHandle.getFile();
+                    const encryptedData = await file.text();
+                    const data = JSON.parse(encryptedData);
+                    
+                    if (data.encrypted) {
+                        const decrypted = await this.decrypt(data.data);
+                        const kenv = JSON.parse(decrypted);
+                        
+                        // Load into localStorage
+                        localStorage.setItem(this.dbName, JSON.stringify(kenv.uploads || []));
+                        this.updateUI();
+                        log(`履歴を読み込みました: ${kenv.uploads?.length || 0}件`, 'success');
+                    }
+                } catch (error) {
+                    // File doesn't exist or error reading
+                    log('履歴ファイルが見つかりません', 'info');
+                }
+            }
+            
+            async saveToFile() {
+                if (!window.workspaceHandle) return;
+                
+                try {
+                    const history = this.getHistory();
+                    const stats = this.calculateStats();
+                    
+                    const kenv = {
+                        version: "1.0",
+                        schemaVersion: 1,
+                        wallet: address?.toString() || '',
+                        created: new Date().toISOString(),
+                        lastModified: new Date().toISOString(),
+                        uploads: history,
+                        stats: stats
+                    };
+                    
+                    // Check size and archive if needed
+                    const size = new Blob([JSON.stringify(kenv)]).size;
+                    if (size > this.maxSize) {
+                        await this.archiveOldEntries();
+                    }
+                    
+                    // Encrypt and save
+                    const encrypted = await this.encrypt(JSON.stringify(kenv));
+                    const data = {
+                        encrypted: true,
+                        version: "1.0",
+                        data: encrypted
+                    };
+                    
+                    const fileHandle = await window.workspaceHandle.getFileHandle(this.fileName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(JSON.stringify(data, null, 2));
+                    await writable.close();
+                    
+                    log('.kenvファイルを保存しました', 'success');
+                } catch (error) {
+                    log(`履歴保存エラー: ${error.message}`, 'error');
+                }
+            }
+            
+            async encrypt(text) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(text);
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                
+                const encrypted = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    this.encryptionKey,
+                    data
+                );
+                
+                // Combine iv and encrypted data
+                const combined = new Uint8Array(iv.length + encrypted.byteLength);
+                combined.set(iv, 0);
+                combined.set(new Uint8Array(encrypted), iv.length);
+                
+                return btoa(String.fromCharCode(...combined));
+            }
+            
+            async decrypt(base64) {
+                const combined = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                const iv = combined.slice(0, 12);
+                const encrypted = combined.slice(12);
+                
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    this.encryptionKey,
+                    encrypted
+                );
+                
+                return new TextDecoder().decode(decrypted);
+            }
+            
+            async addUpload(uploadData) {
+                const history = this.getHistory();
+                history.unshift(uploadData); // Add to beginning
+                localStorage.setItem(this.dbName, JSON.stringify(history));
+                
+                await this.saveToFile();
+                this.updateUI();
+            }
+            
+            getHistory() {
+                const data = localStorage.getItem(this.dbName);
+                return data ? JSON.parse(data) : [];
+            }
+            
+            calculateStats() {
+                const history = this.getHistory();
+                return {
+                    totalUploads: history.length,
+                    totalSize: history.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+                    totalCost: history.reduce((sum, item) => sum + (item.totalCost || 0), 0)
+                };
+            }
+            
+            updateUI() {
+                const stats = this.calculateStats();
+                
+                // Update stats
+                const totalUploads = document.getElementById('totalUploads');
+                const totalSize = document.getElementById('totalSize');
+                const totalCost = document.getElementById('totalCost');
+                
+                if (totalUploads) totalUploads.textContent = stats.totalUploads;
+                if (totalSize) totalSize.textContent = formatSize(stats.totalSize);
+                if (totalCost) totalCost.textContent = stats.totalCost.toFixed(5);
+                
+                // Update history list
+                const historyList = document.getElementById('historyList');
+                if (!historyList) return;
+                
+                const history = this.getHistory();
+                historyList.innerHTML = history.length === 0 ? 
+                    '<p style="text-align: center; color: #666;">アップロード履歴がありません</p>' :
+                    history.map(item => this.createHistoryItem(item)).join('');
+            }
+            
+            createHistoryItem(item) {
+                const date = new Date(item.uploadDate).toLocaleString('ja-JP');
+                const password = item.password || 'なし';
+                
+                return `
+                    <div class="history-item">
+                        <div class="history-item-header">
+                            <div>
+                                <strong>${item.fileName}</strong>
+                                <span style="color: #666; font-size: 12px; margin-left: 10px;">${formatSize(item.fileSize)}</span>
+                            </div>
+                            <div class="history-item-actions">
+                                <button onclick="historyManager.generateKaspa('${item.id}')" class="small-button">📄 .kaspa</button>
+                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}')" class="small-button">📋 MetaTxID</button>` : ''}
+                                ${password !== 'なし' ? `<button onclick="copyToClipboard('${password}')" class="small-button">🔑 Pass</button>` : ''}
+                            </div>
+                        </div>
+                        <div style="font-size: 12px; color: #999;">
+                            <div>日時: ${date}</div>
+                            <div>チャンク: ${item.chunks} | コスト: ${item.totalCost?.toFixed(5) || 0} KAS</div>
+                            ${item.metaTxId ? `<div>MetaTxID: ${item.metaTxId.substring(0, 16)}...</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            async generateKaspa(uploadId) {
+                const history = this.getHistory();
+                const item = history.find(h => h.id === uploadId);
+                if (!item) return;
+                
+                // TODO: Generate .kaspa file from history item
+                log('.kaspaファイル生成機能は実装中です', 'info');
+            }
+            
+            async exportKenv() {
+                try {
+                    await this.saveToFile();
+                    
+                    // Also trigger download
+                    const fileHandle = await window.workspaceHandle.getFileHandle(this.fileName);
+                    const file = await fileHandle.getFile();
+                    const content = await file.text();
+                    
+                    const blob = new Blob([content], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = this.fileName;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    
+                    log('.kenvファイルをエクスポートしました', 'success');
+                } catch (error) {
+                    log(`エクスポートエラー: ${error.message}`, 'error');
+                }
+            }
+            
+            async importKenv() {
+                try {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = '.kenv';
+                    
+                    input.onchange = async (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        
+                        const content = await file.text();
+                        const data = JSON.parse(content);
+                        
+                        if (data.encrypted && data.data) {
+                            const decrypted = await this.decrypt(data.data);
+                            const kenv = JSON.parse(decrypted);
+                            
+                            // Merge with existing history
+                            const existingHistory = this.getHistory();
+                            const newHistory = [...kenv.uploads, ...existingHistory];
+                            
+                            // Remove duplicates by id
+                            const uniqueHistory = newHistory.filter((item, index, self) =>
+                                index === self.findIndex(h => h.id === item.id)
+                            );
+                            
+                            localStorage.setItem(this.dbName, JSON.stringify(uniqueHistory));
+                            await this.saveToFile();
+                            this.updateUI();
+                            
+                            log(`${kenv.uploads.length}件の履歴をインポートしました`, 'success');
+                        }
+                    };
+                    
+                    input.click();
+                } catch (error) {
+                    log(`インポートエラー: ${error.message}`, 'error');
+                }
+            }
+            
+            async archiveOldEntries() {
+                const history = this.getHistory();
+                if (history.length <= 100) return;
+                
+                // Keep recent 100 entries
+                const recentHistory = history.slice(0, 100);
+                const archiveHistory = history.slice(100);
+                
+                // Save archive
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const archiveName = `kaspa-uploads-archive-${timestamp}.kenv`;
+                
+                const archiveData = {
+                    version: "1.0",
+                    archived: true,
+                    uploads: archiveHistory
+                };
+                
+                const encrypted = await this.encrypt(JSON.stringify(archiveData));
+                const data = {
+                    encrypted: true,
+                    version: "1.0",
+                    data: encrypted
+                };
+                
+                const fileHandle = await window.workspaceHandle.getFileHandle(archiveName, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(JSON.stringify(data, null, 2));
+                await writable.close();
+                
+                // Update current history
+                localStorage.setItem(this.dbName, JSON.stringify(recentHistory));
+                log(`${archiveHistory.length}件の古い履歴をアーカイブしました`, 'info');
+            }
+        }
+        
+        // Utility functions
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('クリップボードにコピーしました', 'success');
+            }).catch(err => {
+                log('コピーエラー: ' + err.message, 'error');
+            });
+        }
         
         // Progress Manager Class
         class ProgressManager {
@@ -994,9 +1379,14 @@
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             
-            const tabIndex = ['upload', 'download', 'monitor', 'settings'].indexOf(tab);
+            const tabIndex = ['upload', 'download', 'monitor', 'settings', 'history'].indexOf(tab);
             document.querySelectorAll('.tab-btn')[tabIndex].classList.add('active');
             document.getElementById(`${tab}-tab`).classList.add('active');
+            
+            // Update history tab when switching to it
+            if (tab === 'history' && window.historyManager) {
+                window.historyManager.updateHistoryUI();
+            }
         };
 
         // Filter out trash and system files
@@ -1119,17 +1509,13 @@
                     const progress = JSON.parse(content);
                     
                     if (progress && progress.version === '2.0' && 
-                        progress.chunks && progress.chunks.length > 0) {
-                        
-                        const isComplete = progress.metadata.completedChunks >= progress.metadata.totalChunks;
-                        const statusText = isComplete ? '完了' : '未完了';
-                        const actionText = isComplete ? '確認/ダウンロード' : '続行';
+                        progress.metadata.completedChunks < progress.metadata.totalChunks) {
                         
                         const useExisting = confirm(
-                            `作業フォルダに${statusText}のアップロードが見つかりました。\n\n` +
+                            '作業フォルダに未完了のアップロードが見つかりました。\n\n' +
                             `ファイル: ${progress.fileInfo.name}\n` +
-                            `進捗: ${progress.metadata.completedChunks}/${progress.metadata.totalChunks} チャンク (${statusText})\n\n` +
-                            `これを${actionText}しますか？`
+                            `進捗: ${progress.metadata.completedChunks}/${progress.metadata.totalChunks} チャンク\n\n` +
+                            'これを続行しますか？'
                         );
                         
                         if (useExisting) {
@@ -1138,6 +1524,11 @@
                     }
                 } catch (err) {
                     // No existing progress file
+                }
+                
+                // Load history if historyManager is initialized
+                if (historyManager && historyManager.encryptionKey) {
+                    await historyManager.loadFromFile();
                 }
                 
                 // Update UI to show workspace status
@@ -1386,6 +1777,11 @@
                 document.getElementById('testBtn').disabled = false;
                 document.getElementById('uploadBtn').disabled = false;
                 
+                // Initialize history manager
+                historyManager = new UploadHistoryManager();
+                await historyManager.initialize(privateKeyHex);
+                historyManager.updateUI();
+                
                 updateNetworkStatus('online', 'オンライン');
                 
             } catch (error) {
@@ -1489,16 +1885,19 @@
                         window.currentFileCID = progressInfo.cid;
                         
                         // Show auto-resume notification
-                        const isComplete = progress.metadata.completedChunks >= progress.metadata.totalChunks;
-                        const statusText = isComplete ? '完了' : '未完了';
-                        const actionText = isComplete ? '確認/ダウンロード' : 'レジューム';
+                        // 完了チェック
+                        if (progress.metadata.completedChunks >= progress.metadata.totalChunks) {
+                            log(`完了済みファイルを検出: ${file.name}`, 'info');
+                            // TODO: 履歴に移動して.kprogress削除
+                            return;
+                        }
                         
                         const resumeConfirm = confirm(
                             `進捗ファイルを自動検出しました！\n\n` +
                             `ファイル: ${file.name}\n` +
-                            `進捗: ${progress.metadata.completedChunks}/${progress.metadata.totalChunks} チャンク (${statusText})\n` +
+                            `進捗: ${progress.metadata.completedChunks}/${progress.metadata.totalChunks} チャンク\n` +
                             `CID: ${progressInfo.cid}\n\n` +
-                            `${actionText}しますか？`
+                            `レジュームしますか？`
                         );
                         
                         if (!resumeConfirm) {
@@ -2222,6 +2621,35 @@
                 });
                 
                 log(`アップロード完了! 総コスト: ${totalCost.toFixed(5)} KAS`, 'success');
+                
+                // Add to history
+                if (historyManager) {
+                    const uploadData = {
+                        id: `upload_${Date.now()}`,
+                        fileName: currentFile.name,
+                        fileSize: currentFile.size,
+                        fileSha256: fileHash,
+                        uploadDate: new Date().toISOString(),
+                        chunks: totalChunks,
+                        totalCost: totalCost,
+                        metaTxId: null, // Will be set if meta-tx is used
+                        firstChunkTxId: processedChunks[0]?.txid || '',
+                        cid: window.currentFileCID || '',
+                        password: currentPassword || null,
+                        metadata: kaspaMetadata
+                    };
+                    await historyManager.addUpload(uploadData);
+                    
+                    // Delete .kprogress file if exists
+                    if (progressManager && window.workspaceHandle) {
+                        try {
+                            await window.workspaceHandle.removeEntry(progressManager.progressFileName);
+                            log('.kprogressファイルを削除しました', 'info');
+                        } catch (err) {
+                            // File might not exist
+                        }
+                    }
+                }
                 
                 // Check if meta-tx option is enabled
                 const useMetaTx = document.getElementById('useMetaTx').checked;
@@ -3429,6 +3857,15 @@
                 await startMonitoring();
             }
         }
+        
+        // Initialize system on load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize history manager
+            window.historyManager = new UploadHistoryManager();
+            
+            // Check for auto-resume files
+            checkForResumeFiles();
+        });
     </script>
 </body>
 </html>
