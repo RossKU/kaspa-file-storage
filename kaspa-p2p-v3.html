@@ -998,6 +998,64 @@
             document.getElementById(`${tab}-tab`).classList.add('active');
         };
 
+        // Filter out trash and system files
+        function shouldSkipFile(fileName, filePath = '') {
+            // === iOS/iPadOS patterns ===
+            if (fileName.startsWith('._')) return true;
+            
+            const iosHiddenDirs = [
+                '.Trashes', '.TemporaryItems', '.fseventsd',
+                '.Spotlight-V100', '.DocumentRevisions-V100'
+            ];
+            if (iosHiddenDirs.includes(fileName)) return true;
+            
+            // Safari temporary download files
+            if (fileName.endsWith('.download') && fileName.length > 9) return true;
+            
+            // Recently Deleted folders
+            if (filePath.includes('Recently Deleted') || 
+                filePath.includes('最近削除した項目')) return true;
+            
+            // === Android patterns ===
+            if (fileName.startsWith('.trashed-')) return true;
+            if (fileName.startsWith('.trash')) return true;
+            if (fileName === '.FilesByGoogleTrash') return true;
+            if (fileName === '.thumbnails') return true;
+            
+            // === Windows patterns ===
+            if (/^\$RECYCLE\.BIN$/i.test(fileName)) return true;
+            if (/^RECYCLER$/i.test(fileName)) return true;
+            if (/^\$[IR][A-Z0-9]{6,7}\./i.test(fileName)) return true;
+            
+            // === macOS patterns ===
+            if (fileName === '.Trash') return true;
+            if (fileName === '.DS_Store') return true;
+            if (fileName === '.AppleDouble') return true;
+            if (fileName === '.LSOverride') return true;
+            if (fileName === '__MACOSX') return true;
+            
+            // === Linux patterns ===
+            if (fileName.endsWith('.trashinfo')) return true;
+            if (/^\.Trash-\d+$/.test(fileName)) return true;
+            if (filePath.includes('.local/share/Trash')) return true;
+            
+            // === Common system files ===
+            const systemFiles = [
+                'Thumbs.db', 'desktop.ini', 'System Volume Information',
+                'hiberfil.sys', 'pagefile.sys', '.gitignore', '.gitkeep'
+            ];
+            if (systemFiles.includes(fileName)) return true;
+            
+            // === Temporary files ===
+            if (fileName.startsWith('~$')) return true;
+            if (fileName.endsWith('.tmp')) return true;
+            if (fileName.endsWith('.temp')) return true;
+            if (fileName.endsWith('.cache')) return true;
+            if (fileName === 'Cache.db') return true;
+            
+            return false;
+        }
+
         // Setup workspace directory for File System Access API
         async function setupWorkspace() {
             try {
@@ -1012,10 +1070,18 @@
                 // Scan for .kprogress files
                 progressFileMap.clear();
                 let progressCount = 0;
+                let skippedCount = 0;
                 
                 try {
                     for await (const entry of dirHandle.values()) {
                         if (entry.kind === 'file' && entry.name.endsWith('.kprogress')) {
+                            // Skip trash/system files
+                            if (shouldSkipFile(entry.name)) {
+                                skippedCount++;
+                                log(`スキップ: ${entry.name}`, 'debug');
+                                continue;
+                            }
+                            
                             // Extract base filename and CID from filename
                             const match = entry.name.match(/^(.+?)\.([a-z0-9]{8})\.kprogress$/);
                             if (match) {
@@ -1035,6 +1101,10 @@
                     if (progressCount > 0) {
                         log(`${progressCount}個の進捗ファイルを検出しました`, 'success');
                         showToast(`レジューム可能: ${progressCount}個のファイル`, 'info');
+                    }
+                    
+                    if (skippedCount > 0) {
+                        log(`${skippedCount}個のゴミ箱/システムファイルをスキップしました`, 'debug');
                     }
                 } catch (err) {
                     log('進捗ファイルスキャンエラー: ' + err.message, 'warning');
