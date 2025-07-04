@@ -2737,12 +2737,6 @@
                 
                 log(`アップロード完了! 総コスト: ${totalCost.toFixed(5)} KAS`, 'success');
                 
-                // Auto-stop WebSocket monitoring after upload completion
-                if (window.wsMonitorActive) {
-                    log('アップロード完了 - WebSocket監視を自動停止します', 'info');
-                    await stopMonitoring();
-                }
-                
                 // Add to history
                 if (window.historyManager) {
                     const uploadData = {
@@ -2777,6 +2771,11 @@
                 if (useMetaTx) {
                     await createAndUploadMetaTx();
                 } else {
+                    // Auto-stop monitoring for non-meta-tx uploads
+                    if (window.wsMonitorActive) {
+                        log('アップロード完了 - WebSocket監視を自動停止します', 'info');
+                        await stopMonitoring();
+                    }
                     document.getElementById('generateKaspaSection').style.display = 'block';
                 }
                 
