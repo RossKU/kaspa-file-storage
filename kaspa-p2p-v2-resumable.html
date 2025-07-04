@@ -1499,9 +1499,14 @@
                 // Initial UTXO fetch
                 let currentUtxos = null;
                 
-                // WebSocket monitoring is not needed for upload tracking in resumable version
-                // We rely on transaction confirmation via RPC instead
-                log('WebSocket監視をスキップ - RPC確認を使用します', 'info');
+                // Start WebSocket monitoring for transaction confirmations
+                if (!wsMonitorActive) {
+                    log('WebSocket監視を開始します...', 'info');
+                    await startWebSocketMonitoring();
+                } else {
+                    log('WebSocket監視は既に動作中です', 'info');
+                    log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
+                }
                 
                 // Process chunks with resume support
                 const chunksList = document.getElementById('chunksList');
@@ -1613,26 +1618,51 @@
                             
                             log(`チャンク ${i + 1} TxID: ${txid.substring(0, 16)}...`, 'success');
                             
-                            // Wait for confirmation via RPC
+                            // Try WebSocket monitoring first
                             log(`トランザクション確認を待機中...`);
+                            
+                            // Register transaction for monitoring
+                            if (wsMonitorActive && monitoredTransactions) {
+                                monitoredTransactions.set(txid, {
+                                    timestamp: Date.now(),
+                                    chunkIndex: i,
+                                    blockId: null
+                                });
+                                log(`WebSocket監視にトランザクションを登録: ${txid.substring(0, 16)}...`);
+                            }
+                            
+                            // Wait for confirmation (WebSocket or RPC)
                             let waitTime = 0;
-                            const maxWaitTime = 30000; // 30 seconds
+                            const maxWaitTime = 30000; // 30 seconds for RPC check
                             
                             while (!blockId && waitTime < maxWaitTime) {
-                                try {
-                                    // Try to get transaction info
-                                    const txInfo = await rpcClient.getTransaction({
-                                        transactionId: txid,
-                                        includeBlockInfo: true
-                                    });
-                                    
-                                    if (txInfo && txInfo.blockHash) {
-                                        blockId = txInfo.blockHash;
-                                        log(`RPC経由でBlockID取得: ${blockId.substring(0, 16)}...`);
+                                // Check WebSocket monitor first
+                                if (wsMonitorActive && monitoredTransactions && monitoredTransactions.has(txid)) {
+                                    const monitorData = monitoredTransactions.get(txid);
+                                    if (monitorData.blockId) {
+                                        blockId = monitorData.blockId;
+                                        log(`WebSocket経由でBlockID取得: ${blockId.substring(0, 16)}...`);
                                         break;
                                     }
-                                } catch (err) {
-                                    // Transaction might not be confirmed yet
+                                }
+                                
+                                // After 30 seconds, try RPC
+                                if (waitTime >= 30000) {
+                                    try {
+                                        log('30秒経過 - RPCで確認を試みます...');
+                                        const txInfo = await rpcClient.getTransaction({
+                                            transactionId: txid,
+                                            includeBlockInfo: true
+                                        });
+                                        
+                                        if (txInfo && txInfo.blockHash) {
+                                            blockId = txInfo.blockHash;
+                                            log(`RPC経由でBlockID取得: ${blockId.substring(0, 16)}...`);
+                                            break;
+                                        }
+                                    } catch (err) {
+                                        // Transaction might not be confirmed yet
+                                    }
                                 }
                                 
                                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -1641,7 +1671,12 @@
                             
                             // Fallback to Explorer API
                             if (!blockId) {
-                                log(`RPC待機タイムアウト、Explorer APIを使用`);
+                                if (wsMonitorActive && monitoredTransactions.has(txid)) {
+                                    const elapsed = Date.now() - monitoredTransactions.get(txid).timestamp;
+                                    log(`WebSocketで${elapsed/1000}秒間見つからず - Explorer APIを使用`);
+                                } else {
+                                    log(`RPC待機タイムアウト - Explorer APIを使用`);
+                                }
                                 const apiUrl = `https://api-tn10.kaspa.org/transactions/${txid}`;
                                 const response = await fetch(apiUrl);
                                 if (response.ok) {
@@ -2843,6 +2878,7 @@
             // Make functions available globally
             window.setupWorkspace = setupWorkspace;
             window.showWorkspaceStatus = showWorkspaceStatus;
+            window.startWebSocketMonitoring = startWebSocketMonitoring;
         });
         
         // WebSocket monitoring function
