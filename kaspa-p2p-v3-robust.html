@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v2.0 - Complete Edition</title>
+    <title>Kaspa P2P File Storage v3.0 - Robust Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -286,8 +286,8 @@
 </head>
 <body>
     <div class="header">
-        <h1>🚀 Kaspa P2P File Storage v2.0 - Complete Edition</h1>
-        <p>実ネットワーク接続による完全なP2Pファイル共有システム</p>
+        <h1>🛡️ Kaspa P2P File Storage v3.0 - Robust Edition</h1>
+        <p>エンタープライズグレードの堅牢なP2Pファイル共有システム</p>
         <div id="networkStatus" style="margin-top: 10px;">
             <span class="status-indicator status-offline"></span>
             <span id="statusText">未接続</span>
@@ -309,6 +309,7 @@
             <h2>🔧 システム初期化</h2>
             <div class="grid-2">
                 <button onclick="initializeSystem()" id="initBtn">システムを初期化</button>
+                <button onclick="setupWorkspace()" id="workspaceBtn">作業フォルダ設定</button>
                 <button onclick="testConnection()" id="testBtn" disabled>接続テスト</button>
             </div>
             <div id="initStatus" class="metric-box" style="display: none;"></div>
@@ -323,6 +324,22 @@
                 <small>またはドラッグ&ドロップ</small>
             </label>
             <input type="file" id="fileInput" onchange="handleFileSelect(event)">
+            
+            <!-- Resume Section -->
+            <div class="section-divider" style="margin: 20px 0;">
+                <p style="text-align: center; color: #999;">または</p>
+                <button onclick="loadProgressFile()" style="background: #16213e; color: #e94560; border: 2px solid #e94560;">
+                    📂 進捗ファイル (.progress.json) から再開
+                </button>
+                <input type="file" id="progressFileInput" accept=".json" style="display: none;" onchange="handleProgressFileSelect(event)">
+            </div>
+            
+            <!-- Resume Info -->
+            <div id="resumeInfo" style="display: none;" class="metric-box">
+                <h4 class="success">✅ レジューム準備完了</h4>
+                <div id="resumeDetails"></div>
+                <button onclick="cancelResume()" style="background: #666; margin-top: 10px;">キャンセル</button>
+            </div>
             
             <div class="grid-2">
                 <div>
@@ -479,7 +496,8 @@
             
             <div class="metric-box">
                 <h3>ログエクスポート</h3>
-                <button onclick="exportLogs()">ログをJSON形式でエクスポート</button>
+                <button onclick="exportLogs()">システムログをエクスポート</button>
+                <button onclick="exportErrorLog()">エラーログをエクスポート</button>
                 <button onclick="clearLogs()">ログをクリア</button>
             </div>
             
@@ -511,6 +529,428 @@
         let systemLogs = [];
         let privateKey = null;
         let address = null;
+        let progressManager = null;
+        let wsConnection = null;
+        let wsConnected = false;
+        let wsReconnectInterval = null;
+        let workspaceHandle = null; // File System Access API directory handle
+        let errorManager = null; // Error management system
+        
+        // Error Manager Class - Robust error handling and recovery
+        class ErrorManager {
+            constructor() {
+                this.errorLog = [];
+                this.maxLogSize = 1000;
+                this.retryStrategies = {
+                    network: { maxRetries: 5, baseDelay: 1000, maxDelay: 30000 },
+                    rpc: { maxRetries: 3, baseDelay: 2000, maxDelay: 10000 },
+                    transaction: { maxRetries: 3, baseDelay: 3000, maxDelay: 15000 },
+                    file: { maxRetries: 2, baseDelay: 500, maxDelay: 2000 }
+                };
+                this.errorCount = {
+                    network: 0,
+                    rpc: 0,
+                    transaction: 0,
+                    file: 0,
+                    other: 0
+                };
+            }
+            
+            classifyError(error) {
+                const errorStr = error.toString().toLowerCase();
+                const message = error.message?.toLowerCase() || '';
+                
+                // Network errors
+                if (errorStr.includes('network') || errorStr.includes('fetch') || 
+                    errorStr.includes('timeout') || errorStr.includes('connection')) {
+                    return 'network';
+                }
+                
+                // RPC specific errors
+                if (errorStr.includes('rpc') || errorStr.includes('jsonrpc') || 
+                    message.includes('server')) {
+                    return 'rpc';
+                }
+                
+                // Transaction errors
+                if (errorStr.includes('transaction') || errorStr.includes('utxo') || 
+                    errorStr.includes('insufficient') || errorStr.includes('tx')) {
+                    return 'transaction';
+                }
+                
+                // File system errors
+                if (errorStr.includes('file') || errorStr.includes('read') || 
+                    errorStr.includes('write')) {
+                    return 'file';
+                }
+                
+                return 'other';
+            }
+            
+            logError(error, context = '', severity = 'error') {
+                const errorType = this.classifyError(error);
+                const timestamp = new Date().toISOString();
+                
+                const errorEntry = {
+                    timestamp,
+                    type: errorType,
+                    severity,
+                    message: error.message || error.toString(),
+                    stack: error.stack,
+                    context,
+                    retryCount: 0
+                };
+                
+                this.errorLog.push(errorEntry);
+                this.errorCount[errorType]++;
+                
+                // Keep log size manageable
+                if (this.errorLog.length > this.maxLogSize) {
+                    this.errorLog.shift();
+                }
+                
+                // Log to console with detailed info
+                console.error(`[${timestamp}] ${severity.toUpperCase()} (${errorType}): ${error.message}`, {
+                    context,
+                    stack: error.stack,
+                    errorCount: this.errorCount[errorType]
+                });
+                
+                // Also log to system log with context
+                log(`エラー [${errorType}]: ${error.message} ${context ? `(${context})` : ''}`, severity);
+                
+                return errorEntry;
+            }
+            
+            async retryWithBackoff(operation, errorType = 'network', context = '') {
+                const strategy = this.retryStrategies[errorType] || this.retryStrategies.network;
+                let lastError;
+                
+                for (let attempt = 0; attempt < strategy.maxRetries; attempt++) {
+                    try {
+                        log(`実行中 (試行 ${attempt + 1}/${strategy.maxRetries}): ${context}`, 'info');
+                        return await operation();
+                    } catch (error) {
+                        lastError = error;
+                        const errorEntry = this.logError(error, `${context} - 試行 ${attempt + 1}`, 'warning');
+                        errorEntry.retryCount = attempt + 1;
+                        
+                        if (attempt < strategy.maxRetries - 1) {
+                            // Calculate delay with exponential backoff
+                            const delay = Math.min(
+                                strategy.baseDelay * Math.pow(2, attempt),
+                                strategy.maxDelay
+                            );
+                            
+                            log(`${delay/1000}秒後にリトライします...`, 'info');
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                    }
+                }
+                
+                // Final failure
+                this.logError(lastError, `${context} - 最終失敗`, 'error');
+                throw lastError;
+            }
+            
+            getErrorSummary() {
+                return {
+                    totalErrors: Object.values(this.errorCount).reduce((a, b) => a + b, 0),
+                    byType: { ...this.errorCount },
+                    recentErrors: this.errorLog.slice(-10)
+                };
+            }
+            
+            exportErrorLog() {
+                const summary = this.getErrorSummary();
+                const logData = {
+                    exportDate: new Date().toISOString(),
+                    summary,
+                    errors: this.errorLog
+                };
+                
+                const blob = new Blob([JSON.stringify(logData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `kaspa-error-log-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                log('エラーログをエクスポートしました', 'success');
+            }
+            
+            clearErrors() {
+                this.errorLog = [];
+                this.errorCount = {
+                    network: 0,
+                    rpc: 0,
+                    transaction: 0,
+                    file: 0,
+                    other: 0
+                };
+                log('エラーログをクリアしました', 'info');
+            }
+        }
+        
+        // Progress Manager Class
+        class ProgressManager {
+            constructor(file, chunkSize) {
+                this.file = file;
+                this.chunkSize = chunkSize;
+                // Use a single progress file name
+                this.progressFileName = 'kaspa-upload-progress.json';
+                this.progress = null;
+                this.saveHandle = null;
+                this.autoSaveInterval = 10; // chunks
+                this.lastSaveTime = 0;
+                this.saveThrottle = 5000; // Save at most once every 5 seconds
+                this.fileHandle = null; // For File System Access API
+            }
+            
+            async initialize(existingProgress = null) {
+                if (existingProgress) {
+                    this.progress = existingProgress;
+                    log(`既存の進捗から再開: ${this.progress.metadata.completedChunks}/${this.progress.metadata.totalChunks} チャンク完了`, 'info');
+                    return true;
+                }
+                
+                // Generate file hash for verification
+                const fileData = await this.file.slice(0, 1024 * 1024).arrayBuffer(); // First 1MB
+                const hashBuffer = await crypto.subtle.digest('SHA-256', fileData);
+                const hashArray = Array.from(new Uint8Array(hashBuffer));
+                const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+                
+                this.progress = {
+                    version: "2.0",
+                    fileInfo: {
+                        name: this.file.name,
+                        size: this.file.size,
+                        lastModified: this.file.lastModified,
+                        sha256: fileHash.substring(0, 16), // First 16 chars of hash
+                        mimeType: this.file.type || 'application/octet-stream'
+                    },
+                    encryption: {
+                        algorithm: "AES-256-GCM",
+                        salt: null, // Will be set during encryption
+                        compressed: null
+                    },
+                    chunks: [],
+                    metadata: {
+                        totalChunks: Math.ceil(this.file.size / this.chunkSize),
+                        completedChunks: 0,
+                        chunkSize: this.chunkSize,
+                        totalCost: 0,
+                        startedAt: Date.now(),
+                        lastUpdateAt: Date.now(),
+                        estimatedCompletion: null
+                    },
+                    resume: {
+                        nextChunkIndex: 0,
+                        failedChunks: [],
+                        retryCount: {}
+                    }
+                };
+                
+                return false;
+            }
+            
+            async checkExistingProgress() {
+                // This will be called when user selects a progress file
+                // Returns the progress object if valid, null otherwise
+                return null;
+            }
+            
+            validateProgress(progress) {
+                // Check if progress matches current file
+                if (!progress || !progress.fileInfo) return false;
+                if (progress.fileInfo.name !== this.file.name) return false;
+                if (progress.fileInfo.size !== this.file.size) return false;
+                // Optional: check lastModified if strict matching needed
+                return true;
+            }
+            
+            async markChunkComplete(index, txid, blockId, size) {
+                const chunk = {
+                    index: index,
+                    txid: txid,
+                    blockId: blockId,
+                    size: size,
+                    uploadedAt: Date.now(),
+                    verified: true
+                };
+                
+                // Update or add chunk
+                const existingIndex = this.progress.chunks.findIndex(c => c.index === index);
+                if (existingIndex >= 0) {
+                    this.progress.chunks[existingIndex] = chunk;
+                } else {
+                    this.progress.chunks.push(chunk);
+                }
+                
+                this.progress.metadata.completedChunks = this.progress.chunks.length;
+                this.progress.metadata.lastUpdateAt = Date.now();
+                this.progress.resume.nextChunkIndex = this.getNextChunkIndex();
+                
+                // Calculate estimated completion
+                const elapsed = Date.now() - this.progress.metadata.startedAt;
+                const rate = this.progress.metadata.completedChunks / elapsed;
+                const remaining = this.progress.metadata.totalChunks - this.progress.metadata.completedChunks;
+                this.progress.metadata.estimatedCompletion = Date.now() + (remaining / rate);
+                
+                // Auto-save check
+                if (this.progress.metadata.completedChunks % this.autoSaveInterval === 0) {
+                    await this.saveProgress();
+                }
+            }
+            
+            markChunkFailed(index) {
+                if (!this.progress.resume.failedChunks.includes(index)) {
+                    this.progress.resume.failedChunks.push(index);
+                }
+                this.progress.resume.retryCount[index] = (this.progress.resume.retryCount[index] || 0) + 1;
+            }
+            
+            getNextChunkIndex() {
+                // First, try failed chunks
+                if (this.progress.resume.failedChunks.length > 0) {
+                    return this.progress.resume.failedChunks.shift();
+                }
+                
+                // Then find next incomplete chunk
+                for (let i = 0; i < this.progress.metadata.totalChunks; i++) {
+                    if (!this.progress.chunks.some(c => c.index === i)) {
+                        return i;
+                    }
+                }
+                
+                return -1; // All done
+            }
+            
+            async saveProgress() {
+                try {
+                    const progressData = JSON.stringify(this.progress, null, 2);
+                    
+                    // Save to localStorage as backup
+                    try {
+                        localStorage.setItem('kaspa-upload-progress', progressData);
+                        const metadata = {
+                            fileName: this.progress.fileInfo.name,
+                            fileSize: this.progress.fileInfo.size,
+                            totalChunks: this.progress.metadata.totalChunks,
+                            completedChunks: this.progress.metadata.completedChunks,
+                            lastUpdate: Date.now()
+                        };
+                        localStorage.setItem('kaspa-upload-metadata', JSON.stringify(metadata));
+                        // Show local save status occasionally
+                        if (!this.lastLocalSaveLog || Date.now() - this.lastLocalSaveLog > 10000) {
+                            log(`進捗をローカルに保存中`, 'success');
+                            this.lastLocalSaveLog = Date.now();
+                        }
+                    } catch (err) {
+                        log(`localStorage保存エラー: ${err.message}`, 'warning');
+                    }
+                    
+                    // Save to file if workspace is available
+                    if (window.workspaceHandle) {
+                        try {
+                            const fileHandle = await window.workspaceHandle.getFileHandle(
+                                this.progressFileName,
+                                { create: true }
+                            );
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(progressData);
+                            await writable.close();
+                            
+                            // Show status only occasionally
+                            if (!this.lastSaveLog || Date.now() - this.lastSaveLog > 10000) {
+                                log(`進捗を作業フォルダに保存中`, 'success');
+                                this.lastSaveLog = Date.now();
+                            }
+                            this.updateSaveStatus();
+                        } catch (err) {
+                            log(`ファイル保存エラー: ${err.message}`, 'warning');
+                        }
+                    } else {
+                        // No workspace - localStorage only, no automatic downloads
+                        this.updateSaveStatus();
+                    }
+                } catch (error) {
+                    log(`進捗保存エラー: ${error.message}`, 'error');
+                }
+            }
+            
+            updateSaveStatus() {
+                const statusEl = document.getElementById('saveStatus');
+                if (!statusEl) {
+                    const div = document.createElement('div');
+                    div.id = 'saveStatus';
+                    div.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #4CAF50; color: white; padding: 10px; border-radius: 5px; display: none; z-index: 10000;';
+                    document.body.appendChild(div);
+                }
+                
+                const el = document.getElementById('saveStatus');
+                if (window.workspaceHandle) {
+                    el.textContent = '✓ ファイル保存中';
+                } else {
+                    el.textContent = '✓ ローカル保存中';
+                }
+                el.style.display = 'block';
+                
+                clearTimeout(this.saveStatusTimeout);
+                this.saveStatusTimeout = setTimeout(() => {
+                    el.style.display = 'none';
+                }, 2000);
+            }
+            
+            async exportProgress() {
+                // Manual export function for user
+                const progressData = JSON.stringify(this.progress, null, 2);
+                const blob = new Blob([progressData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = this.progressFileName;
+                
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                log(`進捗ファイルをエクスポートしました`, 'success');
+            }
+            
+            async exportAsKaspa(kaspaMetadata) {
+                // Convert progress to .kaspa format when upload completes
+                const kaspaFile = {
+                    ...kaspaMetadata,
+                    resume: {
+                        supported: true,
+                        progressFile: this.progressFileName,
+                        chunks: this.progress.chunks
+                    }
+                };
+                
+                return kaspaFile;
+            }
+            
+            getStats() {
+                const completed = this.progress.metadata.completedChunks;
+                const total = this.progress.metadata.totalChunks;
+                const progressPercent = (completed / total * 100);
+                
+                console.log(`ProgressManager Stats: ${completed}/${total} 完了 (${progressPercent.toFixed(1)}%)`);
+                
+                return {
+                    completedChunks: completed,
+                    totalChunks: total,
+                    percentage: progressPercent,
+                    remaining: total - completed,
+                    estimatedTime: this.progress.metadata.estimatedCompletion ? 
+                        new Date(this.progress.metadata.estimatedCompletion).toLocaleTimeString() : 'N/A'
+                };
+            }
+        }
         
         // Configuration
         const config = {
@@ -580,11 +1020,231 @@
             document.getElementById(`${tab}-tab`).classList.add('active');
         };
 
+        // Setup workspace directory for File System Access API
+        async function setupWorkspace() {
+            try {
+                const dirHandle = await window.showDirectoryPicker({
+                    mode: 'readwrite',
+                    startIn: 'downloads'
+                });
+                
+                window.workspaceHandle = dirHandle;
+                log(`作業フォルダを設定: ${dirHandle.name}`, 'success');
+                
+                // Check for existing progress file
+                try {
+                    const fileHandle = await dirHandle.getFileHandle('kaspa-upload-progress.json');
+                    const file = await fileHandle.getFile();
+                    const content = await file.text();
+                    const progress = JSON.parse(content);
+                    
+                    if (progress && progress.version === '2.0' && 
+                        progress.metadata.completedChunks < progress.metadata.totalChunks) {
+                        
+                        const useExisting = confirm(
+                            '作業フォルダに未完了のアップロードが見つかりました。\n\n' +
+                            `ファイル: ${progress.fileInfo.name}\n` +
+                            `進捗: ${progress.metadata.completedChunks}/${progress.metadata.totalChunks} チャンク\n\n` +
+                            'これを続行しますか？'
+                        );
+                        
+                        if (useExisting) {
+                            handleProgressLoad(progress);
+                        }
+                    }
+                } catch (err) {
+                    // No existing progress file
+                }
+                
+                // Update UI to show workspace status
+                showWorkspaceStatus();
+                return true;
+                
+            } catch (err) {
+                if (err.name !== 'AbortError') {
+                    log(`作業フォルダ設定エラー: ${err.message}`, 'error');
+                }
+                return false;
+            }
+        }
+        
+        function showWorkspaceStatus() {
+            const statusDiv = document.getElementById('workspaceStatus');
+            if (!statusDiv) {
+                const div = document.createElement('div');
+                div.id = 'workspaceStatus';
+                div.style.cssText = 'background: #16213e; border: 1px solid #e94560; padding: 10px; margin: 10px 0; border-radius: 5px;';
+                const container = document.querySelector('.container');
+                if (container) {
+                    container.insertBefore(div, container.firstChild);
+                }
+            }
+            
+            const status = document.getElementById('workspaceStatus');
+            if (status) {
+                if (window.workspaceHandle) {
+                    status.innerHTML = `
+                        <p style="margin: 0; color: #49EACB;">
+                            ✓ 作業フォルダ: ${window.workspaceHandle.name}
+                            <button onclick="setupWorkspace()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">変更</button>
+                        </p>
+                    `;
+                } else {
+                    status.innerHTML = `
+                        <p style="margin: 0; color: #ffcc66;">
+                            作業フォルダ: 未設定 (ブラウザ内保存のみ)
+                            <button onclick="setupWorkspace()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">設定</button>
+                        </p>
+                    `;
+                }
+            }
+        }
+        
+        function loadProgressFromLocalStorage() {
+            try {
+                const data = localStorage.getItem('kaspa-upload-progress');
+                if (data) {
+                    return JSON.parse(data);
+                }
+            } catch (err) {
+                // Ignore errors
+            }
+            return null;
+        }
+        
+        // Progress file handling
+        window.loadProgressFile = async function() {
+            // Check workspace first
+            if (window.workspaceHandle) {
+                try {
+                    const fileHandle = await window.workspaceHandle.getFileHandle('kaspa-upload-progress.json');
+                    const file = await fileHandle.getFile();
+                    const content = await file.text();
+                    const progress = JSON.parse(content);
+                    
+                    if (progress && progress.version === '2.0') {
+                        handleProgressLoad(progress);
+                        return;
+                    }
+                } catch (err) {
+                    // File doesn't exist in workspace
+                }
+            }
+            
+            // Try localStorage
+            const progress = loadProgressFromLocalStorage();
+            if (progress) {
+                const metadata = localStorage.getItem('kaspa-upload-metadata');
+                let metaInfo = {};
+                try {
+                    metaInfo = JSON.parse(metadata) || {};
+                } catch (err) {}
+                
+                const useLocal = confirm(
+                    '保存された進捗が見つかりました。\n\n' +
+                    `ファイル: ${metaInfo.fileName || '不明'}\n` +
+                    `進捗: ${metaInfo.completedChunks || '?'}/${metaInfo.totalChunks || '?'} チャンク\n` +
+                    `最終更新: ${metaInfo.lastUpdate ? new Date(metaInfo.lastUpdate).toLocaleString() : '不明'}\n\n` +
+                    'これを使用しますか？\n\n' +
+                    '「キャンセル」を選択するとファイルから読み込みます。'
+                );
+                
+                if (useLocal) {
+                    handleProgressLoad(progress);
+                    return;
+                }
+            }
+            
+            // Load from file as last resort
+            document.getElementById('progressFileInput').click();
+        };
+
+        window.handleProgressFileSelect = async function(event) {
+            const file = event.target.files[0];
+            if (!file || !file.name.endsWith('.json')) {
+                log('有効な進捗ファイル（.json）を選択してください', 'error');
+                return;
+            }
+            
+            try {
+                const content = await file.text();
+                const progress = JSON.parse(content);
+                handleProgressLoad(progress);
+            } catch (error) {
+                log(`進捗ファイル読み込みエラー: ${error.message}`, 'error');
+            }
+        };
+        
+        // Handle loaded progress
+        function handleProgressLoad(progress) {
+            try {
+                
+                // Validate progress format
+                if (!progress.version || !progress.fileInfo || !progress.chunks) {
+                    throw new Error('無効な進捗ファイル形式');
+                }
+                
+                // Show resume info
+                document.getElementById('resumeInfo').style.display = 'block';
+                document.getElementById('resumeDetails').innerHTML = `
+                    <p><strong>ファイル:</strong> ${progress.fileInfo.name}</p>
+                    <p><strong>サイズ:</strong> ${(progress.fileInfo.size / 1024 / 1024).toFixed(2)} MB</p>
+                    <p><strong>進捗:</strong> ${progress.metadata.completedChunks}/${progress.metadata.totalChunks} チャンク (${(progress.metadata.completedChunks / progress.metadata.totalChunks * 100).toFixed(1)}%)</p>
+                    <p><strong>最終更新:</strong> ${new Date(progress.metadata.lastUpdateAt).toLocaleString()}</p>
+                    <p class="warning">⚠️ 同じファイルを選択してアップロードを続行してください</p>
+                `;
+                
+                // Store progress for later use
+                window.pendingProgress = progress;
+                log('進捗を読み込みました。同じファイルを選択してください。', 'info');
+                
+                // Show export button if no workspace
+                if (!window.workspaceHandle) {
+                    const resumeDiv = document.getElementById('resumeInfo');
+                    if (resumeDiv && !document.getElementById('exportProgressBtn')) {
+                        const exportBtn = document.createElement('button');
+                        exportBtn.id = 'exportProgressBtn';
+                        exportBtn.textContent = '進捗ファイルをエクスポート';
+                        exportBtn.style.marginTop = '10px';
+                        exportBtn.onclick = () => {
+                            if (window.pendingProgress) {
+                                const progressData = JSON.stringify(window.pendingProgress, null, 2);
+                                const blob = new Blob([progressData], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'kaspa-upload-progress.json';
+                                a.click();
+                                URL.revokeObjectURL(url);
+                                log('進捗ファイルをエクスポートしました', 'success');
+                            }
+                        };
+                        resumeDiv.appendChild(exportBtn);
+                    }
+                }
+                
+            } catch (error) {
+                log(`進捗読み込みエラー: ${error.message}`, 'error');
+            }
+        }
+
+        window.cancelResume = function() {
+            window.pendingProgress = null;
+            document.getElementById('resumeInfo').style.display = 'none';
+            log('レジュームをキャンセルしました', 'info');
+        };
+
         // System initialization
         window.initializeSystem = async function() {
             try {
                 log('システム初期化を開始...');
                 updateNetworkStatus('connecting', '初期化中...');
+                
+                // Initialize error manager first
+                if (!errorManager) {
+                    errorManager = new ErrorManager();
+                    log('ErrorManager初期化完了', 'info');
+                }
                 
                 // Import WASM SDK
                 kaspa = await import('./kaspa-core.js');
@@ -611,21 +1271,34 @@
                 
                 log(`ウォレットアドレス: ${address.toString()}`, 'success');
                 
-                // Create RPC client
+                // Create RPC client with error handling
                 rpcClient = new kaspa.RpcClient({
                     resolver: new kaspa.Resolver(),
                     networkId: config.network
                 });
                 
+                // Connect with retry logic
                 log('RPC接続を試行中...');
-                await rpcClient.connect();
+                await errorManager.retryWithBackoff(
+                    async () => await rpcClient.connect(),
+                    'rpc',
+                    'RPC接続'
+                );
                 
-                // Test connection
-                const info = await rpcClient.getServerInfo();
+                // Test connection with retry
+                const info = await errorManager.retryWithBackoff(
+                    async () => await rpcClient.getServerInfo(),
+                    'rpc',
+                    'サーバー情報取得'
+                );
                 log(`接続成功! サーバー: ${info.serverVersion}`, 'success');
                 
-                // Get balance
-                const { entries } = await rpcClient.getUtxosByAddresses([address.toString()]);
+                // Get balance with retry
+                const { entries } = await errorManager.retryWithBackoff(
+                    async () => await rpcClient.getUtxosByAddresses([address.toString()]),
+                    'rpc',
+                    '残高取得'
+                );
                 const balance = entries.reduce((sum, utxo) => sum + Number(utxo.amount), 0) / 1e8;
                 log(`残高: ${balance} KAS`, 'info');
                 
@@ -643,10 +1316,58 @@
                 updateNetworkStatus('online', 'オンライン');
                 
             } catch (error) {
-                log(`初期化エラー: ${error.message}`, 'error');
+                if (errorManager) {
+                    errorManager.logError(error, 'システム初期化', 'critical');
+                } else {
+                    log(`初期化エラー: ${error.message}`, 'error');
+                }
                 updateNetworkStatus('offline', 'エラー');
+                
+                // Show detailed error info
+                document.getElementById('initStatus').style.display = 'block';
+                document.getElementById('initStatus').innerHTML = `
+                    <p class="error">❌ システム初期化失敗</p>
+                    <p>エラー: ${error.message}</p>
+                    <p style="font-size: 11px;">詳細はシステムログを確認してください</p>
+                `;
             }
         };
+        
+        // Initialize or reinitialize RPC client
+        async function initializeRpcClient() {
+            try {
+                log('RPCクライアントを初期化中...');
+                
+                // Close existing connection if any
+                if (rpcClient) {
+                    try {
+                        await rpcClient.disconnect();
+                    } catch (err) {
+                        // Ignore disconnect errors
+                    }
+                }
+                
+                // Create new RPC client
+                rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: config.network
+                });
+                
+                await rpcClient.connect();
+                
+                // Test connection
+                const info = await rpcClient.getServerInfo();
+                log(`RPC再接続成功! サーバー: ${info.serverVersion}`, 'success');
+                
+                updateNetworkStatus('online', 'オンライン');
+                return true;
+                
+            } catch (error) {
+                log(`RPC初期化エラー: ${error.message}`, 'error');
+                updateNetworkStatus('offline', 'エラー');
+                return false;
+            }
+        }
 
         // Connection test
         window.testConnection = async function() {
@@ -673,19 +1394,48 @@
         };
 
         // File handling
-        window.handleFileSelect = function(event) {
+        window.handleFileSelect = async function(event) {
             const file = event.target.files[0];
             if (!file) return;
             
             currentFile = file;
             log(`ファイル選択: ${file.name} (${(file.size/1024).toFixed(1)}KB)`);
             
-            // Update UI
-            const label = document.querySelector('.file-input-label');
-            label.innerHTML = `
-                <strong>${file.name}</strong><br>
-                ${(file.size/1024/1024).toFixed(2)}MB
-            `;
+            // Check if we have pending progress for this file
+            if (window.pendingProgress) {
+                const chunkSize = parseInt(document.getElementById('chunkSize').value) * 1024;
+                progressManager = new ProgressManager(file, chunkSize);
+                
+                if (progressManager.validateProgress(window.pendingProgress)) {
+                    // Initialize with existing progress
+                    await progressManager.initialize(window.pendingProgress);
+                    
+                    // Update UI to show resume status
+                    const stats = progressManager.getStats();
+                    const label = document.querySelector('.file-input-label');
+                    label.innerHTML = `
+                        <strong>${file.name}</strong><br>
+                        ${(file.size/1024/1024).toFixed(2)}MB<br>
+                        <span class="success">レジューム: ${stats.percentage}% 完了</span>
+                    `;
+                    
+                    log(`レジューム準備完了: ${stats.completed}/${stats.total} チャンク完了`, 'success');
+                    
+                    // Clear pending progress
+                    window.pendingProgress = null;
+                    document.getElementById('resumeInfo').style.display = 'none';
+                } else {
+                    log('進捗ファイルが選択されたファイルと一致しません', 'error');
+                    progressManager = null;
+                }
+            } else {
+                // Update UI for new upload
+                const label = document.querySelector('.file-input-label');
+                label.innerHTML = `
+                    <strong>${file.name}</strong><br>
+                    ${(file.size/1024/1024).toFixed(2)}MB
+                `;
+            }
         };
 
         // Compression logic
@@ -877,9 +1627,38 @@
             
             try {
                 log(`処理開始: ${currentFile.name}`);
+                log(`ファイルサイズ: ${(currentFile.size / 1024 / 1024).toFixed(2)} MB`);
                 
-                const data = new Uint8Array(await currentFile.arrayBuffer());
-                const fileHash = await sha256(data);
+                // Initialize or use existing progress manager
+                const chunkSize = parseInt(document.getElementById('chunkSize').value) * 1024;
+                log(`チャンクサイズ設定: ${chunkSize / 1024} KB`);
+                
+                if (!progressManager) {
+                    log('新規ProgressManagerを作成中...');
+                    progressManager = new ProgressManager(currentFile, chunkSize);
+                    await progressManager.initialize();
+                    log(`ProgressManager初期化完了 - 総チャンク数: ${progressManager.progress.metadata.totalChunks}`);
+                } else {
+                    log(`既存のProgressManagerを使用 - 完了済み: ${progressManager.progress.metadata.completedChunks}/${progressManager.progress.metadata.totalChunks}`);
+                }
+                
+                // Get file hash for the entire file (expensive for large files, consider chunked hashing)
+                let fileHash;
+                if (currentFile.size < 10 * 1024 * 1024) { // Only hash small files completely
+                    log('小さなファイル - 全体をハッシュ化中...');
+                    const data = new Uint8Array(await currentFile.arrayBuffer());
+                    fileHash = await sha256(data);
+                } else {
+                    // For large files, hash first and last 1MB
+                    log('大きなファイル - 最初と最後の1MBをハッシュ化中...');
+                    const firstChunk = await currentFile.slice(0, 1024 * 1024).arrayBuffer();
+                    const lastChunk = await currentFile.slice(-1024 * 1024).arrayBuffer();
+                    const combined = new Uint8Array(firstChunk.byteLength + lastChunk.byteLength);
+                    combined.set(new Uint8Array(firstChunk), 0);
+                    combined.set(new Uint8Array(lastChunk), firstChunk.byteLength);
+                    fileHash = await sha256(combined);
+                }
+                log(`ファイルハッシュ: ${fileHash}`);
                 
                 // Compression strategy
                 const useCompression = shouldCompress(currentFile.name);
@@ -888,49 +1667,69 @@
                 // Generate salt
                 const saltBase = fileHash + currentFile.name;
                 const saltHash = await sha256(new TextEncoder().encode(saltBase));
-                // Take first 16 bytes of hash (32 hex chars = 16 bytes)
                 const salt = new Uint8Array(saltHash.substring(0, 32).match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
                 
                 const key = await deriveKey(password, salt);
                 
+                // Update progress manager with encryption info
+                progressManager.progress.encryption.salt = toBase64(salt);
+                progressManager.progress.encryption.compressed = useCompression;
+                
                 // Get chunk size and apply safety limit
                 const requestedChunkSize = parseInt(document.getElementById('chunkSize').value) * 1024;
-                const chunkSize = calculateSafePayloadSize(requestedChunkSize);
+                const actualChunkSize = calculateSafePayloadSize(requestedChunkSize);
                 
-                if (chunkSize < requestedChunkSize) {
-                    log(`チャンクサイズを安全な値に調整: ${(chunkSize/1024).toFixed(1)}KB`, 'warning');
+                if (actualChunkSize < requestedChunkSize) {
+                    log(`チャンクサイズを安全な値に調整: ${(actualChunkSize/1024).toFixed(1)}KB`, 'warning');
                 }
-                const chunks = Math.ceil(data.length / chunkSize);
-                log(`チャンク数: ${chunks}`);
+                
+                const totalChunks = progressManager.progress.metadata.totalChunks;
+                log(`総チャンク数: ${totalChunks}`);
                 
                 // Initial UTXO fetch
                 let currentUtxos = null;
                 
-                // Start WebSocket monitoring
+                // Start WebSocket monitoring for transaction confirmations
                 if (!wsMonitorActive) {
+                    log('WebSocket監視を開始します...', 'info');
                     await startMonitoring();
+                } else {
+                    log('WebSocket監視は既に動作中です', 'info');
+                    log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
                 }
                 
-                // Process chunks
+                // Process chunks with resume support
                 const chunksList = document.getElementById('chunksList');
                 chunksList.innerHTML = '';
                 
-                for (let i = 0; i < chunks; i++) {
+                // Continue from next incomplete chunk
+                let nextChunkIndex = progressManager.getNextChunkIndex();
+                while (nextChunkIndex >= 0) {
                     // Get fresh UTXOs for each chunk
+                    log(`チャンク ${nextChunkIndex + 1}/${totalChunks} の処理を開始...`);
                     const { entries } = await rpcClient.getUtxosByAddresses([address.toString()]);
                     if (!entries || entries.length === 0) {
                         throw new Error('利用可能なUTXOがありません');
                     }
-                    log(`Chunk ${i + 1}: ${entries.length} UTXOs available`);
-                    const start = i * chunkSize;
-                    const end = Math.min(start + chunkSize, data.length);
-                    const chunk = data.slice(start, end);
+                    
+                    const i = nextChunkIndex;
+                    log(`チャンク ${i + 1}: ${entries.length} UTXOs 利用可能`);
+                    
+                    // Read chunk from file
+                    const start = i * actualChunkSize;
+                    const end = Math.min(start + actualChunkSize, currentFile.size);
+                    log(`ファイルから読み込み: オフセット ${start} - ${end} (${end - start} バイト)`);
+                    
+                    const chunkBlob = currentFile.slice(start, end);
+                    const chunkArrayBuffer = await chunkBlob.arrayBuffer();
+                    const chunk = new Uint8Array(chunkArrayBuffer);
+                    log(`チャンクサイズ: ${chunk.length} バイト`);
                     
                     // Create chunk UI
                     const chunkDiv = document.createElement('div');
                     chunkDiv.className = 'chunk-item';
                     chunkDiv.innerHTML = `
-                        <div>Chunk ${i + 1}/${chunks} (${(chunk.length/1024).toFixed(1)}KB)</div>
+                        <div>Chunk ${i + 1}/${totalChunks} (${(chunk.length/1024).toFixed(1)}KB)</div>
                         <div class="chunk-status pending" id="chunk-status-${i}">
                             <span>待機中</span>
                         </div>
@@ -996,36 +1795,86 @@
                             const pendingTx = result.transactions[0];
                             
                             // Sign the transaction
+                            log(`トランザクションに署名中...`);
                             await pendingTx.sign([privateKey]);
                             
                             // Submit to network
+                            log(`ネットワークに送信中...`);
                             txid = await pendingTx.submit(rpcClient);
                             
+                            log(`チャンク ${i + 1} TxID: ${txid.substring(0, 16)}...`, 'success');
+                            
+                            // IMMEDIATELY register transaction for monitoring (before any waiting)
+                            if (wsMonitorActive && monitoredTransactions) {
+                                monitoredTransactions.set(txid, {
+                                    timestamp: Date.now(),
+                                    chunkIndex: i,
+                                    blockId: null
+                                });
+                                log(`WebSocket監視にトランザクションを登録: ${txid.substring(0, 16)}...`);
+                            }
+                            
                             // Wait for transaction to be accepted
-                            log(`Waiting for transaction confirmation...`);
+                            log(`トランザクションの確認待ち...`);
                             await new Promise(resolve => setTimeout(resolve, 2000));
                             
-                            log(`Chunk ${i + 1} TxID: ${txid}`, 'success');
+                            // Try WebSocket monitoring first
+                            log(`トランザクション確認を待機中...`);
                             
-                            // Wait for BlockID from monitor with shorter timeout
+                            // Wait for confirmation (WebSocket or RPC)
                             let waitTime = 0;
-                            while (!blockId && waitTime < 10000) {
-                                if (monitoredTransactions.has(txid)) {
-                                    blockId = monitoredTransactions.get(txid).blockId;
-                                    break;
+                            const maxWaitTime = 30000; // 30 seconds for RPC check
+                            
+                            while (!blockId && waitTime < maxWaitTime) {
+                                // Check WebSocket monitor first
+                                if (wsMonitorActive && monitoredTransactions && monitoredTransactions.has(txid)) {
+                                    const monitorData = monitoredTransactions.get(txid);
+                                    if (monitorData.blockId) {
+                                        blockId = monitorData.blockId;
+                                        log(`WebSocket経由でBlockID取得: ${blockId.substring(0, 16)}...`);
+                                        break;
+                                    }
                                 }
-                                await new Promise(resolve => setTimeout(resolve, 500));
-                                waitTime += 500;
+                                
+                                // After 30 seconds, try RPC
+                                if (waitTime >= 30000) {
+                                    try {
+                                        log('30秒経過 - RPCで確認を試みます...');
+                                        const txInfo = await rpcClient.getTransaction({
+                                            transactionId: txid,
+                                            includeBlockInfo: true
+                                        });
+                                        
+                                        if (txInfo && txInfo.blockHash) {
+                                            blockId = txInfo.blockHash;
+                                            log(`RPC経由でBlockID取得: ${blockId.substring(0, 16)}...`);
+                                            break;
+                                        }
+                                    } catch (err) {
+                                        // Transaction might not be confirmed yet
+                                    }
+                                }
+                                
+                                await new Promise(resolve => setTimeout(resolve, 2000));
+                                waitTime += 2000;
                             }
                             
                             // Fallback to Explorer API
                             if (!blockId) {
-                                log(`WebSocket待機タイムアウト、Explorer APIを使用`);
+                                if (wsMonitorActive && monitoredTransactions.has(txid)) {
+                                    const elapsed = Date.now() - monitoredTransactions.get(txid).timestamp;
+                                    log(`WebSocketで${elapsed/1000}秒間見つからず - Explorer APIを使用`);
+                                } else {
+                                    log(`RPC待機タイムアウト - Explorer APIを使用`);
+                                }
                                 const apiUrl = `https://api-tn10.kaspa.org/transactions/${txid}`;
                                 const response = await fetch(apiUrl);
                                 if (response.ok) {
                                     const data = await response.json();
                                     blockId = data.block_hash?.[0] || data.accepting_block_hash;
+                                    if (blockId) {
+                                        log(`Explorer API経由でBlockID取得: ${blockId.substring(0, 16)}...`);
+                                    }
                                 }
                             }
                             
@@ -1035,6 +1884,7 @@
                             
                             // Update status
                             document.getElementById(`chunk-status-${i}`).innerHTML = '<span class="success">✅ 完了</span>';
+                            log(`チャンク ${i + 1} アップロード完了`);
                             
                             // Store chunk info
                             processedChunks.push({
@@ -1047,29 +1897,47 @@
                                 uploadedAt: Date.now()
                             });
                             
+                            // Update progress manager
+                            log(`進捗情報を更新中...`);
+                            await progressManager.markChunkComplete(i, txid, blockId, payloadBytes.length);
+                            
                             break;
                             
                         } catch (error) {
                             retries++;
-                            log(`Chunk ${i + 1} エラー (試行 ${retries}/${config.retryCount}): ${error.message || error}`, 'error');
-                            console.error('Full error:', error);
+                            log(`チャンク ${i + 1} エラー (試行 ${retries}/${config.retryCount}): ${error.message || error}`, 'error');
+                            console.error('詳細エラー:', error);
+                            console.error('スタックトレース:', error.stack);
+                            
                             if (retries >= config.retryCount) {
                                 document.getElementById(`chunk-status-${i}`).innerHTML = '<span class="error">❌ 失敗</span>';
+                                progressManager.markChunkFailed(i);
+                                log(`チャンク ${i + 1} のアップロードが失敗 - 進捗を保存`);
+                                await progressManager.saveProgress(); // Save progress on failure
                                 throw error;
                             }
+                            log(`2秒待機後にリトライ...`);
                             await new Promise(resolve => setTimeout(resolve, 2000));
                         }
                     }
                     
                     // Update progress
-                    const progress = ((i + 1) / chunks * 100).toFixed(0);
+                    const stats = progressManager.getStats();
+                    const progress = stats.percentage;
                     document.getElementById('uploadProgressBar').style.width = progress + '%';
                     document.getElementById('uploadProgressBar').textContent = progress + '%';
+                    
+                    // Get next chunk
+                    nextChunkIndex = progressManager.getNextChunkIndex();
                 }
                 
                 // Calculate cost
                 const totalPayloadKB = processedChunks.reduce((sum, c) => sum + c.payloadSize, 0) / 1024;
-                const totalCost = chunks * 0.00005 + totalPayloadKB * 0.00001;
+                const totalCost = totalChunks * 0.00005 + totalPayloadKB * 0.00001;
+                
+                // Final progress save
+                await progressManager.saveProgress();
+                log('最終進捗を保存しました', 'success');
                 
                 // Prepare metadata
                 kaspaMetadata = {
@@ -1106,7 +1974,7 @@
                     })),
                     metadata: {
                         createdAt: Date.now(),
-                        totalChunks: chunks,
+                        totalChunks: totalChunks,
                         totalKAS: totalCost,
                         uploadedBy: address.toString()
                     }
@@ -1904,32 +2772,6 @@
                 
                 document.getElementById('monitorStartTime').textContent = new Date().toLocaleString();
                 
-                rpcClient.addEventListener('block-added', (event) => {
-                    const block = event.data.block;
-                    const blockId = block.header.hash;
-                    const blockTime = new Date(Number(block.header.timestamp));
-                    
-                    if (block.transactions && block.transactions.length > 0) {
-                        for (const tx of block.transactions) {
-                            const txId = tx.verboseData?.transactionId;
-                            if (txId) {
-                                monitoredTransactions.set(txId, {
-                                    blockId: blockId,
-                                    blockTime: blockTime,
-                                    foundAt: new Date()
-                                });
-                                
-                                if (tx.payload && tx.payload !== '') {
-                                    monitorLog(`ペイロード付きTx検出: ${txId}`, 'success');
-                                }
-                            }
-                        }
-                        
-                        document.getElementById('monitoringCount').textContent = monitoredTransactions.size;
-                        document.getElementById('detectedCount').textContent = monitoredTransactions.size;
-                    }
-                });
-                
                 monitorLog('監視を開始しました', 'success');
                 
             } catch (error) {
@@ -1960,6 +2802,7 @@
         window.exportLogs = function() {
             const exportData = {
                 timestamp: new Date().toISOString(),
+                version: 'v3.0',
                 logs: systemLogs,
                 uploadHistory: uploadHistory,
                 monitoredTransactions: Array.from(monitoredTransactions.entries())
@@ -1973,7 +2816,15 @@
             a.click();
             URL.revokeObjectURL(url);
             
-            log('ログをエクスポートしました', 'success');
+            log('システムログをエクスポートしました', 'success');
+        };
+        
+        window.exportErrorLog = function() {
+            if (!errorManager) {
+                log('ErrorManagerが初期化されていません', 'warning');
+                return;
+            }
+            errorManager.exportErrorLog();
         };
 
         window.clearLogs = function() {
@@ -1981,7 +2832,10 @@
                 systemLogs = [];
                 document.getElementById('systemLog').innerHTML = '';
                 document.getElementById('monitorLog').innerHTML = '';
-                log('ログをクリアしました', 'info');
+                if (errorManager) {
+                    errorManager.clearErrors();
+                }
+                log('すべてのログをクリアしました', 'info');
             }
         };
 
@@ -2093,9 +2947,251 @@
                 log('警告: kaspaFileInput要素が見つかりません', 'error');
             }
             
-            log('🚀 Kaspa P2P v2.0 準備完了！', 'info');
+            log('🛡️ Kaspa P2P v3.0 Robust Edition 準備完了！', 'info');
             log('システムを初期化してください', 'info');
+            
+            // Initialize workspace prompt
+            setTimeout(async () => {
+                // Check if File System Access API is available
+                if ('showDirectoryPicker' in window) {
+                    const hasWorkspace = window.workspaceHandle !== null;
+                    if (!hasWorkspace) {
+                        const useFileAPI = confirm(
+                            'Kaspa P2P File Storage\n\n' +
+                            '作業フォルダを設定しますか？\n\n' +
+                            '設定すると：\n' +
+                            '✓ 進捗がファイルに自動保存されます\n' +
+                            '✓ ダウンロードファイルが整理されます\n' +
+                            '✓ ブラウザを閉じても進捗が残ります\n\n' +
+                            '設定しない場合：\n' +
+                            '✓ ブラウザ内に進捗が保存されます\n' +
+                            '✓ ファイルの自動ダウンロードはありません\n\n' +
+                            '※「作業フォルダ設定」ボタンで後から設定できます'
+                        );
+                        
+                        if (useFileAPI) {
+                            await setupWorkspace();
+                        } else {
+                            log('作業フォルダ未設定 - ブラウザ内に進捗を保存します', 'info');
+                            showWorkspaceStatus();
+                        }
+                    } else {
+                        showWorkspaceStatus();
+                    }
+                } else {
+                    log('File System Access APIはこのブラウザでは利用できません', 'warning');
+                }
+                
+                // Check for saved progress
+                const metadata = localStorage.getItem('kaspa-upload-metadata');
+                if (metadata) {
+                    try {
+                        const meta = JSON.parse(metadata);
+                        if (meta.completedChunks < meta.totalChunks) {
+                            const hoursSince = (Date.now() - meta.lastUpdate) / (1000 * 60 * 60);
+                            if (hoursSince < 24) {
+                                log(`未完了のアップロードが見つかりました`, 'warning');
+                                log(`ファイル: ${meta.fileName} (${meta.completedChunks}/${meta.totalChunks} チャンク)`, 'info');
+                                log('「進捗ファイルから再開」ボタンをクリックして続行', 'info');
+                            }
+                        }
+                    } catch (err) {}
+                }
+            }, 1000);
+            
+            // Network status monitoring
+            window.addEventListener('online', async () => {
+                log('ネットワーク接続が復活しました', 'success');
+                if (rpcClient) {
+                    updateNetworkStatus('online', 'オンライン');
+                    
+                    // Check if we need to reconnect RPC client
+                    if (progressManager && progressManager.progress && 
+                        progressManager.progress.metadata.completedChunks < progressManager.progress.metadata.totalChunks) {
+                        log('アップロード中 - RPC接続を確認します', 'info');
+                        
+                        // Test RPC connection
+                        try {
+                            const info = await rpcClient.getServerInfo();
+                            log(`RPC接続確認: ${info.serverVersion}`, 'success');
+                        } catch (err) {
+                            log('RPC接続エラー - 再接続を試みます', 'error');
+                            // Reinitialize RPC client
+                            await initializeRpcClient();
+                            
+                            // Restart WebSocket monitoring if it was active
+                            if (wsMonitorActive) {
+                                log('WebSocket監視を再開します', 'info');
+                                await restartMonitoring();
+                            }
+                        }
+                    }
+                }
+            });
+            
+            window.addEventListener('offline', async () => {
+                log('ネットワーク接続が切断されました', 'error');
+                updateNetworkStatus('offline', 'オフライン');
+                
+                // Save progress if uploading
+                if (progressManager && progressManager.progress) {
+                    await progressManager.saveProgress();
+                    log('進捗を自動保存しました', 'info');
+                }
+            });
+            
+            // Periodic cleanup of old progress data
+            setInterval(() => {
+                const metadata = localStorage.getItem('kaspa-upload-metadata');
+                if (metadata) {
+                    try {
+                        const meta = JSON.parse(metadata);
+                        const daysSince = (Date.now() - meta.lastUpdate) / (1000 * 60 * 60 * 24);
+                        if (daysSince > 7) {
+                            // Clean up old progress after 7 days
+                            localStorage.removeItem('kaspa-upload-progress');
+                            localStorage.removeItem('kaspa-upload-metadata');
+                            log('古い進捗データを削除しました', 'info');
+                        }
+                    } catch (err) {}
+                }
+            }, 3600000); // Every hour
+            
+            // Make functions available globally
+            window.setupWorkspace = setupWorkspace;
+            window.showWorkspaceStatus = showWorkspaceStatus;
         });
+        
+        // WebSocket monitoring (from complete.html with network recovery enhancements)
+        window.startMonitoring = async function() {
+            if (!rpcClient) {
+                log('先にシステムを初期化してください', 'error');
+                return;
+            }
+            
+            if (wsMonitorActive) {
+                monitorLog('すでに監視中です', 'warning');
+                return;
+            }
+            
+            try {
+                monitorLog('WebSocket監視を開始...');
+                log('WebSocket監視を開始しました', 'info');
+                wsMonitorActive = true;
+                
+                // Subscribe with error handling
+                await errorManager.retryWithBackoff(
+                    async () => await rpcClient.subscribeBlockAdded(),
+                    'network',
+                    'WebSocket購読'
+                );
+                monitorLog('Block Addedイベントを購読しました', 'success');
+                log('WebSocket経由でブロック追加イベントの監視を開始', 'info');
+                
+                document.getElementById('monitorStartTime').textContent = new Date().toLocaleString();
+                
+                rpcClient.addEventListener('block-added', (event) => {
+                    const block = event.data.block;
+                    const blockId = block.header.hash;
+                    const blockTime = new Date(Number(block.header.timestamp));
+                    
+                    // Clean up old transactions (older than 90 seconds)
+                    const now = Date.now();
+                    for (const [txid, txData] of monitoredTransactions.entries()) {
+                        if (now - txData.timestamp > 90000) {
+                            monitoredTransactions.delete(txid);
+                            log(`WebSocket監視から古いトランザクションを削除: ${txid.substring(0, 16)}... (90秒経過)`, 'info');
+                        }
+                    }
+                    
+                    if (block.transactions && block.transactions.length > 0) {
+                        let myTransactionFound = false;
+                        
+                        for (const tx of block.transactions) {
+                            const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
+                            if (txId) {
+                                // Check if this is one of our monitored transactions
+                                if (monitoredTransactions.has(txId)) {
+                                    // Update existing entry (preserve original data)
+                                    const existing = monitoredTransactions.get(txId);
+                                    existing.blockId = blockId;
+                                    existing.blockTime = blockTime;
+                                    existing.foundAt = new Date();
+                                    
+                                    log(`🎯 WebSocket: 監視中のトランザクション検出！ TxID: ${txId.substring(0, 16)}... BlockID: ${blockId.substring(0, 16)}...`, 'success');
+                                    myTransactionFound = true;
+                                } else {
+                                    // Don't add other users' transactions to monitoredTransactions!
+                                    // This is a transaction from another user, ignore it
+                                }
+                            }
+                        }
+                        
+                        document.getElementById('monitoringCount').textContent = monitoredTransactions.size;
+                        document.getElementById('detectedCount').textContent = monitoredTransactions.size;
+                        
+                        // Only log if we found our transaction or if it's a small block
+                        if (myTransactionFound) {
+                            log(`✅ WebSocket: ブロック ${blockId.substring(0, 16)}... で監視中のトランザクションを確認`, 'success');
+                        } else if (block.transactions.length <= 5) {
+                            // Only log small blocks to reduce noise
+                            log(`WebSocket: ブロック ${blockId.substring(0, 16)}... に ${block.transactions.length} トランザクション`, 'info');
+                        }
+                    }
+                });
+                
+                monitorLog('監視を開始しました', 'success');
+                log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
+                
+            } catch (error) {
+                if (errorManager) {
+                    errorManager.logError(error, 'WebSocket監視開始', 'error');
+                }
+                monitorLog(`監視開始エラー: ${error.message}`, 'error');
+                wsMonitorActive = false;
+                
+                // Schedule automatic retry for network errors
+                if (error.message.includes('network') || error.message.includes('connection')) {
+                    log('ネットワークエラーを検出 - 30秒後に再試行します', 'warning');
+                    setTimeout(async () => {
+                        if (!wsMonitorActive && rpcClient) {
+                            log('WebSocket監視の自動再試行...', 'info');
+                            await startMonitoring();
+                        }
+                    }, 30000);
+                }
+            }
+        };
+
+        window.stopMonitoring = async function() {
+            if (!wsMonitorActive) {
+                monitorLog('監視は開始されていません', 'warning');
+                return;
+            }
+            
+            try {
+                if (rpcClient) {
+                    await rpcClient.unsubscribeBlockAdded();
+                    monitorLog('監視を停止しました', 'success');
+                    log('WebSocket監視を停止しました', 'info');
+                }
+                wsMonitorActive = false;
+                
+            } catch (error) {
+                monitorLog(`監視停止エラー: ${error.message}`, 'error');
+                log(`WebSocket監視停止エラー: ${error.message}`, 'error');
+            }
+        };
+        
+        // Restart monitoring after network recovery
+        async function restartMonitoring() {
+            if (wsMonitorActive) {
+                log('WebSocket監視の再起動を試みます', 'info');
+                await stopMonitoring();
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                await startMonitoring();
+            }
+        }
     </script>
 </body>
 </html>
