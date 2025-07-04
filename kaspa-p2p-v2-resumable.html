@@ -699,12 +699,14 @@
             getStats() {
                 const completed = this.progress.metadata.completedChunks;
                 const total = this.progress.metadata.totalChunks;
-                const percentage = (completed / total * 100).toFixed(1);
+                const progressPercent = (completed / total * 100);
+                
+                console.log(`ProgressManager Stats: ${completed}/${total} 完了 (${progressPercent.toFixed(1)}%)`);
                 
                 return {
-                    completed,
-                    total,
-                    percentage,
+                    completedChunks: completed,
+                    totalChunks: total,
+                    progressPercent,
                     remaining: total - completed,
                     estimatedTime: this.progress.metadata.estimatedCompletion ? 
                         new Date(this.progress.metadata.estimatedCompletion).toLocaleTimeString() : 'N/A'
@@ -1152,21 +1154,30 @@
             
             try {
                 log(`処理開始: ${currentFile.name}`);
+                log(`ファイルサイズ: ${(currentFile.size / 1024 / 1024).toFixed(2)} MB`);
                 
                 // Initialize or use existing progress manager
                 const chunkSize = parseInt(document.getElementById('chunkSize').value) * 1024;
+                log(`チャンクサイズ設定: ${chunkSize / 1024} KB`);
+                
                 if (!progressManager) {
+                    log('新規ProgressManagerを作成中...');
                     progressManager = new ProgressManager(currentFile, chunkSize);
                     await progressManager.initialize();
+                    log(`ProgressManager初期化完了 - 総チャンク数: ${progressManager.progress.metadata.totalChunks}`);
+                } else {
+                    log(`既存のProgressManagerを使用 - 完了済み: ${progressManager.progress.metadata.completedChunks}/${progressManager.progress.metadata.totalChunks}`);
                 }
                 
                 // Get file hash for the entire file (expensive for large files, consider chunked hashing)
                 let fileHash;
                 if (currentFile.size < 10 * 1024 * 1024) { // Only hash small files completely
+                    log('小さなファイル - 全体をハッシュ化中...');
                     const data = new Uint8Array(await currentFile.arrayBuffer());
                     fileHash = await sha256(data);
                 } else {
                     // For large files, hash first and last 1MB
+                    log('大きなファイル - 最初と最後の1MBをハッシュ化中...');
                     const firstChunk = await currentFile.slice(0, 1024 * 1024).arrayBuffer();
                     const lastChunk = await currentFile.slice(-1024 * 1024).arrayBuffer();
                     const combined = new Uint8Array(firstChunk.byteLength + lastChunk.byteLength);
@@ -1174,6 +1185,7 @@
                     combined.set(new Uint8Array(lastChunk), firstChunk.byteLength);
                     fileHash = await sha256(combined);
                 }
+                log(`ファイルハッシュ: ${fileHash}`);
                 
                 // Compression strategy
                 const useCompression = shouldCompress(currentFile.name);
@@ -1217,26 +1229,30 @@
                 let nextChunkIndex = progressManager.getNextChunkIndex();
                 while (nextChunkIndex >= 0) {
                     // Get fresh UTXOs for each chunk
+                    log(`チャンク ${nextChunkIndex + 1}/${totalChunks} の処理を開始...`);
                     const { entries } = await rpcClient.getUtxosByAddresses([address.toString()]);
                     if (!entries || entries.length === 0) {
                         throw new Error('利用可能なUTXOがありません');
                     }
                     
                     const i = nextChunkIndex;
-                    log(`Chunk ${i + 1}: ${entries.length} UTXOs available`);
+                    log(`チャンク ${i + 1}: ${entries.length} UTXOs 利用可能`);
                     
                     // Read chunk from file
                     const start = i * actualChunkSize;
                     const end = Math.min(start + actualChunkSize, currentFile.size);
+                    log(`ファイルから読み込み: オフセット ${start} - ${end} (${end - start} バイト)`);
+                    
                     const chunkBlob = currentFile.slice(start, end);
                     const chunkArrayBuffer = await chunkBlob.arrayBuffer();
                     const chunk = new Uint8Array(chunkArrayBuffer);
+                    log(`チャンクサイズ: ${chunk.length} バイト`);
                     
                     // Create chunk UI
                     const chunkDiv = document.createElement('div');
                     chunkDiv.className = 'chunk-item';
                     chunkDiv.innerHTML = `
-                        <div>Chunk ${i + 1}/${chunks} (${(chunk.length/1024).toFixed(1)}KB)</div>
+                        <div>Chunk ${i + 1}/${totalChunks} (${(chunk.length/1024).toFixed(1)}KB)</div>
                         <div class="chunk-status pending" id="chunk-status-${i}">
                             <span>待機中</span>
                         </div>
@@ -1302,22 +1318,26 @@
                             const pendingTx = result.transactions[0];
                             
                             // Sign the transaction
+                            log(`トランザクションに署名中...`);
                             await pendingTx.sign([privateKey]);
                             
                             // Submit to network
+                            log(`ネットワークに送信中...`);
                             txid = await pendingTx.submit(rpcClient);
                             
                             // Wait for transaction to be accepted
-                            log(`Waiting for transaction confirmation...`);
+                            log(`トランザクションの確認待ち...`);
                             await new Promise(resolve => setTimeout(resolve, 2000));
                             
-                            log(`Chunk ${i + 1} TxID: ${txid}`, 'success');
+                            log(`チャンク ${i + 1} TxID: ${txid.substring(0, 16)}...`, 'success');
                             
                             // Wait for BlockID from monitor with shorter timeout
+                            log(`BlockIDを待機中...`);
                             let waitTime = 0;
                             while (!blockId && waitTime < 10000) {
                                 if (monitoredTransactions.has(txid)) {
                                     blockId = monitoredTransactions.get(txid).blockId;
+                                    log(`WebSocket経由でBlockID取得: ${blockId.substring(0, 16)}...`);
                                     break;
                                 }
                                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -1341,6 +1361,7 @@
                             
                             // Update status
                             document.getElementById(`chunk-status-${i}`).innerHTML = '<span class="success">✅ 完了</span>';
+                            log(`チャンク ${i + 1} アップロード完了`);
                             
                             // Store chunk info
                             processedChunks.push({
@@ -1354,20 +1375,25 @@
                             });
                             
                             // Update progress manager
+                            log(`進捗情報を更新中...`);
                             await progressManager.markChunkComplete(i, txid, blockId, payloadBytes.length);
                             
                             break;
                             
                         } catch (error) {
                             retries++;
-                            log(`Chunk ${i + 1} エラー (試行 ${retries}/${config.retryCount}): ${error.message || error}`, 'error');
-                            console.error('Full error:', error);
+                            log(`チャンク ${i + 1} エラー (試行 ${retries}/${config.retryCount}): ${error.message || error}`, 'error');
+                            console.error('詳細エラー:', error);
+                            console.error('スタックトレース:', error.stack);
+                            
                             if (retries >= config.retryCount) {
                                 document.getElementById(`chunk-status-${i}`).innerHTML = '<span class="error">❌ 失敗</span>';
                                 progressManager.markChunkFailed(i);
+                                log(`チャンク ${i + 1} のアップロードが失敗 - 進捗を保存`);
                                 await progressManager.saveProgress(); // Save progress on failure
                                 throw error;
                             }
+                            log(`2秒待機後にリトライ...`);
                             await new Promise(resolve => setTimeout(resolve, 2000));
                         }
                     }
