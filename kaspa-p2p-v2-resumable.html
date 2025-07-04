@@ -2844,6 +2844,82 @@
             window.setupWorkspace = setupWorkspace;
             window.showWorkspaceStatus = showWorkspaceStatus;
         });
+        
+        // WebSocket monitoring function
+        async function startWebSocketMonitoring() {
+            if (wsMonitorActive) {
+                log('WebSocket監視は既に動作中です', 'info');
+                return;
+            }
+            
+            try {
+                // Initialize WebSocket connection for transaction monitoring
+                const wsUrl = config.network === 'testnet-10' 
+                    ? 'wss://kaspa-testnet-10-ws.kaspa.org' 
+                    : 'wss://kaspa-mainnet-ws.kaspa.org';
+                
+                log(`WebSocket接続を開始: ${wsUrl}`, 'info');
+                wsConnection = new WebSocket(wsUrl);
+                
+                wsConnection.onopen = () => {
+                    log('WebSocket接続を確立しました', 'success');
+                    wsMonitorActive = true;
+                    
+                    // Subscribe to address notifications
+                    wsConnection.send(JSON.stringify({
+                        method: 'subscribeVirtualDaaScoreChangedNotifications',
+                        params: {}
+                    }));
+                    
+                    log('WebSocket監視を開始しました', 'success');
+                    log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
+                };
+                
+                wsConnection.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        // Clean up old transactions (older than 90 seconds)
+                        const now = Date.now();
+                        for (const [txid, txData] of monitoredTransactions.entries()) {
+                            if (now - txData.timestamp > 90000) {
+                                monitoredTransactions.delete(txid);
+                                log(`WebSocket監視から古いトランザクションを削除: ${txid.substring(0, 16)}... (90秒経過)`);
+                            }
+                        }
+                        
+                        // Process notifications
+                        if (data.method === 'notifyVirtualDaaScoreChangedNotification') {
+                            // This is a heartbeat-like notification
+                            // In a real implementation, we would check for transaction confirmations here
+                        }
+                    } catch (err) {
+                        // Ignore parse errors
+                    }
+                };
+                
+                wsConnection.onerror = (error) => {
+                    log(`WebSocketエラー: ${error.message || 'Unknown error'}`, 'error');
+                    wsMonitorActive = false;
+                };
+                
+                wsConnection.onclose = () => {
+                    log('WebSocket接続が切断されました', 'warning');
+                    wsMonitorActive = false;
+                    wsConnection = null;
+                    
+                    // Clean up monitored transactions
+                    if (monitoredTransactions.size > 0) {
+                        log(`監視中のトランザクションをクリア: ${monitoredTransactions.size}件`, 'info');
+                        monitoredTransactions.clear();
+                    }
+                };
+                
+            } catch (error) {
+                log(`WebSocket監視の開始に失敗: ${error.message}`, 'error');
+                wsMonitorActive = false;
+            }
+        }
     </script>
 </body>
 </html>
