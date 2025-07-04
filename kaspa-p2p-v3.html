@@ -614,54 +614,84 @@
                 this.maxSize = 100 * 1024 * 1024; // 100MB
                 this.archiveSize = 10 * 1024 * 1024; // 10MB chunks
                 this.encryptionKey = null;
+                log('[UploadHistoryManager] インスタンスを初期化しました', 'debug');
             }
             
             async initialize(privateKey) {
-                // Derive encryption key from private key
-                const keyData = new TextEncoder().encode(privateKey);
-                const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
-                this.encryptionKey = await crypto.subtle.importKey(
-                    'raw',
-                    hashBuffer,
-                    { name: 'AES-GCM', length: 256 },
-                    false,
-                    ['encrypt', 'decrypt']
-                );
-                
-                // Load existing history from workspace
-                if (window.workspaceHandle) {
-                    await this.loadFromFile();
+                log('[UploadHistoryManager] 初期化を開始します', 'debug');
+                try {
+                    // Derive encryption key from private key
+                    const keyData = new TextEncoder().encode(privateKey);
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+                    this.encryptionKey = await crypto.subtle.importKey(
+                        'raw',
+                        hashBuffer,
+                        { name: 'AES-GCM', length: 256 },
+                        false,
+                        ['encrypt', 'decrypt']
+                    );
+                    log('[UploadHistoryManager] 暗号化キーを初期化しました', 'success');
+                    
+                    // Load existing history from workspace
+                    if (window.workspaceHandle) {
+                        log('[UploadHistoryManager] ワークスペースハンドルが存在します。履歴の読み込みを開始します', 'debug');
+                        await this.loadFromFile();
+                    } else {
+                        log('[UploadHistoryManager] ワークスペースハンドルが存在しません', 'info');
+                    }
+                } catch (error) {
+                    log(`[UploadHistoryManager] 初期化エラー: ${error.message}`, 'error');
+                    throw error;
                 }
             }
             
             async loadFromFile() {
+                log(`[UploadHistoryManager] .kenvファイル「${this.fileName}」の読み込みを開始します`, 'debug');
                 try {
                     const fileHandle = await window.workspaceHandle.getFileHandle(this.fileName);
+                    log('[UploadHistoryManager] .kenvファイルが見つかりました', 'success');
+                    
                     const file = await fileHandle.getFile();
+                    const fileSize = file.size;
+                    log(`[UploadHistoryManager] ファイルサイズ: ${fileSize} bytes`, 'debug');
+                    
                     const encryptedData = await file.text();
                     const data = JSON.parse(encryptedData);
+                    log(`[UploadHistoryManager] ファイルのバージョン: ${data.version}、暗号化: ${data.encrypted}`, 'debug');
                     
                     if (data.encrypted) {
                         const decrypted = await this.decrypt(data.data);
                         const kenv = JSON.parse(decrypted);
+                        log(`[UploadHistoryManager] 復号化成功。履歴数: ${kenv.uploads?.length || 0}件`, 'debug');
                         
                         // Load into localStorage
                         localStorage.setItem(this.dbName, JSON.stringify(kenv.uploads || []));
                         this.updateHistoryUI();
                         log(`履歴を読み込みました: ${kenv.uploads?.length || 0}件`, 'success');
+                    } else {
+                        log('[UploadHistoryManager] ファイルが暗号化されていません', 'error');
                     }
                 } catch (error) {
                     // File doesn't exist or error reading
-                    log('履歴ファイルが見つかりません', 'info');
+                    if (error.name === 'NotFoundError') {
+                        log(`[UploadHistoryManager] .kenvファイル「${this.fileName}」が見つかりません`, 'info');
+                    } else {
+                        log(`[UploadHistoryManager] ファイル読み込みエラー: ${error.name} - ${error.message}`, 'error');
+                    }
                 }
             }
             
             async saveToFile() {
-                if (!window.workspaceHandle) return;
+                if (!window.workspaceHandle) {
+                    log('[UploadHistoryManager] ワークスペースハンドルがないため保存をスキップします', 'debug');
+                    return;
+                }
                 
+                log('[UploadHistoryManager] 履歴の保存を開始します', 'debug');
                 try {
                     const history = this.getHistory();
                     const stats = this.calculateStats();
+                    log(`[UploadHistoryManager] 保存する履歴数: ${history.length}件`, 'debug');
                     
                     const kenv = {
                         version: "1.0",
@@ -675,11 +705,14 @@
                     
                     // Check size and archive if needed
                     const size = new Blob([JSON.stringify(kenv)]).size;
+                    log(`[UploadHistoryManager] ファイルサイズチェック: ${size} bytes (最大: ${this.maxSize} bytes)`, 'debug');
                     if (size > this.maxSize) {
+                        log('[UploadHistoryManager] ファイルサイズが上限を超えました。アーカイブを開始します', 'info');
                         await this.archiveOldEntries();
                     }
                     
                     // Encrypt and save
+                    log('[UploadHistoryManager] データの暗号化を開始します', 'debug');
                     const encrypted = await this.encrypt(JSON.stringify(kenv));
                     const data = {
                         encrypted: true,
@@ -688,73 +721,104 @@
                     };
                     
                     const fileHandle = await window.workspaceHandle.getFileHandle(this.fileName, { create: true });
+                    if (fileHandle) {
+                        log(`[UploadHistoryManager] .kenvファイル「${this.fileName}」を作成/更新します`, 'debug');
+                    }
                     const writable = await fileHandle.createWritable();
                     await writable.write(JSON.stringify(data, null, 2));
                     await writable.close();
                     
                     log('.kenvファイルを保存しました', 'success');
                 } catch (error) {
-                    log(`履歴保存エラー: ${error.message}`, 'error');
+                    log(`[UploadHistoryManager] 履歴保存エラー: ${error.name} - ${error.message}`, 'error');
                 }
             }
             
             async encrypt(text) {
-                const encoder = new TextEncoder();
-                const data = encoder.encode(text);
-                const iv = crypto.getRandomValues(new Uint8Array(12));
-                
-                const encrypted = await crypto.subtle.encrypt(
-                    { name: 'AES-GCM', iv: iv },
-                    this.encryptionKey,
-                    data
-                );
-                
-                // Combine iv and encrypted data
-                const combined = new Uint8Array(iv.length + encrypted.byteLength);
-                combined.set(iv, 0);
-                combined.set(new Uint8Array(encrypted), iv.length);
-                
-                return btoa(String.fromCharCode(...combined));
+                log(`[UploadHistoryManager] 暗号化を開始します (データサイズ: ${text.length} 文字)`, 'debug');
+                try {
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(text);
+                    const iv = crypto.getRandomValues(new Uint8Array(12));
+                    
+                    const encrypted = await crypto.subtle.encrypt(
+                        { name: 'AES-GCM', iv: iv },
+                        this.encryptionKey,
+                        data
+                    );
+                    
+                    // Combine iv and encrypted data
+                    const combined = new Uint8Array(iv.length + encrypted.byteLength);
+                    combined.set(iv, 0);
+                    combined.set(new Uint8Array(encrypted), iv.length);
+                    
+                    const result = btoa(String.fromCharCode(...combined));
+                    log(`[UploadHistoryManager] 暗号化完了 (結果サイズ: ${result.length} 文字)`, 'debug');
+                    return result;
+                } catch (error) {
+                    log(`[UploadHistoryManager] 暗号化エラー: ${error.message}`, 'error');
+                    throw error;
+                }
             }
             
             async decrypt(base64) {
-                const combined = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-                const iv = combined.slice(0, 12);
-                const encrypted = combined.slice(12);
-                
-                const decrypted = await crypto.subtle.decrypt(
-                    { name: 'AES-GCM', iv: iv },
-                    this.encryptionKey,
-                    encrypted
-                );
-                
-                return new TextDecoder().decode(decrypted);
+                log(`[UploadHistoryManager] 復号化を開始します (データサイズ: ${base64.length} 文字)`, 'debug');
+                try {
+                    const combined = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                    const iv = combined.slice(0, 12);
+                    const encrypted = combined.slice(12);
+                    
+                    const decrypted = await crypto.subtle.decrypt(
+                        { name: 'AES-GCM', iv: iv },
+                        this.encryptionKey,
+                        encrypted
+                    );
+                    
+                    const result = new TextDecoder().decode(decrypted);
+                    log(`[UploadHistoryManager] 復号化完了 (結果サイズ: ${result.length} 文字)`, 'debug');
+                    return result;
+                } catch (error) {
+                    log(`[UploadHistoryManager] 復号化エラー: ${error.message}`, 'error');
+                    throw error;
+                }
             }
             
             async addUpload(uploadData) {
-                const history = this.getHistory();
-                history.unshift(uploadData); // Add to beginning
-                localStorage.setItem(this.dbName, JSON.stringify(history));
-                
-                await this.saveToFile();
-                this.updateUI();
+                log(`[UploadHistoryManager] 新しいアップロードエントリを追加します: ${uploadData.fileName}`, 'debug');
+                try {
+                    const history = this.getHistory();
+                    const beforeCount = history.length;
+                    history.unshift(uploadData); // Add to beginning
+                    localStorage.setItem(this.dbName, JSON.stringify(history));
+                    log(`[UploadHistoryManager] 履歴に追加しました (${beforeCount} → ${history.length}件)`, 'success');
+                    
+                    await this.saveToFile();
+                    this.updateUI();
+                } catch (error) {
+                    log(`[UploadHistoryManager] エントリ追加エラー: ${error.message}`, 'error');
+                }
             }
             
             getHistory() {
                 const data = localStorage.getItem(this.dbName);
-                return data ? JSON.parse(data) : [];
+                const history = data ? JSON.parse(data) : [];
+                log(`[UploadHistoryManager] 履歴を取得しました: ${history.length}件`, 'debug');
+                return history;
             }
             
             calculateStats() {
                 const history = this.getHistory();
-                return {
+                const stats = {
                     totalUploads: history.length,
                     totalSize: history.reduce((sum, item) => sum + (item.fileSize || 0), 0),
                     totalCost: history.reduce((sum, item) => sum + (item.totalCost || 0), 0)
                 };
+                log(`[UploadHistoryManager] 統計情報: アップロード${stats.totalUploads}件、総サイズ${stats.totalSize}bytes、総コスト${stats.totalCost}KAS`, 'debug');
+                return stats;
             }
             
             updateUI() {
+                log('[UploadHistoryManager] UIを更新します', 'debug');
                 const stats = this.calculateStats();
                 
                 // Update stats
@@ -768,12 +832,16 @@
                 
                 // Update history list
                 const historyList = document.getElementById('historyList');
-                if (!historyList) return;
+                if (!historyList) {
+                    log('[UploadHistoryManager] historyList要素が見つかりません', 'debug');
+                    return;
+                }
                 
                 const history = this.getHistory();
                 historyList.innerHTML = history.length === 0 ? 
                     '<p style="text-align: center; color: #666;">アップロード履歴がありません</p>' :
                     history.map(item => this.createHistoryItem(item)).join('');
+                log(`[UploadHistoryManager] 履歴リストを更新しました (${history.length}件)`, 'debug');
             }
             
             createHistoryItem(item) {
@@ -803,15 +871,21 @@
             }
             
             async generateKaspa(uploadId) {
+                log(`[UploadHistoryManager] .kaspaファイルの生成を開始します (ID: ${uploadId})`, 'debug');
                 const history = this.getHistory();
                 const item = history.find(h => h.id === uploadId);
-                if (!item) return;
+                if (!item) {
+                    log(`[UploadHistoryManager] 指定されたIDの履歴が見つかりません: ${uploadId}`, 'error');
+                    return;
+                }
                 
+                log(`[UploadHistoryManager] 履歴項目が見つかりました: ${item.fileName}`, 'debug');
                 // TODO: Generate .kaspa file from history item
                 log('.kaspaファイル生成機能は実装中です', 'info');
             }
             
             async exportKenv() {
+                log('[UploadHistoryManager] .kenvファイルのエクスポートを開始します', 'debug');
                 try {
                     await this.saveToFile();
                     
@@ -819,6 +893,7 @@
                     const fileHandle = await window.workspaceHandle.getFileHandle(this.fileName);
                     const file = await fileHandle.getFile();
                     const content = await file.text();
+                    log(`[UploadHistoryManager] エクスポートファイルサイズ: ${content.length} 文字`, 'debug');
                     
                     const blob = new Blob([content], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
@@ -830,11 +905,12 @@
                     
                     log('.kenvファイルをエクスポートしました', 'success');
                 } catch (error) {
-                    log(`エクスポートエラー: ${error.message}`, 'error');
+                    log(`[UploadHistoryManager] エクスポートエラー: ${error.name} - ${error.message}`, 'error');
                 }
             }
             
             async importKenv() {
+                log('[UploadHistoryManager] .kenvファイルのインポートを開始します', 'debug');
                 try {
                     const input = document.createElement('input');
                     input.type = 'file';
@@ -842,71 +918,109 @@
                     
                     input.onchange = async (e) => {
                         const file = e.target.files[0];
-                        if (!file) return;
+                        if (!file) {
+                            log('[UploadHistoryManager] ファイルが選択されませんでした', 'info');
+                            return;
+                        }
                         
-                        const content = await file.text();
-                        const data = JSON.parse(content);
+                        log(`[UploadHistoryManager] インポートファイル: ${file.name} (${file.size} bytes)`, 'debug');
                         
-                        if (data.encrypted && data.data) {
-                            const decrypted = await this.decrypt(data.data);
-                            const kenv = JSON.parse(decrypted);
+                        try {
+                            const content = await file.text();
+                            const data = JSON.parse(content);
+                            log(`[UploadHistoryManager] ファイルバージョン: ${data.version}、暗号化: ${data.encrypted}`, 'debug');
                             
-                            // Merge with existing history
-                            const existingHistory = this.getHistory();
-                            const newHistory = [...kenv.uploads, ...existingHistory];
-                            
-                            // Remove duplicates by id
-                            const uniqueHistory = newHistory.filter((item, index, self) =>
-                                index === self.findIndex(h => h.id === item.id)
-                            );
-                            
-                            localStorage.setItem(this.dbName, JSON.stringify(uniqueHistory));
-                            await this.saveToFile();
-                            this.updateHistoryUI();
-                            
-                            log(`${kenv.uploads.length}件の履歴をインポートしました`, 'success');
+                            if (data.encrypted && data.data) {
+                                const decrypted = await this.decrypt(data.data);
+                                const kenv = JSON.parse(decrypted);
+                                log(`[UploadHistoryManager] インポートデータ: ${kenv.uploads?.length || 0}件の履歴`, 'debug');
+                                
+                                // Merge with existing history
+                                const existingHistory = this.getHistory();
+                                const beforeCount = existingHistory.length;
+                                const newHistory = [...kenv.uploads, ...existingHistory];
+                                
+                                // Remove duplicates by id
+                                const uniqueHistory = newHistory.filter((item, index, self) =>
+                                    index === self.findIndex(h => h.id === item.id)
+                                );
+                                const duplicates = newHistory.length - uniqueHistory.length;
+                                if (duplicates > 0) {
+                                    log(`[UploadHistoryManager] ${duplicates}件の重複を除去しました`, 'info');
+                                }
+                                
+                                localStorage.setItem(this.dbName, JSON.stringify(uniqueHistory));
+                                await this.saveToFile();
+                                this.updateHistoryUI();
+                                
+                                const addedCount = uniqueHistory.length - beforeCount;
+                                log(`${addedCount}件の履歴をインポートしました (総数: ${uniqueHistory.length}件)`, 'success');
+                            } else {
+                                log('[UploadHistoryManager] ファイルが暗号化されていないか、データが無効です', 'error');
+                            }
+                        } catch (error) {
+                            log(`[UploadHistoryManager] インポート処理エラー: ${error.message}`, 'error');
                         }
                     };
                     
                     input.click();
                 } catch (error) {
-                    log(`インポートエラー: ${error.message}`, 'error');
+                    log(`[UploadHistoryManager] インポートエラー: ${error.message}`, 'error');
                 }
             }
             
             async archiveOldEntries() {
+                log('[UploadHistoryManager] アーカイブ処理を開始します', 'debug');
                 const history = this.getHistory();
-                if (history.length <= 100) return;
+                log(`[UploadHistoryManager] 現在の履歴数: ${history.length}件`, 'debug');
+                
+                if (history.length <= 100) {
+                    log('[UploadHistoryManager] 履歴数が100件以下のためアーカイブは不要です', 'debug');
+                    return;
+                }
                 
                 // Keep recent 100 entries
                 const recentHistory = history.slice(0, 100);
                 const archiveHistory = history.slice(100);
+                log(`[UploadHistoryManager] アーカイブ対象: ${archiveHistory.length}件、保持: ${recentHistory.length}件`, 'info');
                 
                 // Save archive
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
                 const archiveName = `kaspa-uploads-archive-${timestamp}.kenv`;
+                log(`[UploadHistoryManager] アーカイブファイル名: ${archiveName}`, 'debug');
                 
-                const archiveData = {
-                    version: "1.0",
-                    archived: true,
-                    uploads: archiveHistory
-                };
-                
-                const encrypted = await this.encrypt(JSON.stringify(archiveData));
-                const data = {
-                    encrypted: true,
-                    version: "1.0",
-                    data: encrypted
-                };
-                
-                const fileHandle = await window.workspaceHandle.getFileHandle(archiveName, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(JSON.stringify(data, null, 2));
-                await writable.close();
-                
-                // Update current history
-                localStorage.setItem(this.dbName, JSON.stringify(recentHistory));
-                log(`${archiveHistory.length}件の古い履歴をアーカイブしました`, 'info');
+                try {
+                    const archiveData = {
+                        version: "1.0",
+                        archived: true,
+                        uploads: archiveHistory
+                    };
+                    
+                    const encrypted = await this.encrypt(JSON.stringify(archiveData));
+                    const data = {
+                        encrypted: true,
+                        version: "1.0",
+                        data: encrypted
+                    };
+                    
+                    const fileHandle = await window.workspaceHandle.getFileHandle(archiveName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(JSON.stringify(data, null, 2));
+                    await writable.close();
+                    log(`[UploadHistoryManager] アーカイブファイルを作成しました: ${archiveName}`, 'success');
+                    
+                    // Update current history
+                    localStorage.setItem(this.dbName, JSON.stringify(recentHistory));
+                    log(`${archiveHistory.length}件の古い履歴をアーカイブしました`, 'info');
+                } catch (error) {
+                    log(`[UploadHistoryManager] アーカイブエラー: ${error.message}`, 'error');
+                    throw error;
+                }
+            }
+            
+            updateHistoryUI() {
+                log('[UploadHistoryManager] updateHistoryUI が呼び出されました', 'debug');
+                this.updateUI();
             }
         }
         
