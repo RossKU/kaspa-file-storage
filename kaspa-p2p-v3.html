@@ -2737,6 +2737,12 @@
                 
                 log(`アップロード完了! 総コスト: ${totalCost.toFixed(5)} KAS`, 'success');
                 
+                // Auto-stop WebSocket monitoring after upload completion
+                if (window.wsMonitorActive) {
+                    log('アップロード完了 - WebSocket監視を自動停止します', 'info');
+                    await stopMonitoring();
+                }
+                
                 // Add to history
                 if (window.historyManager) {
                     const uploadData = {
@@ -2996,6 +3002,12 @@
                         await window.historyManager.saveToFile();
                         log('[UploadHistoryManager] メタTxIDを履歴に追加しました', 'debug');
                     }
+                }
+                
+                // Auto-stop WebSocket monitoring after meta-tx creation
+                if (window.wsMonitorActive) {
+                    log('メタトランザクション作成完了 - WebSocket監視を自動停止します', 'info');
+                    await stopMonitoring();
                 }
                 
             } catch (error) {
@@ -3897,7 +3909,7 @@
                                     existing.blockTime = blockTime;
                                     existing.foundAt = new Date();
                                     
-                                    log(`🎯 WebSocket: 監視中のトランザクション検出！ TxID: ${txId.substring(0, 16)}... BlockID: ${blockId.substring(0, 16)}...`, 'success');
+                                    log(`🎯 WebSocket: 監視中のトランザクション検出！ TxID: ${txId.substring(0, 16)}... BlockID: ${blockId.substring(0, 16)}...`, 'debug');
                                     myTransactionFound = true;
                                 } else {
                                     // Monitor all transactions with payload (like complete.html)
@@ -3988,6 +4000,12 @@
         
         // Initialize history manager on load
         window.historyManager = new UploadHistoryManager();
+        
+        // Auto-initialize WASM on page load
+        window.addEventListener('DOMContentLoaded', async function() {
+            log('ページ読み込み完了 - システムを自動初期化します', 'info');
+            await initializeSystem();
+        });
     </script>
 </body>
 </html>
