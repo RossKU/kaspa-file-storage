@@ -147,3 +147,55 @@ window.addEventListener('offline', () => { /* 切断時の保存 */ });
 ### まとめ
 
 BitTorrent風の堅牢なレジューム機能を実装し、大容量ファイルのアップロードを確実に完了できるようになりました。ネットワーク切断やブラウザクラッシュにも対応し、P2Pファイル共有システムとしての信頼性が大幅に向上しました。
+
+## 🔧 追加実装 (2025-01-04)
+
+### WebSocket監視機能の修正
+
+#### 問題点
+- resumable.htmlでWebSocket監視が動作しない（"WebSocket監視をスキップ"と表示）
+- 不完全な独自WebSocket実装を使用していた
+- DAAスコア変更通知のみ購読（トランザクション監視に不適切）
+
+#### 修正内容
+1. **complete.htmlから正しい実装を移植**
+   ```javascript
+   // 修正前：独自WebSocket接続
+   wsConnection = new WebSocket(wsUrl);
+   wsConnection.send(JSON.stringify({
+       method: 'subscribeVirtualDaaScoreChangedNotifications'
+   }));
+   
+   // 修正後：RPCクライアントの組み込み機能
+   await rpcClient.subscribeBlockAdded();
+   rpcClient.addEventListener('block-added', (event) => {
+       // ブロック内のトランザクションを監視
+   });
+   ```
+
+2. **ネットワーク遮断対応の強化**
+   - `restartMonitoring()`関数を追加
+   - ネットワーク復帰時に自動的にWebSocket監視を再開
+   - RPCクライアント再接続時の監視再開処理
+
+3. **タイミング調整**
+   - WebSocket: 90秒間トランザクション保持
+   - RPC確認: 30秒後に開始
+   - 古いトランザクションの自動クリーンアップ
+
+4. **デバッグログの追加**
+   ```javascript
+   log('WebSocket監視を開始しました', 'info');
+   log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
+   log(`WebSocket: ペイロード付きトランザクション検出 - ${txId.substring(0, 16)}...`, 'info');
+   ```
+
+### 技術的改善
+- `removeAllListeners('block-added')`で重複リスナーを防止
+- トランザクションにタイムスタンプを追加して正確な90秒管理
+- ネットワークエラー検出と自動リトライ機能
+
+### File System Access API関連の修正
+- 作業フォルダ設定ボタンをグローバルスコープに公開
+- ワークスペース未設定時はlocalStorageのみ使用
+- 進捗ファイルの自動ダウンロードを削除（ユーザーの要望）
