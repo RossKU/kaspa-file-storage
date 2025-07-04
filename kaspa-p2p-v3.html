@@ -2449,7 +2449,7 @@
                     await startMonitoring();
                 } else {
                     log('WebSocket監視は既に動作中です', 'info');
-                    log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
+                    // log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
                 }
                 
                 
@@ -3890,7 +3890,7 @@
                     for (const [txid, txData] of monitoredTransactions.entries()) {
                         if (now - txData.timestamp > 90000) {
                             monitoredTransactions.delete(txid);
-                            log(`WebSocket監視から古いトランザクションを削除: ${txid.substring(0, 16)}... (90秒経過)`, 'info');
+                            // log(`WebSocket監視から古いトランザクションを削除: ${txid.substring(0, 16)}... (90秒経過)`, 'debug');
                         }
                     }
                     
@@ -3908,7 +3908,7 @@
                                     existing.blockTime = blockTime;
                                     existing.foundAt = new Date();
                                     
-                                    log(`🎯 WebSocket: 監視中のトランザクション検出！ TxID: ${txId.substring(0, 16)}... BlockID: ${blockId.substring(0, 16)}...`, 'debug');
+                                    // log(`🎯 WebSocket: 監視中のトランザクション検出！ TxID: ${txId.substring(0, 16)}... BlockID: ${blockId.substring(0, 16)}...`, 'debug');
                                     myTransactionFound = true;
                                 } else {
                                     // Monitor all transactions with payload (like complete.html)
@@ -3947,13 +3947,13 @@
                             log(`✅ WebSocket: ブロック ${blockId.substring(0, 16)}... で監視中のトランザクションを確認`, 'success');
                         } else if (block.transactions.length <= 5) {
                             // Only log small blocks to reduce noise
-                            log(`WebSocket: ブロック ${blockId.substring(0, 16)}... に ${block.transactions.length} トランザクション`, 'info');
+                            // log(`WebSocket: ブロック ${blockId.substring(0, 16)}... に ${block.transactions.length} トランザクション`, 'debug');
                         }
                     }
                 });
                 
                 monitorLog('監視を開始しました', 'success');
-                log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
+                // log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
                 
             } catch (error) {
                 monitorLog(`監視開始エラー: ${error.message}`, 'error');
