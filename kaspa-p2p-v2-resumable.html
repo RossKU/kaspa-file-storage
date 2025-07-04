@@ -309,6 +309,7 @@
             <h2>🔧 システム初期化</h2>
             <div class="grid-2">
                 <button onclick="initializeSystem()" id="initBtn">システムを初期化</button>
+                <button onclick="setupWorkspace()" id="workspaceBtn">作業フォルダ設定</button>
                 <button onclick="testConnection()" id="testBtn" disabled>接続テスト</button>
             </div>
             <div id="initStatus" class="metric-box" style="display: none;"></div>
@@ -682,6 +683,11 @@
                             lastUpdate: Date.now()
                         };
                         localStorage.setItem('kaspa-upload-metadata', JSON.stringify(metadata));
+                        // Show local save status occasionally
+                        if (!this.lastLocalSaveLog || Date.now() - this.lastLocalSaveLog > 10000) {
+                            log(`進捗をローカルに保存中`, 'success');
+                            this.lastLocalSaveLog = Date.now();
+                        }
                     } catch (err) {
                         log(`localStorage保存エラー: ${err.message}`, 'warning');
                     }
@@ -707,21 +713,8 @@
                             log(`ファイル保存エラー: ${err.message}`, 'warning');
                         }
                     } else {
-                        // No workspace, download file at milestones only
-                        if (this.shouldDownloadFile()) {
-                            const blob = new Blob([progressData], { type: 'application/json' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = this.progressFileName;
-                            
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                            
-                            log(`進捗ファイルをダウンロード: ${this.progress.metadata.completedChunks}/${this.progress.metadata.totalChunks} 完了`, 'info');
-                        }
+                        // No workspace - localStorage only, no automatic downloads
+                        this.updateSaveStatus();
                     }
                 } catch (error) {
                     log(`進捗保存エラー: ${error.message}`, 'error');
@@ -738,7 +731,11 @@
                 }
                 
                 const el = document.getElementById('saveStatus');
-                el.textContent = '✓ 自動保存中';
+                if (window.workspaceHandle) {
+                    el.textContent = '✓ ファイル保存中';
+                } else {
+                    el.textContent = '✓ ローカル保存中';
+                }
                 el.style.display = 'block';
                 
                 clearTimeout(this.saveStatusTimeout);
@@ -747,18 +744,21 @@
                 }, 2000);
             }
             
-            shouldDownloadFile() {
-                const chunks = this.progress.metadata.completedChunks;
-                const total = this.progress.metadata.totalChunks;
+            async exportProgress() {
+                // Manual export function for user
+                const progressData = JSON.stringify(this.progress, null, 2);
+                const blob = new Blob([progressData], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = this.progressFileName;
                 
-                // Download at: start, 25%, 50%, 75%, 100%
-                if (chunks === 1) return true;
-                if (chunks === Math.floor(total * 0.25)) return true;
-                if (chunks === Math.floor(total * 0.5)) return true;
-                if (chunks === Math.floor(total * 0.75)) return true;
-                if (chunks === total) return true;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
                 
-                return false;
+                log(`進捗ファイルをエクスポートしました`, 'success');
             }
             
             async exportAsKaspa(kaspaMetadata) {
@@ -933,7 +933,7 @@
                 } else {
                     status.innerHTML = `
                         <p style="margin: 0; color: #ffcc66;">
-                            ⚠️ 作業フォルダが設定されていません
+                            作業フォルダ: 未設定 (ブラウザ内保存のみ)
                             <button onclick="setupWorkspace()" style="margin-left: 10px; padding: 5px 10px; font-size: 12px;">設定</button>
                         </p>
                     `;
@@ -1038,6 +1038,31 @@
                 // Store progress for later use
                 window.pendingProgress = progress;
                 log('進捗を読み込みました。同じファイルを選択してください。', 'info');
+                
+                // Show export button if no workspace
+                if (!window.workspaceHandle) {
+                    const resumeDiv = document.getElementById('resumeInfo');
+                    if (resumeDiv && !document.getElementById('exportProgressBtn')) {
+                        const exportBtn = document.createElement('button');
+                        exportBtn.id = 'exportProgressBtn';
+                        exportBtn.textContent = '進捗ファイルをエクスポート';
+                        exportBtn.style.marginTop = '10px';
+                        exportBtn.onclick = () => {
+                            if (window.pendingProgress) {
+                                const progressData = JSON.stringify(window.pendingProgress, null, 2);
+                                const blob = new Blob([progressData], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'kaspa-upload-progress.json';
+                                a.click();
+                                URL.revokeObjectURL(url);
+                                log('進捗ファイルをエクスポートしました', 'success');
+                            }
+                        };
+                        resumeDiv.appendChild(exportBtn);
+                    }
+                }
                 
             } catch (error) {
                 log(`進捗読み込みエラー: ${error.message}`, 'error');
@@ -2722,19 +2747,25 @@
                     if (!hasWorkspace) {
                         const useFileAPI = confirm(
                             'Kaspa P2P File Storage\n\n' +
-                            'ファイルの自動保存機能を有効にしますか？\n\n' +
-                            '有効にすると：\n' +
-                            '✓ 進捗が自動的にファイルに保存されます\n' +
+                            '作業フォルダを設定しますか？\n\n' +
+                            '設定すると：\n' +
+                            '✓ 進捗がファイルに自動保存されます\n' +
                             '✓ ダウンロードファイルが整理されます\n' +
-                            '✓ ファイルアクセスの許可が必要です\n\n' +
-                            '※後から設定できます'
+                            '✓ ブラウザを閉じても進捗が残ります\n\n' +
+                            '設定しない場合：\n' +
+                            '✓ ブラウザ内に進捗が保存されます\n' +
+                            '✓ ファイルの自動ダウンロードはありません\n\n' +
+                            '※「作業フォルダ設定」ボタンで後から設定できます'
                         );
                         
                         if (useFileAPI) {
                             await setupWorkspace();
                         } else {
+                            log('作業フォルダ未設定 - ブラウザ内に進捗を保存します', 'info');
                             showWorkspaceStatus();
                         }
+                    } else {
+                        showWorkspaceStatus();
                     }
                 } else {
                     log('File System Access APIはこのブラウザでは利用できません', 'warning');
