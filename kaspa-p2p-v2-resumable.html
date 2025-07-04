@@ -2924,19 +2924,34 @@
                     }
                     
                     if (block.transactions && block.transactions.length > 0) {
+                        let myTransactionFound = false;
+                        
                         for (const tx of block.transactions) {
                             const txId = tx.verboseData?.transactionId;
                             if (txId) {
-                                monitoredTransactions.set(txId, {
-                                    blockId: blockId,
-                                    blockTime: blockTime,
-                                    foundAt: new Date(),
-                                    timestamp: now
-                                });
-                                
-                                if (tx.payload && tx.payload !== '') {
-                                    monitorLog(`ペイロード付きTx検出: ${txId}`, 'success');
-                                    log(`WebSocket: ペイロード付きトランザクション検出 - ${txId.substring(0, 16)}...`, 'info');
+                                // Check if this is one of our monitored transactions
+                                if (monitoredTransactions.has(txId)) {
+                                    // Update existing entry (preserve original data)
+                                    const existing = monitoredTransactions.get(txId);
+                                    existing.blockId = blockId;
+                                    existing.blockTime = blockTime;
+                                    existing.foundAt = new Date();
+                                    
+                                    log(`🎯 WebSocket: 監視中のトランザクション検出！ TxID: ${txId.substring(0, 16)}... BlockID: ${blockId.substring(0, 16)}...`, 'success');
+                                    myTransactionFound = true;
+                                } else {
+                                    // New transaction (from other users)
+                                    monitoredTransactions.set(txId, {
+                                        blockId: blockId,
+                                        blockTime: blockTime,
+                                        foundAt: new Date(),
+                                        timestamp: now
+                                    });
+                                    
+                                    // Only show debug log for payload transactions from others (reduce noise)
+                                    if (tx.payload && tx.payload !== '') {
+                                        // Don't log every single payload transaction
+                                    }
                                 }
                             }
                         }
@@ -2944,7 +2959,13 @@
                         document.getElementById('monitoringCount').textContent = monitoredTransactions.size;
                         document.getElementById('detectedCount').textContent = monitoredTransactions.size;
                         
-                        log(`WebSocket: ブロック ${blockId.substring(0, 16)}... に ${block.transactions.length} トランザクション`, 'info');
+                        // Only log if we found our transaction or if it's a small block
+                        if (myTransactionFound) {
+                            log(`✅ WebSocket: ブロック ${blockId.substring(0, 16)}... で監視中のトランザクションを確認`, 'success');
+                        } else if (block.transactions.length <= 5) {
+                            // Only log small blocks to reduce noise
+                            log(`WebSocket: ブロック ${blockId.substring(0, 16)}... に ${block.transactions.length} トランザクション`, 'info');
+                        }
                     }
                 });
                 
