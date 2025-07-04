@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v2.0.3 - Resumable Edition</title>
+    <title>Kaspa P2P File Storage v2.0.4 - Resumable Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -286,7 +286,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>🚀 Kaspa P2P File Storage v2.0.3 - Resumable Edition</h1>
+        <h1>🚀 Kaspa P2P File Storage v2.0.4 - Resumable Edition</h1>
         <p>実ネットワーク接続による完全なP2Pファイル共有システム（レジューム対応）</p>
         <div id="networkStatus" style="margin-top: 10px;">
             <span class="status-indicator status-offline"></span>
@@ -1612,16 +1612,9 @@
                             log(`ネットワークに送信中...`);
                             txid = await pendingTx.submit(rpcClient);
                             
-                            // Wait for transaction to be accepted
-                            log(`トランザクションの確認待ち...`);
-                            await new Promise(resolve => setTimeout(resolve, 2000));
-                            
                             log(`チャンク ${i + 1} TxID: ${txid.substring(0, 16)}...`, 'success');
                             
-                            // Try WebSocket monitoring first
-                            log(`トランザクション確認を待機中...`);
-                            
-                            // Register transaction for monitoring
+                            // IMMEDIATELY register transaction for monitoring (before any waiting)
                             if (wsMonitorActive && monitoredTransactions) {
                                 monitoredTransactions.set(txid, {
                                     timestamp: Date.now(),
@@ -1630,6 +1623,13 @@
                                 });
                                 log(`WebSocket監視にトランザクションを登録: ${txid.substring(0, 16)}...`);
                             }
+                            
+                            // Wait for transaction to be accepted
+                            log(`トランザクションの確認待ち...`);
+                            await new Promise(resolve => setTimeout(resolve, 2000));
+                            
+                            // Try WebSocket monitoring first
+                            log(`トランザクション確認を待機中...`);
                             
                             // Wait for confirmation (WebSocket or RPC)
                             let waitTime = 0;
@@ -2745,7 +2745,7 @@
                 log('警告: kaspaFileInput要素が見つかりません', 'error');
             }
             
-            log('🚀 Kaspa P2P v2.0.3 準備完了！', 'info');
+            log('🚀 Kaspa P2P v2.0.4 準備完了！', 'info');
             log('システムを初期化してください', 'info');
             
             // Initialize workspace prompt
