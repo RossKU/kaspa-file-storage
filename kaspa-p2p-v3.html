@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.1.0 - Auto-Resume & History Edition</title>
+    <title>Kaspa P2P File Storage v3.2.0 - Auto-Resume & History Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -322,9 +322,9 @@
 </head>
 <body>
     <div class="header">
-        <h1>🚀 Kaspa P2P File Storage v3.1.0 - Auto-Resume & History Edition</h1>
+        <h1>🚀 Kaspa P2P File Storage v3.2.0 - Auto-Resume & History Edition</h1>
         <p>実ネットワーク接続による完全なP2Pファイル共有システム（レジューム＆履歴管理対応）</p>
-        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.1.0: 履歴管理機能追加 - 完了したアップロードを暗号化保存</p>
+        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.2.0: WebSocket監視の自動停止機能追加</p>
         <div id="networkStatus" style="margin-top: 10px;">
             <span class="status-indicator status-offline"></span>
             <span id="statusText">未接続</span>
@@ -335,7 +335,6 @@
     <div class="tab-buttons">
         <button class="tab-btn active" onclick="switchTab('upload')">📤 Upload</button>
         <button class="tab-btn" onclick="switchTab('download')">📥 Download</button>
-        <button class="tab-btn" onclick="switchTab('monitor')">📡 Monitor</button>
         <button class="tab-btn" onclick="switchTab('history')">📜 History</button>
         <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
     </div>
@@ -486,37 +485,6 @@
         </div>
     </div>
 
-    <!-- Monitor Tab -->
-    <div id="monitor-tab" class="tab-content">
-        <div class="container">
-            <h2>📡 WebSocket監視</h2>
-            <div class="grid-2">
-                <button onclick="startMonitoring()">監視開始</button>
-                <button onclick="stopMonitoring()">監視停止</button>
-            </div>
-            
-            <div class="metric-box">
-                <table>
-                    <tr>
-                        <th>監視中のトランザクション</th>
-                        <td id="monitoringCount">0</td>
-                    </tr>
-                    <tr>
-                        <th>検出されたBlockID</th>
-                        <td id="detectedCount">0</td>
-                    </tr>
-                    <tr>
-                        <th>監視開始時刻</th>
-                        <td id="monitorStartTime">-</td>
-                    </tr>
-                </table>
-            </div>
-            
-            <h3>監視ログ</h3>
-            <div class="log-container" id="monitorLog"></div>
-        </div>
-    </div>
-
     <!-- History Tab -->
     <div id="history-tab" class="tab-content">
         <div class="container">
@@ -605,6 +573,9 @@
         let workspaceHandle = null; // File System Access API directory handle
         let progressFileMap = new Map(); // Map of filename -> {cid, fileHandle}
         let historyManager = null; // Upload history manager
+        let wsMonitorTimeout = null; // WebSocket monitoring timeout
+        let uploadingChunksCount = 0; // Number of chunks being uploaded
+        let uploadingMetaTx = false; // Whether meta-tx is being uploaded
         
         // Upload History Manager Class
         class UploadHistoryManager {
@@ -1493,7 +1464,7 @@
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             
-            const tabIndex = ['upload', 'download', 'monitor', 'settings', 'history'].indexOf(tab);
+            const tabIndex = ['upload', 'download', 'history', 'settings'].indexOf(tab);
             document.querySelectorAll('.tab-btn')[tabIndex].classList.add('active');
             document.getElementById(`${tab}-tab`).classList.add('active');
             
@@ -2559,7 +2530,16 @@
                             
                             log(`チャンク ${i + 1} TxID: ${txid.substring(0, 16)}...`, 'success');
                             
-                            // No pre-registration needed - rely on WebSocket catching all transactions
+                            // Add to monitoring list
+                            uploadingChunksCount++;
+                            monitoredTransactions.set(txid, {
+                                type: 'chunk',
+                                chunkIndex: i,
+                                timestamp: Date.now(),
+                                blockId: null
+                            });
+                            log(`[DEBUG] WebSocket監視リストに追加: TxID: ${txid.substring(0, 16)}... (チャンク ${i + 1}/${totalChunks})`, 'debug');
+                            
                             log(`トランザクション送信完了: ${txid.substring(0, 16)}...`);
                             
                             // Wait for transaction to be accepted
@@ -2580,6 +2560,10 @@
                                     if (monitorData.blockId) {
                                         blockId = monitorData.blockId;
                                         log(`WebSocket経由でBlockID取得: ${blockId.substring(0, 16)}...`);
+                                        // Remove from monitoring list
+                                        monitoredTransactions.delete(txid);
+                                        uploadingChunksCount--;
+                                        log(`[DEBUG] WebSocket監視リストから削除: TxID: ${txid.substring(0, 16)}... (BlockID取得済み)`, 'debug');
                                         break;
                                     }
                                 }
@@ -2596,6 +2580,12 @@
                                         if (txInfo && txInfo.blockHash) {
                                             blockId = txInfo.blockHash;
                                             log(`RPC経由でBlockID取得: ${blockId.substring(0, 16)}...`);
+                                            // Remove from monitoring list if found via RPC
+                                            if (monitoredTransactions.has(txid)) {
+                                                monitoredTransactions.delete(txid);
+                                                uploadingChunksCount--;
+                                                log(`[DEBUG] WebSocket監視リストから削除: TxID: ${txid.substring(0, 16)}... (RPC経由でBlockID取得)`, 'debug');
+                                            }
                                             break;
                                         }
                                     } catch (err) {
@@ -2936,6 +2926,15 @@
                 
                 log(`メタトランザクションを送信しました: ${metaTxId}`, 'success');
                 
+                // Add to monitoring list
+                uploadingMetaTx = true;
+                monitoredTransactions.set(metaTxId, {
+                    type: 'meta-tx',
+                    timestamp: Date.now(),
+                    blockId: null
+                });
+                log(`[DEBUG] WebSocket監視リストに追加: TxID: ${metaTxId.substring(0, 16)}... (メタトランザクション)`, 'debug');
+                
                 // Wait for BlockID from WebSocket monitor
                 log(`メタトランザクションのBlockIDを待機中...`);
                 let metaBlockId = null;
@@ -2944,8 +2943,15 @@
                 
                 while (!metaBlockId && waitTime < maxWaitTime) {
                     if (monitoredTransactions.has(metaTxId)) {
-                        metaBlockId = monitoredTransactions.get(metaTxId).blockId;
-                        break;
+                        const monitorData = monitoredTransactions.get(metaTxId);
+                        if (monitorData.blockId) {
+                            metaBlockId = monitorData.blockId;
+                            // Remove from monitoring list
+                            monitoredTransactions.delete(metaTxId);
+                            uploadingMetaTx = false;
+                            log(`[DEBUG] WebSocket監視リストから削除: TxID: ${metaTxId.substring(0, 16)}... (メタTx BlockID取得済み)`, 'debug');
+                            break;
+                        }
                     }
                     await new Promise(resolve => setTimeout(resolve, 500));
                     waitTime += 500;
@@ -3557,6 +3563,14 @@
             }
         };
 
+        // Check if monitoring should stop
+        async function checkMonitoringStop() {
+            if (uploadingChunksCount === 0 && !uploadingMetaTx) {
+                log(`[DEBUG] WebSocket監視: 残り0件 - 自動停止します`, 'debug');
+                await stopMonitoring();
+            }
+        }
+        
         // WebSocket monitoring
         window.startMonitoring = async function() {
             if (!rpcClient) {
@@ -3572,6 +3586,15 @@
             try {
                 monitorLog('WebSocket監視を開始...');
                 wsMonitorActive = true;
+                
+                // Set 5 minute timeout
+                if (wsMonitorTimeout) {
+                    clearTimeout(wsMonitorTimeout);
+                }
+                wsMonitorTimeout = setTimeout(async () => {
+                    log('WebSocket監視: 5分タイムアウト - 自動停止', 'warning');
+                    await stopMonitoring();
+                }, 5 * 60 * 1000);
                 
                 await rpcClient.subscribeBlockAdded();
                 monitorLog('Block Addedイベントを購読しました', 'success');
@@ -3598,6 +3621,18 @@
                     monitorLog('監視を停止しました', 'success');
                 }
                 wsMonitorActive = false;
+                
+                // Clear timeout
+                if (wsMonitorTimeout) {
+                    clearTimeout(wsMonitorTimeout);
+                    wsMonitorTimeout = null;
+                }
+                
+                // Reset counters
+                uploadingChunksCount = 0;
+                uploadingMetaTx = false;
+                
+                log('WebSocket監視を停止しました', 'info');
                 
             } catch (error) {
                 monitorLog(`監視停止エラー: ${error.message}`, 'error');
@@ -3741,8 +3776,8 @@
                 log('警告: kaspaFileInput要素が見つかりません', 'error');
             }
             
-            log('🚀 Kaspa P2P v3.1.0 準備完了！', 'info');
-            log('📋 v3.1.0: 履歴管理機能追加 - 完了したアップロードを暗号化保存', 'info');
+            log('🚀 Kaspa P2P v3.2.0 準備完了！', 'info');
+            log('📋 v3.2.0: WebSocket監視の自動停止機能追加', 'info');
             log('システムを初期化してください', 'info');
             
             // Initialize workspace prompt
@@ -3908,33 +3943,14 @@
                                     existing.blockTime = blockTime;
                                     existing.foundAt = new Date();
                                     
-                                    // log(`🎯 WebSocket: 監視中のトランザクション検出！ TxID: ${txId.substring(0, 16)}... BlockID: ${blockId.substring(0, 16)}...`, 'debug');
+                                    log(`[DEBUG] WebSocket: 監視中のトランザクション検出！ TxID: ${txId.substring(0, 16)}... BlockID: ${blockId.substring(0, 16)}...`, 'debug');
                                     myTransactionFound = true;
+                                    
+                                    // Check if upload is complete after finding this transaction
+                                    setTimeout(checkMonitoringStop, 100);
                                 } else {
-                                    // Monitor all transactions with payload (like complete.html)
-                                    if (tx.payload && tx.payload !== '') {
-                                        // Add to monitoring with minimal data to save memory
-                                        monitoredTransactions.set(txId, {
-                                            blockId: blockId,
-                                            blockTime: blockTime,
-                                            foundAt: new Date(),
-                                            timestamp: now,
-                                            fromWebSocket: true  // Mark as WebSocket-discovered
-                                        });
-                                        
-                                        // Keep total monitored transactions under control
-                                        if (monitoredTransactions.size > 1000) {
-                                            // Remove oldest WebSocket-discovered transactions
-                                            const sortedEntries = Array.from(monitoredTransactions.entries())
-                                                .filter(([_, data]) => data.fromWebSocket)
-                                                .sort((a, b) => a[1].timestamp - b[1].timestamp);
-                                            
-                                            // Remove oldest 100 WebSocket-discovered transactions
-                                            for (let i = 0; i < 100 && i < sortedEntries.length; i++) {
-                                                monitoredTransactions.delete(sortedEntries[i][0]);
-                                            }
-                                        }
-                                    }
+                                    // Skip monitoring other transactions to reduce noise
+                                    // We only care about our own transactions
                                 }
                             }
                         }
