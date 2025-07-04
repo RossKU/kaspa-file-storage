@@ -2582,32 +2582,6 @@
                 
                 document.getElementById('monitorStartTime').textContent = new Date().toLocaleString();
                 
-                rpcClient.addEventListener('block-added', (event) => {
-                    const block = event.data.block;
-                    const blockId = block.header.hash;
-                    const blockTime = new Date(Number(block.header.timestamp));
-                    
-                    if (block.transactions && block.transactions.length > 0) {
-                        for (const tx of block.transactions) {
-                            const txId = tx.verboseData?.transactionId;
-                            if (txId) {
-                                monitoredTransactions.set(txId, {
-                                    blockId: blockId,
-                                    blockTime: blockTime,
-                                    foundAt: new Date()
-                                });
-                                
-                                if (tx.payload && tx.payload !== '') {
-                                    monitorLog(`ペイロード付きTx検出: ${txId}`, 'success');
-                                }
-                            }
-                        }
-                        
-                        document.getElementById('monitoringCount').textContent = monitoredTransactions.size;
-                        document.getElementById('detectedCount').textContent = monitoredTransactions.size;
-                    }
-                });
-                
                 monitorLog('監視を開始しました', 'success');
                 
             } catch (error) {
