@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.0 - Auto-Resume Edition</title>
+    <title>Kaspa P2P File Storage v3.0.1 - Auto-Resume Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -286,8 +286,9 @@
 </head>
 <body>
     <div class="header">
-        <h1>🚀 Kaspa P2P File Storage v2.1.1 - Resumable Edition</h1>
+        <h1>🚀 Kaspa P2P File Storage v3.0.1 - Auto-Resume Edition</h1>
         <p>実ネットワーク接続による完全なP2Pファイル共有システム（レジューム対応）</p>
+        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.0.1: ゴミ箱ファイルフィルター機能追加 - .trashed-*ファイルを自動除外</p>
         <div id="networkStatus" style="margin-top: 10px;">
             <span class="status-indicator status-offline"></span>
             <span id="statusText">未接続</span>
@@ -3165,7 +3166,8 @@
                 log('警告: kaspaFileInput要素が見つかりません', 'error');
             }
             
-            log('🚀 Kaspa P2P v2.1.1 準備完了！', 'info');
+            log('🚀 Kaspa P2P v3.0.1 準備完了！', 'info');
+            log('📋 v3.0.1: ゴミ箱ファイルフィルター追加', 'info');
             log('システムを初期化してください', 'info');
             
             // Initialize workspace prompt
