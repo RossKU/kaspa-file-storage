@@ -528,16 +528,23 @@
         let privateKey = null;
         let address = null;
         let progressManager = null;
+        let wsConnection = null;
+        let wsConnected = false;
+        let wsReconnectInterval = null;
         
         // Progress Manager Class
         class ProgressManager {
             constructor(file, chunkSize) {
                 this.file = file;
                 this.chunkSize = chunkSize;
-                this.progressFileName = `${file.name}.uploading.progress.json`;
+                // Use a single progress file name
+                this.progressFileName = 'kaspa-upload-progress.json';
                 this.progress = null;
                 this.saveHandle = null;
                 this.autoSaveInterval = 10; // chunks
+                this.lastSaveTime = 0;
+                this.saveThrottle = 5000; // Save at most once every 5 seconds
+                this.fileHandle = null; // For File System Access API
             }
             
             async initialize(existingProgress = null) {
@@ -661,22 +668,61 @@
             
             async saveProgress() {
                 try {
+                    // Throttle saves to prevent too many downloads
+                    const now = Date.now();
+                    if (now - this.lastSaveTime < this.saveThrottle) {
+                        return; // Skip this save
+                    }
+                    
+                    this.lastSaveTime = now;
                     const progressData = JSON.stringify(this.progress, null, 2);
                     const blob = new Blob([progressData], { type: 'application/json' });
                     
-                    // Create download link
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = this.progressFileName;
+                    // Try to use File System Access API if available
+                    if ('showSaveFilePicker' in window && !this.fileHandle) {
+                        try {
+                            // Only prompt once
+                            this.fileHandle = await window.showSaveFilePicker({
+                                suggestedName: this.progressFileName,
+                                types: [{
+                                    description: 'Progress File',
+                                    accept: { 'application/json': ['.json'] }
+                                }]
+                            });
+                        } catch (err) {
+                            // User cancelled, continue with download method
+                        }
+                    }
                     
-                    // Auto-download without user interaction
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                    // If we have a file handle, update the file
+                    if (this.fileHandle) {
+                        try {
+                            const writable = await this.fileHandle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+                            log(`進捗を更新しました: ${this.progressFileName}`, 'success');
+                            return;
+                        } catch (err) {
+                            // File handle failed, fallback to download
+                            this.fileHandle = null;
+                        }
+                    }
                     
-                    log(`進捗を保存しました: ${this.progressFileName}`, 'success');
+                    // Fallback to download (only for first save)
+                    if (this.lastSaveTime === now) {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = this.progressFileName;
+                        
+                        // Auto-download without user interaction
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        
+                        log(`進捗を保存しました: ${this.progressFileName}`, 'success');
+                    }
                 } catch (error) {
                     log(`進捗保存エラー: ${error.message}`, 'error');
                 }
@@ -895,6 +941,42 @@
                 updateNetworkStatus('offline', 'エラー');
             }
         };
+        
+        // Initialize or reinitialize RPC client
+        async function initializeRpcClient() {
+            try {
+                log('RPCクライアントを初期化中...');
+                
+                // Close existing connection if any
+                if (rpcClient) {
+                    try {
+                        await rpcClient.disconnect();
+                    } catch (err) {
+                        // Ignore disconnect errors
+                    }
+                }
+                
+                // Create new RPC client
+                rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: config.network
+                });
+                
+                await rpcClient.connect();
+                
+                // Test connection
+                const info = await rpcClient.getServerInfo();
+                log(`RPC再接続成功! サーバー: ${info.serverVersion}`, 'success');
+                
+                updateNetworkStatus('online', 'オンライン');
+                return true;
+                
+            } catch (error) {
+                log(`RPC初期化エラー: ${error.message}`, 'error');
+                updateNetworkStatus('offline', 'エラー');
+                return false;
+            }
+        }
 
         // Connection test
         window.testConnection = async function() {
@@ -1216,10 +1298,9 @@
                 // Initial UTXO fetch
                 let currentUtxos = null;
                 
-                // Start WebSocket monitoring
-                if (!wsMonitorActive) {
-                    await startMonitoring();
-                }
+                // WebSocket monitoring is not needed for upload tracking in resumable version
+                // We rely on transaction confirmation via RPC instead
+                log('WebSocket監視をスキップ - RPC確認を使用します', 'info');
                 
                 // Process chunks with resume support
                 const chunksList = document.getElementById('chunksList');
@@ -1331,27 +1412,43 @@
                             
                             log(`チャンク ${i + 1} TxID: ${txid.substring(0, 16)}...`, 'success');
                             
-                            // Wait for BlockID from monitor with shorter timeout
-                            log(`BlockIDを待機中...`);
+                            // Wait for confirmation via RPC
+                            log(`トランザクション確認を待機中...`);
                             let waitTime = 0;
-                            while (!blockId && waitTime < 10000) {
-                                if (monitoredTransactions.has(txid)) {
-                                    blockId = monitoredTransactions.get(txid).blockId;
-                                    log(`WebSocket経由でBlockID取得: ${blockId.substring(0, 16)}...`);
-                                    break;
+                            const maxWaitTime = 30000; // 30 seconds
+                            
+                            while (!blockId && waitTime < maxWaitTime) {
+                                try {
+                                    // Try to get transaction info
+                                    const txInfo = await rpcClient.getTransaction({
+                                        transactionId: txid,
+                                        includeBlockInfo: true
+                                    });
+                                    
+                                    if (txInfo && txInfo.blockHash) {
+                                        blockId = txInfo.blockHash;
+                                        log(`RPC経由でBlockID取得: ${blockId.substring(0, 16)}...`);
+                                        break;
+                                    }
+                                } catch (err) {
+                                    // Transaction might not be confirmed yet
                                 }
-                                await new Promise(resolve => setTimeout(resolve, 500));
-                                waitTime += 500;
+                                
+                                await new Promise(resolve => setTimeout(resolve, 2000));
+                                waitTime += 2000;
                             }
                             
                             // Fallback to Explorer API
                             if (!blockId) {
-                                log(`WebSocket待機タイムアウト、Explorer APIを使用`);
+                                log(`RPC待機タイムアウト、Explorer APIを使用`);
                                 const apiUrl = `https://api-tn10.kaspa.org/transactions/${txid}`;
                                 const response = await fetch(apiUrl);
                                 if (response.ok) {
                                     const data = await response.json();
                                     blockId = data.block_hash?.[0] || data.accepting_block_hash;
+                                    if (blockId) {
+                                        log(`Explorer API経由でBlockID取得: ${blockId.substring(0, 16)}...`);
+                                    }
                                 }
                             }
                             
@@ -2442,10 +2539,26 @@
             log('システムを初期化してください', 'info');
             
             // Network status monitoring
-            window.addEventListener('online', () => {
+            window.addEventListener('online', async () => {
                 log('ネットワーク接続が復活しました', 'success');
                 if (rpcClient) {
                     updateNetworkStatus('online', 'オンライン');
+                    
+                    // Check if we need to reconnect RPC client
+                    if (progressManager && progressManager.progress && 
+                        progressManager.progress.metadata.completedChunks < progressManager.progress.metadata.totalChunks) {
+                        log('アップロード中 - RPC接続を確認します', 'info');
+                        
+                        // Test RPC connection
+                        try {
+                            const info = await rpcClient.getServerInfo();
+                            log(`RPC接続確認: ${info.serverVersion}`, 'success');
+                        } catch (err) {
+                            log('RPC接続エラー - 再接続を試みます', 'error');
+                            // Reinitialize RPC client
+                            await initializeRpcClient();
+                        }
+                    }
                 }
             });
             
@@ -2465,7 +2578,7 @@
                 if (progressManager && progressManager.progress && 
                     progressManager.progress.metadata.completedChunks < progressManager.progress.metadata.totalChunks) {
                     const stats = progressManager.getStats();
-                    log(`自動保存: ${stats.completed}/${stats.total} チャンク完了 (${stats.percentage}%)`, 'info');
+                    log(`自動保存: ${stats.completedChunks}/${stats.totalChunks} チャンク完了 (${stats.progressPercent.toFixed(1)}%)`, 'info');
                     await progressManager.saveProgress();
                 }
             }, 60000); // Every minute
