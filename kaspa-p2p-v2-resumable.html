@@ -2901,7 +2901,7 @@
                         let myTransactionFound = false;
                         
                         for (const tx of block.transactions) {
-                            const txId = tx.verboseData?.transactionId;
+                            const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
                             if (txId) {
                                 // Check if this is one of our monitored transactions
                                 if (monitoredTransactions.has(txId)) {
