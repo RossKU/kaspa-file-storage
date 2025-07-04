@@ -1874,14 +1874,17 @@
                 
                 URL.revokeObjectURL(url);
                 
-                document.getElementById('kaspaResult').innerHTML = `
-                    <div class="metric-box">
-                        <h4 class="success">✅ .kaspaファイル生成完了</h4>
-                        <p>ファイル名: ${currentFile.name}.kaspa</p>
-                        <p>サイズ: ${(kaspaFileContent.length/1024).toFixed(1)}KB</p>
-                        ${includePassword ? '<p class="warning">⚠️ パスワードが含まれています</p>' : ''}
-                    </div>
-                `;
+                const kaspaResultElement = document.getElementById('kaspaResult');
+                if (kaspaResultElement) {
+                    kaspaResultElement.innerHTML = `
+                        <div class="metric-box">
+                            <h4 class="success">✅ .kaspaファイル生成完了</h4>
+                            <p>ファイル名: ${currentFile.name}.kaspa</p>
+                            <p>サイズ: ${(kaspaFileContent.length/1024).toFixed(1)}KB</p>
+                            ${includePassword ? '<p class="warning">⚠️ パスワードが含まれています</p>' : ''}
+                        </div>
+                    `;
+                }
                 
                 log('.kaspaファイルをダウンロードしました', 'success');
                 
@@ -2011,27 +2014,27 @@
                     log(`BlockID取得タイムアウト - メタTxIDのみで保存`, 'warning');
                 }
                 
-                // Show meta-tx result
-                document.getElementById('generateKaspaSection').innerHTML = `
-                    <div class="container" style="background: #1a3d2e; border: 2px solid #49EACB;">
-                        <h3>🎉 メタトランザクション作成完了！</h3>
-                        <div class="metric-box">
-                            <p><strong>${metaBlockId ? 'メタTxID + BlockID:' : 'メタTxID:'}</strong></p>
-                            <p style="word-break: break-all; font-family: monospace; color: #49EACB; font-size: 12px;">${metaTxReference}</p>
-                            <button onclick="navigator.clipboard.writeText('${metaTxReference}').then(() => log('コピーしました', 'success'))">
-                                📋 コピー
-                            </button>
+                // Show meta-tx result in kaspaResult div
+                const kaspaResultDiv = document.getElementById('kaspaResult');
+                if (kaspaResultDiv) {
+                    kaspaResultDiv.innerHTML = `
+                        <div class="container" style="background: #1a3d2e; border: 2px solid #49EACB; margin-top: 20px;">
+                            <h3>🎉 メタトランザクション作成完了！</h3>
+                            <div class="metric-box">
+                                <p><strong>${metaBlockId ? 'メタTxID + BlockID:' : 'メタTxID:'}</strong></p>
+                                <p style="word-break: break-all; font-family: monospace; color: #49EACB; font-size: 12px;">${metaTxReference}</p>
+                                <button onclick="navigator.clipboard.writeText('${metaTxReference}').then(() => log('コピーしました', 'success'))">
+                                    📋 コピー
+                                </button>
+                            </div>
+                            <div class="info">
+                                <p>この${metaBlockId ? 'TxID:BlockID' : 'メタTxID'}とパスワードだけでファイルを復元できます。</p>
+                                <p>.kaspaファイルは不要です！</p>
+                                ${metaBlockId ? '<p class="success">✅ REST API不要で復元可能</p>' : '<p class="warning">⚠️ REST APIが必要です</p>'}
+                            </div>
                         </div>
-                        <div class="info">
-                            <p>この${metaBlockId ? 'TxID:BlockID' : 'メタTxID'}とパスワードだけでファイルを復元できます。</p>
-                            <p>.kaspaファイルは不要です！</p>
-                            ${metaBlockId ? '<p class="success">✅ REST API不要で復元可能</p>' : '<p class="warning">⚠️ REST APIが必要です</p>'}
-                        </div>
-                        <button onclick="generateKaspaFile()" style="margin-top: 10px;">
-                            📄 念のため.kaspaファイルも生成
-                        </button>
-                    </div>
-                `;
+                    `;
+                }
                 document.getElementById('generateKaspaSection').style.display = 'block';
                 
                 // Add meta-tx to metadata for .kaspa file generation
