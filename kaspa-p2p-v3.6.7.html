@@ -950,7 +950,7 @@
                 
                 // Password button
                 if (hasPassword) {
-                    buttons.push(`<button onclick="copyToClipboard('${item.password}')" class="small-button" title="パスワードをコピー">🔑Pass</button>`);
+                    buttons.push(`<button onclick="window.copyToClipboard('${item.password}')" class="small-button" title="パスワードをコピー">🔑Pass</button>`);
                 } else {
                     buttons.push(`<button class="small-button disabled" title="パスワードが保存されていません" style="opacity: 0.5; cursor: not-allowed;">🔑Pass</button>`);
                 }
