@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.2.3 - Auto-Resume & History Edition</title>
+    <title>Kaspa P2P File Storage v3.3.0 - Auto-Resume & History Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -420,14 +420,7 @@
                 <div id="chunksList"></div>
             </div>
             
-            <!-- Generate .kaspa -->
-            <div id="generateKaspaSection" style="display: none;" class="section-divider">
-                <h3>📄 .kaspaファイル生成</h3>
-                <button onclick="generateKaspaFile()" id="generateBtn">
-                    .kaspa P2Pファイルを生成
-                </button>
-                <div id="kaspaResult"></div>
-            </div>
+            <!-- .kaspa generation moved to History tab -->
         </div>
     </div>
 
@@ -2837,7 +2830,9 @@
                         log('アップロード完了 - WebSocket監視を自動停止します', 'info');
                         await stopMonitoring();
                     }
-                    document.getElementById('generateKaspaSection').style.display = 'block';
+                    log('🎉 アップロードが完了しました！履歴タブで詳細を確認してください', 'success');
+                    // Switch to History tab
+                    document.querySelector('[data-tab="history"]').click();
                 }
                 
             } catch (error) {
@@ -2847,8 +2842,9 @@
             }
         };
 
-        // Generate .kaspa file
-        window.generateKaspaFile = function() {
+        // Generate .kaspa file - DEPRECATED: Now handled in History tab
+        // Keeping for backward compatibility if needed
+        /* window.generateKaspaFile = function() {
             if (!kaspaMetadata) {
                 log('.kaspaファイル生成データがありません', 'error');
                 return;
@@ -2897,7 +2893,7 @@
             } catch (error) {
                 log(`.kaspaファイル生成エラー: ${error.message}`, 'error');
             }
-        };
+        }; */
 
         // Create and upload meta transaction
         window.createAndUploadMetaTx = async function() {
@@ -3036,28 +3032,13 @@
                     log(`BlockID取得タイムアウト - メタTxIDのみで保存`, 'warning');
                 }
                 
-                // Show meta-tx result in kaspaResult div
-                const kaspaResultDiv = document.getElementById('kaspaResult');
-                if (kaspaResultDiv) {
-                    kaspaResultDiv.innerHTML = `
-                        <div class="container" style="background: #1a3d2e; border: 2px solid #49EACB; margin-top: 20px;">
-                            <h3>🎉 メタトランザクション作成完了！</h3>
-                            <div class="metric-box">
-                                <p><strong>${metaBlockId ? 'メタTxID + BlockID:' : 'メタTxID:'}</strong></p>
-                                <p style="word-break: break-all; font-family: monospace; color: #49EACB; font-size: 12px;">${metaTxReference}</p>
-                                <button onclick="navigator.clipboard.writeText('${metaTxReference}').then(() => log('コピーしました', 'success'))">
-                                    📋 コピー
-                                </button>
-                            </div>
-                            <div class="info">
-                                <p>この${metaBlockId ? 'TxID:BlockID' : 'メタTxID'}とパスワードだけでファイルを復元できます。</p>
-                                <p>.kaspaファイルは不要です！</p>
-                                ${metaBlockId ? '<p class="success">✅ REST API不要で復元可能</p>' : '<p class="warning">⚠️ REST APIが必要です</p>'}
-                            </div>
-                        </div>
-                    `;
+                // Log meta-tx creation success
+                log(`🎉 メタトランザクション作成完了！ ${metaBlockId ? 'TxID:BlockID' : 'TxID'}: ${metaTxReference}`, 'success');
+                if (metaBlockId) {
+                    log('✅ REST API不要で復元可能です', 'success');
+                } else {
+                    log('⚠️ BlockID取得に失敗しました。復元時にREST APIが必要です', 'warning');
                 }
-                document.getElementById('generateKaspaSection').style.display = 'block';
                 
                 // Add meta-tx to metadata for .kaspa file generation
                 kaspaMetadata.metaTx = {
@@ -3086,6 +3067,10 @@
                     await stopMonitoring();
                 }
                 
+                // Switch to History tab
+                log('履歴タブで詳細を確認してください', 'info');
+                document.querySelector('[data-tab="history"]').click();
+                
             } catch (error) {
                 log(`メタトランザクション作成エラー: ${error.message || error}`, 'error');
                 console.error('Meta-tx creation error:', error);
@@ -3095,8 +3080,7 @@
                     console.error('Error stack:', error.stack);
                 }
                 
-                // Fallback to normal .kaspa generation
-                document.getElementById('generateKaspaSection').style.display = 'block';
+                // Error occurred - no fallback needed as .kaspa generation is in History tab
             }
         };
 
