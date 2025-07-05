@@ -1,0 +1,2566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspa P2P File Storage v3.6.1 - Stable Edition with Optional Parallel</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #eee;
+        }
+        .header {
+            background: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        h1 {
+            margin: 0;
+            color: #e94560;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        .container {
+            background: #0f3460;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            background: #16213e;
+            color: #e94560;
+            border: 2px solid #e94560;
+            padding: 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+        .tab-btn:hover {
+            background: #1a2540;
+            transform: translateY(-2px);
+        }
+        .tab-btn.active {
+            background: #e94560;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #c13651;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(233, 69, 96, 0.3);
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .small-button {
+            background: #16213e;
+            color: #49EACB;
+            border: 1px solid #49EACB;
+            padding: 8px 16px;
+            font-size: 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .small-button:hover {
+            background: #49EACB;
+            color: #16213e;
+        }
+        input[type="text"], input[type="password"], input[type="number"], select {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #49EACB;
+            background: #16213e;
+            color: white;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .drop-area {
+            border: 3px dashed #49EACB;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            background: #16213e;
+            transition: all 0.3s;
+        }
+        .drop-area.dragover {
+            background: #1f2940;
+            border-color: #e94560;
+        }
+        .metric-box {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            border: 1px solid #2a3f5f;
+        }
+        .metric-box h3 {
+            margin-top: 0;
+            color: #49EACB;
+        }
+        .log-container {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .log-info { color: #49EACB; }
+        .log-error { color: #e94560; background: rgba(233, 69, 96, 0.1); }
+        .log-success { color: #4ecdc4; }
+        .log-warning { color: #ffa502; }
+        .progress-bar {
+            background: #16213e;
+            border-radius: 5px;
+            padding: 3px;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            background: linear-gradient(90deg, #49EACB 0%, #4ecdc4 100%);
+            height: 30px;
+            border-radius: 3px;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #16213e;
+            font-weight: bold;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-connected { background: #4ecdc4; }
+        .status-disconnected { background: #e94560; }
+        .chunk-info {
+            background: #1a2540;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px 0;
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .upload-item {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border: 1px solid #2a3f5f;
+        }
+        .upload-title {
+            font-weight: bold;
+            color: #49EACB;
+            margin-bottom: 5px;
+        }
+        .upload-meta {
+            font-size: 14px;
+            color: #999;
+        }
+        .copy-btn {
+            background: #16213e;
+            color: #49EACB;
+            border: 1px solid #49EACB;
+            padding: 8px 16px;
+            font-size: 14px;
+            float: right;
+            margin-top: -40px;
+        }
+        .copy-btn:hover {
+            background: #49EACB;
+            color: #16213e;
+        }
+        code {
+            background: #0a0a0a;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            color: #49EACB;
+        }
+        .history-tab-buttons {
+            display: flex;
+            gap: 5px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        .history-small-btn {
+            background: #16213e;
+            color: #49EACB;
+            border: 1px solid #49EACB;
+            padding: 6px 12px;
+            font-size: 13px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        .history-small-btn:hover {
+            background: #49EACB;
+            color: #16213e;
+        }
+        .success-toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4ecdc4;
+            color: #16213e;
+            padding: 15px 25px;
+            border-radius: 5px;
+            box-shadow: 0 4px 20px rgba(78, 205, 196, 0.3);
+            animation: slideIn 0.3s ease-out;
+            z-index: 1000;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #666;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #49EACB;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(30px);
+        }
+        .setting-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 15px 0;
+        }
+        .setting-label {
+            font-size: 16px;
+            color: #eee;
+        }
+        .setting-description {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔐 Kaspa P2P File Storage v3.6.1</h1>
+        <p style="margin: 10px 0 0 0; color: #aaa;">Decentralized file storage using Kaspa blockchain - Stable Edition</p>
+        <p style="margin: 5px 0 0 0; color: #999; font-size: 14px;">並列ダウンロード機能（オプション）付き安定版</p>
+    </div>
+
+    <!-- Tab Buttons -->
+    <div class="tab-buttons">
+        <button class="tab-btn active" onclick="switchTab('upload')">📤 Upload</button>
+        <button class="tab-btn" onclick="switchTab('download')">📥 Download</button>
+        <button class="tab-btn" onclick="switchTab('history')">📋 History</button>
+        <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
+    </div>
+
+    <!-- Upload Tab -->
+    <div id="upload-tab" class="tab-content active">
+        <div class="container">
+            <h2>📤 ファイルアップロード</h2>
+            
+            <div class="metric-box">
+                <h3>ウォレット設定</h3>
+                <label>秘密鍵（BIP0340形式、64文字の16進数）</label>
+                <input type="password" id="privateKeyInput" placeholder="秘密鍵を入力">
+                <button onclick="importWallet()">ウォレットをインポート</button>
+                <button onclick="generateNewWallet()">新しいウォレットを生成</button>
+                
+                <div id="walletInfo" style="margin-top: 15px; display: none;">
+                    <p><strong>アドレス:</strong> <code id="walletAddress">-</code></p>
+                    <p><strong>残高:</strong> <span id="walletBalance">-</span> KAS</p>
+                </div>
+            </div>
+            
+            <div class="metric-box">
+                <h3>ファイル選択</h3>
+                <div class="drop-area" id="dropArea">
+                    <p>📁 ここにファイルをドロップ、またはクリックして選択</p>
+                    <input type="file" id="fileInput" style="display: none;">
+                </div>
+                <div id="fileInfo" style="display: none; margin-top: 15px;">
+                    <p><strong>ファイル名:</strong> <span id="fileName">-</span></p>
+                    <p><strong>サイズ:</strong> <span id="fileSize">-</span></p>
+                    <p><strong>推定チャンク数:</strong> <span id="estimatedChunks">-</span></p>
+                    <p><strong>推定コスト:</strong> <span id="estimatedCost">-</span> KAS</p>
+                </div>
+            </div>
+            
+            <div class="metric-box">
+                <h3>暗号化設定</h3>
+                <label>パスワード（8文字以上）</label>
+                <input type="password" id="passwordInput" placeholder="ファイル暗号化用パスワード">
+                <input type="password" id="passwordConfirm" placeholder="パスワード確認">
+            </div>
+            
+            <button onclick="startUpload()" id="uploadButton" disabled>🚀 アップロード開始</button>
+            
+            <div id="uploadProgress" style="display: none; margin-top: 20px;">
+                <h3>アップロード進行状況</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="uploadProgressBar" style="width: 0%">0%</div>
+                </div>
+                <p id="uploadStatus">準備中...</p>
+                <div id="chunkDetails"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Download Tab -->
+    <div id="download-tab" class="tab-content">
+        <div class="container">
+            <h2>📥 ファイルダウンロード</h2>
+            
+            <div class="metric-box">
+                <h3>ファイル情報入力</h3>
+                <label>Transaction ID (必須)</label>
+                <input type="text" id="downloadTxId" placeholder="メタデータトランザクションのTxID">
+                
+                <label>Block ID (オプション - 自動検索されます)</label>
+                <input type="text" id="downloadBlockId" placeholder="メタデータが含まれるブロックID">
+                
+                <label>パスワード</label>
+                <input type="password" id="downloadPassword" placeholder="ファイル復号化用パスワード">
+                
+                <p style="font-size: 14px; color: #999; margin-top: 10px;">
+                    入力形式:
+                    <br>• TxID のみ（自動でBlockIDを検索）
+                    <br>• TxID:BlockID（高速ダウンロード）
+                    <br>• TxID:BlockID:Password（一括入力）
+                </p>
+            </div>
+            
+            <button onclick="startDownload()">📥 ダウンロード開始</button>
+            
+            <div id="downloadProgress" style="display: none; margin-top: 20px;">
+                <h3>ダウンロード進行状況</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="downloadProgressBar" style="width: 0%">0%</div>
+                </div>
+                <p id="downloadStatus">準備中...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- History Tab -->
+    <div id="history-tab" class="tab-content">
+        <div class="container">
+            <h2>📋 アップロード履歴</h2>
+            <div id="historyContent">
+                <p style="color: #999;">履歴を読み込み中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div id="settings-tab" class="tab-content">
+        <div class="container">
+            <h2>⚙️ 設定</h2>
+            
+            <div class="metric-box">
+                <h3>ネットワーク設定</h3>
+                <label>ネットワーク</label>
+                <select id="networkSelect">
+                    <option value="testnet-10" selected>Testnet-10 (テスト用)</option>
+                    <option value="mainnet">Mainnet (本番)</option>
+                </select>
+                
+                <label>リトライ回数</label>
+                <input type="number" id="retryCount" value="3" min="0" max="10">
+                
+                <label>タイムアウト (秒)</label>
+                <input type="number" id="timeout" value="30" min="10" max="120">
+            </div>
+            
+            <div class="metric-box">
+                <h3>ダウンロード設定</h3>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">並列ダウンロード</div>
+                        <div class="setting-description">10チャンク以上のファイルで8並列接続を使用（実験的機能）</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="parallelDownloadToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">並列接続数</div>
+                        <div class="setting-description">並列ダウンロード時の同時接続数（2-16）</div>
+                    </div>
+                    <input type="number" id="parallelConcurrency" value="8" min="2" max="16" style="width: 80px;">
+                </div>
+                <div class="setting-row">
+                    <div>
+                        <div class="setting-label">並列モード閾値</div>
+                        <div class="setting-description">この数以上のチャンクで並列モードを使用</div>
+                    </div>
+                    <input type="number" id="parallelThreshold" value="10" min="5" max="100" style="width: 80px;">
+                </div>
+            </div>
+            
+            <div class="metric-box">
+                <h3>ログエクスポート</h3>
+                <button onclick="exportLogs()">ログをJSON形式でエクスポート</button>
+                <button onclick="clearLogs()">ログをクリア</button>
+            </div>
+            
+            <div class="metric-box">
+                <h3>アップロード履歴</h3>
+                <div id="uploadHistory"></div>
+            </div>
+            
+            <div class="metric-box">
+                <h3>パフォーマンステスト</h3>
+                <p style="font-size: 14px; color: #999; margin-bottom: 10px;">
+                    並列ダウンロードの最適な同時接続数をテストします（目標: 100ブロック/秒）
+                </p>
+                <button onclick="testParallelPerformance()">🚀 並列ダウンロードテスト実行</button>
+                <div id="performanceResults" style="margin-top: 15px; display: none;">
+                    <h4>テスト結果:</h4>
+                    <div id="performanceChart" style="background: #0a0a0a; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Log -->
+    <div class="container">
+        <h3>📝 システムログ</h3>
+        <div class="log-container" id="systemLog"></div>
+        <button class="copy-btn" onclick="copyLog()">ログをコピー</button>
+    </div>
+
+    <script type="module">
+        // Global state
+        let kaspa = null;
+        let rpcClient = null;
+        let currentFile = null;
+        let currentPassword = null;
+        let processedChunks = [];
+        let kaspaMetadata = null;
+        let wsMonitorActive = false;
+        let monitoredTransactions = new Map();
+        let uploadHistory = [];
+        let systemLogs = [];
+        let privateKey = null;
+        let address = null;
+        let progressManager = null;
+        let wsConnection = null;
+        let wsConnected = false;
+        let wsReconnectInterval = null;
+        let workspaceHandle = null; // File System Access API directory handle
+        let progressFileMap = new Map(); // Map of filename -> {cid, fileHandle}
+        let historyManager = null; // Upload history manager
+        let wsMonitorTimeout = null; // WebSocket monitoring timeout
+        let uploadingChunksCount = 0; // Number of chunks being uploaded
+        let uploadingMetaTx = false; // Whether meta-tx is being uploaded
+        
+        // Settings state
+        let settings = {
+            parallelDownloadEnabled: false, // Default OFF for v3.5.0 compatibility
+            parallelConcurrency: 8,
+            parallelThreshold: 10
+        };
+        
+        // Load settings from localStorage
+        function loadSettings() {
+            const saved = localStorage.getItem('kaspaFileStorageSettings');
+            if (saved) {
+                try {
+                    Object.assign(settings, JSON.parse(saved));
+                    // Update UI
+                    document.getElementById('parallelDownloadToggle').checked = settings.parallelDownloadEnabled;
+                    document.getElementById('parallelConcurrency').value = settings.parallelConcurrency;
+                    document.getElementById('parallelThreshold').value = settings.parallelThreshold;
+                } catch (e) {
+                    log('設定の読み込みに失敗しました', 'error');
+                }
+            }
+        }
+        
+        // Save settings to localStorage
+        function saveSettings() {
+            localStorage.setItem('kaspaFileStorageSettings', JSON.stringify(settings));
+            log('設定を保存しました', 'success');
+        }
+        
+        // Settings event listeners
+        document.getElementById('parallelDownloadToggle').addEventListener('change', (e) => {
+            settings.parallelDownloadEnabled = e.target.checked;
+            saveSettings();
+            if (e.target.checked) {
+                log('並列ダウンロードを有効にしました（実験的機能）', 'warning');
+            } else {
+                log('並列ダウンロードを無効にしました（安定モード）', 'success');
+            }
+        });
+        
+        document.getElementById('parallelConcurrency').addEventListener('change', (e) => {
+            settings.parallelConcurrency = parseInt(e.target.value);
+            saveSettings();
+        });
+        
+        document.getElementById('parallelThreshold').addEventListener('change', (e) => {
+            settings.parallelThreshold = parseInt(e.target.value);
+            saveSettings();
+        });
+        
+        // Upload History Manager Class
+        class UploadHistoryManager {
+            constructor() {
+                this.dbName = 'kaspa-upload-history';
+                this.fileName = 'kaspa-uploads.kenv';
+                this.maxSize = 100 * 1024 * 1024; // 100MB
+                this.archiveSize = 10 * 1024 * 1024; // 10MB chunks
+                this.encryptionKey = null;
+                log('[UploadHistoryManager] インスタンスを初期化しました', 'debug');
+            }
+            
+            async initialize(privateKey) {
+                log('[UploadHistoryManager] 初期化を開始します', 'debug');
+                try {
+                    // Derive encryption key from private key
+                    const keyData = new TextEncoder().encode(privateKey);
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', keyData);
+                    this.encryptionKey = await crypto.subtle.importKey(
+                        'raw',
+                        hashBuffer,
+                        { name: 'AES-GCM' },
+                        false,
+                        ['encrypt', 'decrypt']
+                    );
+                    log('[UploadHistoryManager] 暗号化キーを生成しました', 'debug');
+                    
+                    // Try to load existing history
+                    await this.loadFromFile();
+                    log('[UploadHistoryManager] 初期化が完了しました', 'success');
+                } catch (error) {
+                    log(`[UploadHistoryManager] 初期化エラー: ${error.message}`, 'error');
+                    uploadHistory = [];
+                }
+            }
+            
+            async loadFromFile() {
+                if (!workspaceHandle) {
+                    log('[UploadHistoryManager] ワークスペースハンドルがありません', 'debug');
+                    return;
+                }
+                
+                try {
+                    const fileHandle = await workspaceHandle.getFileHandle(this.fileName);
+                    const file = await fileHandle.getFile();
+                    const encryptedData = await file.text();
+                    
+                    if (!encryptedData || encryptedData.trim() === '') {
+                        log('[UploadHistoryManager] 履歴ファイルが空です', 'debug');
+                        uploadHistory = [];
+                        return;
+                    }
+                    
+                    // Decrypt data
+                    const decrypted = await this.decrypt(encryptedData);
+                    const data = JSON.parse(decrypted);
+                    
+                    if (data.version === '1.0' && Array.isArray(data.history)) {
+                        uploadHistory = data.history;
+                        log(`[UploadHistoryManager] ${uploadHistory.length}件の履歴を読み込みました`, 'success');
+                    } else {
+                        log('[UploadHistoryManager] 無効な履歴フォーマット', 'error');
+                        uploadHistory = [];
+                    }
+                } catch (error) {
+                    if (error.name === 'NotFoundError') {
+                        log('[UploadHistoryManager] 履歴ファイルが見つかりません（新規作成します）', 'debug');
+                        uploadHistory = [];
+                    } else {
+                        log(`[UploadHistoryManager] 履歴読み込みエラー: ${error.message}`, 'error');
+                        uploadHistory = [];
+                    }
+                }
+            }
+            
+            async saveToFile() {
+                if (!workspaceHandle) {
+                    log('[UploadHistoryManager] ワークスペースハンドルがありません', 'warning');
+                    return;
+                }
+                
+                try {
+                    const data = {
+                        version: '1.0',
+                        updated: new Date().toISOString(),
+                        history: uploadHistory
+                    };
+                    
+                    // Encrypt data
+                    const encrypted = await this.encrypt(JSON.stringify(data, null, 2));
+                    
+                    // Write to file
+                    const fileHandle = await workspaceHandle.getFileHandle(this.fileName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(encrypted);
+                    await writable.close();
+                    
+                    log(`[UploadHistoryManager] ${uploadHistory.length}件の履歴を保存しました`, 'success');
+                } catch (error) {
+                    log(`[UploadHistoryManager] 履歴保存エラー: ${error.message}`, 'error');
+                }
+            }
+            
+            async encrypt(text) {
+                const iv = crypto.getRandomValues(new Uint8Array(12));
+                const data = new TextEncoder().encode(text);
+                
+                const encrypted = await crypto.subtle.encrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    this.encryptionKey,
+                    data
+                );
+                
+                // Combine IV and encrypted data
+                const combined = new Uint8Array(iv.length + encrypted.byteLength);
+                combined.set(iv);
+                combined.set(new Uint8Array(encrypted), iv.length);
+                
+                return btoa(String.fromCharCode(...combined));
+            }
+            
+            async decrypt(encryptedText) {
+                const combined = Uint8Array.from(atob(encryptedText), c => c.charCodeAt(0));
+                const iv = combined.slice(0, 12);
+                const encrypted = combined.slice(12);
+                
+                const decrypted = await crypto.subtle.decrypt(
+                    { name: 'AES-GCM', iv: iv },
+                    this.encryptionKey,
+                    encrypted
+                );
+                
+                return new TextDecoder().decode(decrypted);
+            }
+            
+            async addEntry(entry) {
+                // Add timestamp if not present
+                if (!entry.timestamp) {
+                    entry.timestamp = new Date().toISOString();
+                }
+                
+                // Add to beginning of array (newest first)
+                uploadHistory.unshift(entry);
+                
+                // Limit history size
+                if (uploadHistory.length > 1000) {
+                    uploadHistory = uploadHistory.slice(0, 1000);
+                }
+                
+                // Save to file
+                await this.saveToFile();
+                
+                // Update UI
+                updateHistoryDisplay();
+            }
+            
+            async exportHistory() {
+                const data = {
+                    version: '1.0',
+                    exported: new Date().toISOString(),
+                    history: uploadHistory
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `kaspa-upload-history-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                log('履歴をエクスポートしました', 'success');
+            }
+        }
+        
+        // Progress Manager Class
+        class ProgressManager {
+            constructor() {
+                this.uploads = new Map();
+                this.downloads = new Map();
+                this.activeDownload = null;
+                this.downloads = new Map();
+            }
+            
+            // Upload progress methods
+            createUpload(txid, metadata) {
+                const progress = {
+                    txid: txid,
+                    metadata: metadata,
+                    chunks: new Map(),
+                    startTime: Date.now(),
+                    status: 'uploading'
+                };
+                this.uploads.set(txid, progress);
+                return progress;
+            }
+            
+            updateChunkStatus(txid, chunkIndex, status) {
+                const upload = this.uploads.get(txid);
+                if (!upload) return;
+                
+                upload.chunks.set(chunkIndex, {
+                    status: status,
+                    timestamp: Date.now()
+                });
+            }
+            
+            getUploadProgress(txid) {
+                const upload = this.uploads.get(txid);
+                if (!upload) return null;
+                
+                const total = upload.metadata.totalChunks;
+                const completed = Array.from(upload.chunks.values())
+                    .filter(chunk => chunk.status === 'completed').length;
+                
+                return {
+                    txid: txid,
+                    fileName: upload.metadata.fileName,
+                    progress: (completed / total) * 100,
+                    completed: completed,
+                    total: total,
+                    status: upload.status,
+                    elapsedTime: Date.now() - upload.startTime
+                };
+            }
+            
+            // Download progress methods
+            createDownload(txid, totalChunks) {
+                const id = `${txid}_${Date.now()}`;
+                const progress = {
+                    id: id,
+                    txid: txid,
+                    totalChunks: totalChunks,
+                    completedChunks: 0,
+                    startTime: Date.now(),
+                    lastUpdate: Date.now(),
+                    status: 'downloading',
+                    speed: 0,
+                    throughput: 0,
+                    errors: []
+                };
+                this.downloads.set(id, progress);
+                this.activeDownload = id;
+                return progress;
+            }
+            
+            updateDownloadProgress(downloadId, completed, speed = 0, throughput = 0) {
+                const download = this.downloads.get(downloadId || this.activeDownload);
+                if (!download) return;
+                
+                download.completedChunks = completed;
+                download.lastUpdate = Date.now();
+                download.speed = speed;
+                download.throughput = throughput;
+                
+                if (completed >= download.totalChunks) {
+                    download.status = 'completed';
+                }
+            }
+            
+            getDownloadProgress(downloadId) {
+                const download = this.downloads.get(downloadId || this.activeDownload);
+                if (!download) return null;
+                
+                const elapsed = (Date.now() - download.startTime) / 1000;
+                const progress = (download.completedChunks / download.totalChunks) * 100;
+                const eta = download.speed > 0 ? 
+                    (download.totalChunks - download.completedChunks) / download.speed : 0;
+                
+                return {
+                    id: download.id,
+                    txid: download.txid,
+                    progress: progress,
+                    completed: download.completedChunks,
+                    total: download.totalChunks,
+                    speed: download.speed,
+                    throughput: download.throughput,
+                    elapsed: elapsed,
+                    eta: eta,
+                    status: download.status
+                };
+            }
+        }
+        
+        // Fixed Parallel Downloader Class with proper synchronization
+        class ParallelDownloader {
+            constructor(rpcClient, concurrency = 8) {
+                this.rpcClient = rpcClient;
+                this.concurrency = concurrency;
+                this.queue = [];
+                this.active = 0;
+                this.results = new Map();
+                this.errors = new Map();
+                this.startTime = null;
+                this.completedCount = 0;
+                this.totalBytes = 0;
+                this.queueLock = false; // Simple mutex for queue access
+                this.maxRetries = 3; // Add retry capability
+            }
+            
+            async downloadChunks(chunksMetadata, key, kaspaMetadata, progressCallback) {
+                this.startTime = Date.now();
+                this.queue = chunksMetadata.map((chunk, index) => ({ 
+                    chunk, 
+                    index, 
+                    retries: 0 
+                }));
+                this.results = new Map();
+                this.errors = new Map();
+                this.completedCount = 0;
+                this.totalBytes = 0;
+                this.totalChunks = chunksMetadata.length;
+                
+                log(`並列ダウンロード開始: ${chunksMetadata.length}チャンク, ${this.concurrency}並列`, 'info');
+                
+                try {
+                    // Start workers
+                    const workers = [];
+                    for (let i = 0; i < this.concurrency; i++) {
+                        workers.push(this.worker(key, kaspaMetadata, progressCallback));
+                    }
+                    
+                    // Wait for all workers
+                    await Promise.all(workers);
+                    
+                    // Check for errors
+                    if (this.errors.size > 0) {
+                        const errorRate = (this.errors.size / chunksMetadata.length) * 100;
+                        if (errorRate > 10) { // Allow up to 10% failure rate
+                            const errorMsg = Array.from(this.errors.entries())
+                                .map(([idx, err]) => `チャンク${idx}: ${err}`)
+                                .join(', ');
+                            throw new Error(`ダウンロードエラー率が高すぎます (${errorRate.toFixed(1)}%): ${errorMsg}`);
+                        }
+                    }
+                    
+                    // Sort results by index
+                    const sortedChunks = [];
+                    for (let i = 0; i < chunksMetadata.length; i++) {
+                        if (!this.results.has(i)) {
+                            if (this.errors.has(i)) {
+                                throw new Error(`チャンク${i}のダウンロードに失敗: ${this.errors.get(i)}`);
+                            } else {
+                                throw new Error(`チャンク${i}が見つかりません`);
+                            }
+                        }
+                        sortedChunks.push(this.results.get(i));
+                    }
+                    
+                    const elapsed = (Date.now() - this.startTime) / 1000;
+                    const throughput = (this.totalBytes / 1024 / 1024) / elapsed;
+                    log(`並列ダウンロード完了: ${elapsed.toFixed(1)}秒, ${throughput.toFixed(1)} MB/秒`, 'success');
+                    
+                    return sortedChunks;
+                } catch (error) {
+                    log(`並列ダウンロードエラー: ${error.message}`, 'error');
+                    throw error;
+                }
+            }
+            
+            async worker(key, kaspaMetadata, progressCallback) {
+                while (true) {
+                    // Thread-safe queue access
+                    let work = null;
+                    
+                    // Simple mutex implementation
+                    while (this.queueLock) {
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                    }
+                    
+                    this.queueLock = true;
+                    try {
+                        if (this.queue.length > 0) {
+                            work = this.queue.shift();
+                            this.active++;
+                        }
+                    } finally {
+                        this.queueLock = false;
+                    }
+                    
+                    if (!work && this.active === 0) {
+                        break; // All work done
+                    }
+                    
+                    if (!work) {
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                        continue;
+                    }
+                    
+                    try {
+                        const { chunk: chunkMeta, index } = work;
+                        
+                        // Get block data with retry
+                        let response = null;
+                        let lastError = null;
+                        
+                        for (let retry = 0; retry <= this.maxRetries; retry++) {
+                            try {
+                                response = await this.rpcClient.getBlock({
+                                    hash: chunkMeta.blockId,
+                                    includeTransactions: true
+                                });
+                                break; // Success
+                            } catch (error) {
+                                lastError = error;
+                                if (retry < this.maxRetries) {
+                                    log(`チャンク${index}の取得に失敗 (リトライ ${retry + 1}/${this.maxRetries})`, 'warning');
+                                    await new Promise(resolve => setTimeout(resolve, 1000 * (retry + 1)));
+                                }
+                            }
+                        }
+                        
+                        if (!response) {
+                            throw lastError || new Error('ブロック取得に失敗');
+                        }
+                        
+                        const block = response?.block?.block || response?.block;
+                        if (!block) {
+                            throw new Error(`ブロックが見つかりません: ${chunkMeta.blockId}`);
+                        }
+                        
+                        // Find transaction
+                        let payload = null;
+                        for (const tx of block.transactions || []) {
+                            const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
+                            if (txId === chunkMeta.txid) {
+                                if (tx.payload && tx.payload !== '') {
+                                    payload = safeHexDecode(tx.payload, 'chunk payload');
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!payload) {
+                            throw new Error(`ペイロードが見つかりません`);
+                        }
+                        
+                        // Decrypt and decompress
+                        const compressed = await decryptChunk(payload, key, index);
+                        const original = kaspaMetadata.compression.enabled ? 
+                            lzDecompress(compressed) : compressed;
+                        
+                        this.results.set(index, original);
+                        this.completedCount++;
+                        this.totalBytes += original.length;
+                        
+                        // Update progress
+                        const elapsed = (Date.now() - this.startTime) / 1000;
+                        const speed = this.completedCount / elapsed;
+                        const throughput = (this.totalBytes / 1024 / 1024) / elapsed;
+                        
+                        if (progressCallback) {
+                            progressCallback({
+                                completed: this.completedCount,
+                                total: this.totalChunks,
+                                speed: speed,
+                                throughput: throughput
+                            });
+                        }
+                        
+                    } catch (error) {
+                        work.retries++;
+                        if (work.retries <= this.maxRetries) {
+                            // Re-queue for retry
+                            while (this.queueLock) {
+                                await new Promise(resolve => setTimeout(resolve, 10));
+                            }
+                            this.queueLock = true;
+                            try {
+                                this.queue.push(work);
+                            } finally {
+                                this.queueLock = false;
+                            }
+                            log(`チャンク${work.index}を再試行キューに追加 (${work.retries}/${this.maxRetries})`, 'warning');
+                        } else {
+                            log(`ワーカーエラー (チャンク${work.index}): ${error.message}`, 'error');
+                            this.errors.set(work.index, error.message);
+                        }
+                    } finally {
+                        this.active--;
+                    }
+                }
+            }
+        }
+        
+        // Configuration
+        const config = {
+            network: 'testnet-10',
+            retryCount: 3,
+            timeout: 30000,
+            testPrivateKey: 'b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfef'
+        };
+
+        // Safe hex decode function
+        function safeHexDecode(hexString, context = '') {
+            try {
+                if (!hexString || typeof hexString !== 'string') {
+                    throw new Error('Invalid hex string: null or not a string');
+                }
+                
+                // Remove any whitespace
+                hexString = hexString.trim();
+                
+                if (hexString.length === 0) {
+                    throw new Error('Invalid hex string: empty');
+                }
+                
+                if (hexString.length % 2 !== 0) {
+                    throw new Error(`Invalid hex string: odd length (${hexString.length})`);
+                }
+                
+                if (!/^[0-9a-fA-F]+$/.test(hexString)) {
+                    throw new Error('Invalid hex string: contains non-hex characters');
+                }
+                
+                const matches = hexString.match(/.{1,2}/g);
+                if (!matches) {
+                    throw new Error('Failed to parse hex string');
+                }
+                
+                return new Uint8Array(matches.map(byte => parseInt(byte, 16)));
+            } catch (e) {
+                const errorMsg = context ? `Hex decode error in ${context}: ${e.message}` : `Hex decode error: ${e.message}`;
+                log(errorMsg, 'error');
+                throw new Error(errorMsg);
+            }
+        }
+        
+        // Logging system
+        function log(message, type = 'info') {
+            const timestamp = new Date();
+            const logEntry = {
+                timestamp: timestamp.toISOString(),
+                time: timestamp.toLocaleTimeString(),
+                type: type,
+                message: message
+            };
+            
+            systemLogs.push(logEntry);
+            
+            const logContainer = document.getElementById('systemLog');
+            if (logContainer) {
+                const logElement = document.createElement('div');
+                logElement.className = `log-entry log-${type}`;
+                logElement.textContent = `[${logEntry.time}] ${message}`;
+                logContainer.appendChild(logElement);
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+            
+            // Keep only last 1000 logs
+            if (systemLogs.length > 1000) {
+                systemLogs = systemLogs.slice(-1000);
+            }
+        }
+        
+        // Tab switching
+        window.switchTab = function(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+            
+            if (tabName === 'history') {
+                updateHistoryDisplay();
+            }
+        };
+        
+        // File handling
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        
+        dropArea.addEventListener('click', () => fileInput.click());
+        dropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropArea.classList.add('dragover');
+        });
+        dropArea.addEventListener('dragleave', () => {
+            dropArea.classList.remove('dragover');
+        });
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) handleFileSelect(file);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) handleFileSelect(file);
+        });
+        
+        function handleFileSelect(file) {
+            currentFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            
+            const chunkSize = 12 * 1024; // 12KB chunks
+            const estimatedChunks = Math.ceil(file.size / chunkSize);
+            document.getElementById('estimatedChunks').textContent = estimatedChunks;
+            
+            // Estimate cost (rough estimate)
+            const estimatedCost = estimatedChunks * 0.00001;
+            document.getElementById('estimatedCost').textContent = estimatedCost.toFixed(6);
+            
+            document.getElementById('fileInfo').style.display = 'block';
+            checkUploadReady();
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+        
+        // Wallet management
+        window.importWallet = async function() {
+            const keyInput = document.getElementById('privateKeyInput').value.trim();
+            if (!keyInput || keyInput.length !== 64) {
+                showToast('秘密鍵は64文字の16進数である必要があります', 'error');
+                return;
+            }
+            
+            try {
+                await initializeKaspa();
+                
+                privateKey = keyInput;
+                const privKey = new kaspa.PrivateKey(privateKey);
+                const pubKey = privKey.toPublicKey();
+                address = pubKey.toAddress(kaspa.NetworkType.Testnet).toString();
+                
+                document.getElementById('walletAddress').textContent = address;
+                document.getElementById('walletInfo').style.display = 'block';
+                
+                // Initialize history manager
+                if (!historyManager) {
+                    historyManager = new UploadHistoryManager();
+                    await historyManager.initialize(privateKey);
+                }
+                
+                // Update balance
+                await updateBalance();
+                
+                // Save to localStorage
+                localStorage.setItem('kaspaPrivateKey', privateKey);
+                
+                log('ウォレットをインポートしました', 'success');
+                showToast('ウォレットのインポートに成功しました', 'success');
+                checkUploadReady();
+            } catch (error) {
+                log(`ウォレットインポートエラー: ${error.message}`, 'error');
+                showToast('ウォレットのインポートに失敗しました', 'error');
+            }
+        };
+        
+        window.generateNewWallet = async function() {
+            try {
+                await initializeKaspa();
+                
+                // Generate mnemonic
+                const mnemonic = kaspa.Mnemonic.random();
+                const seed = mnemonic.toSeed();
+                
+                // Derive key
+                const xprv = new kaspa.XPrv(seed);
+                const account = await xprv.deriveAccount(0);
+                const prvKey = await account.deriveKey(0, 0);
+                
+                privateKey = prvKey.toString();
+                const pubKey = prvKey.toPublicKey();
+                address = pubKey.toAddress(kaspa.NetworkType.Testnet).toString();
+                
+                // Show mnemonic
+                alert(`新しいウォレットを生成しました。\n\n重要: 以下のリカバリーフレーズを安全に保管してください:\n${mnemonic.phrase}\n\n秘密鍵: ${privateKey}`);
+                
+                document.getElementById('privateKeyInput').value = privateKey;
+                document.getElementById('walletAddress').textContent = address;
+                document.getElementById('walletInfo').style.display = 'block';
+                
+                // Initialize history manager
+                if (!historyManager) {
+                    historyManager = new UploadHistoryManager();
+                    await historyManager.initialize(privateKey);
+                }
+                
+                await updateBalance();
+                
+                // Save to localStorage
+                localStorage.setItem('kaspaPrivateKey', privateKey);
+                
+                log('新しいウォレットを生成しました', 'success');
+                showToast('新しいウォレットを生成しました', 'success');
+                checkUploadReady();
+            } catch (error) {
+                log(`ウォレット生成エラー: ${error.message}`, 'error');
+                showToast('ウォレット生成に失敗しました', 'error');
+            }
+        };
+        
+        async function updateBalance() {
+            if (!address || !rpcClient) return;
+            
+            try {
+                const response = await rpcClient.getBalanceByAddress({ address });
+                const balance = Number(response.balance) / 100000000;
+                document.getElementById('walletBalance').textContent = balance.toFixed(8);
+            } catch (error) {
+                log(`残高取得エラー: ${error.message}`, 'error');
+                document.getElementById('walletBalance').textContent = 'エラー';
+            }
+        }
+        
+        function checkUploadReady() {
+            const hasFile = currentFile !== null;
+            const hasWallet = privateKey !== null;
+            const hasPassword = document.getElementById('passwordInput').value.length >= 8;
+            const passwordMatch = document.getElementById('passwordInput').value === 
+                                 document.getElementById('passwordConfirm').value;
+            
+            document.getElementById('uploadButton').disabled = 
+                !(hasFile && hasWallet && hasPassword && passwordMatch);
+        }
+        
+        // Password validation
+        document.getElementById('passwordInput').addEventListener('input', checkUploadReady);
+        document.getElementById('passwordConfirm').addEventListener('input', checkUploadReady);
+        
+        // Kaspa initialization
+        async function initializeKaspa() {
+            if (kaspa) return;
+            
+            try {
+                const kaspaModule = await import('./kaspa-core.js');
+                kaspa = kaspaModule.default || kaspaModule;
+                
+                if (kaspa.initWASM32Bindings) {
+                    await kaspa.initWASM32Bindings();
+                }
+                
+                log('Kaspa WASM initialized', 'success');
+            } catch (error) {
+                log(`Kaspa初期化エラー: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        // RPC Client initialization
+        async function initializeRPC() {
+            if (rpcClient && rpcClient.isConnected) return;
+            
+            try {
+                const network = document.getElementById('networkSelect').value;
+                
+                rpcClient = new kaspa.RpcClient({
+                    resolver: new kaspa.Resolver(),
+                    networkId: network
+                });
+                
+                await rpcClient.connect();
+                log(`RPCクライアント接続完了 (${network})`, 'success');
+                
+                // Update config
+                config.network = network;
+            } catch (error) {
+                log(`RPC接続エラー: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        // Encryption functions
+        async function deriveKey(password, salt) {
+            const encoder = new TextEncoder();
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(password),
+                'PBKDF2',
+                false,
+                ['deriveBits', 'deriveKey']
+            );
+            
+            return crypto.subtle.deriveKey(
+                {
+                    name: 'PBKDF2',
+                    salt: salt,
+                    iterations: 100000,
+                    hash: 'SHA-256'
+                },
+                keyMaterial,
+                { name: 'AES-GCM', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+        }
+        
+        async function encryptChunk(data, key, chunkIndex) {
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            
+            // Add chunk index to additional data for authentication
+            const additionalData = new Uint8Array(4);
+            new DataView(additionalData.buffer).setUint32(0, chunkIndex, true);
+            
+            const encrypted = await crypto.subtle.encrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: iv,
+                    additionalData: additionalData
+                },
+                key,
+                data
+            );
+            
+            // Combine IV and ciphertext
+            const result = new Uint8Array(iv.length + encrypted.byteLength);
+            result.set(iv);
+            result.set(new Uint8Array(encrypted), iv.length);
+            
+            return result;
+        }
+        
+        async function decryptChunk(data, key, chunkIndex) {
+            const iv = data.slice(0, 12);
+            const ciphertext = data.slice(12);
+            
+            // Add chunk index to additional data for authentication
+            const additionalData = new Uint8Array(4);
+            new DataView(additionalData.buffer).setUint32(0, chunkIndex, true);
+            
+            const decrypted = await crypto.subtle.decrypt(
+                {
+                    name: 'AES-GCM',
+                    iv: iv,
+                    additionalData: additionalData
+                },
+                key,
+                ciphertext
+            );
+            
+            return new Uint8Array(decrypted);
+        }
+        
+        // Compression functions
+        function lzCompress(data) {
+            // Simple LZ77-style compression
+            const result = [];
+            const windowSize = 4096;
+            const lookaheadSize = 15;
+            
+            let pos = 0;
+            while (pos < data.length) {
+                let bestMatch = { distance: 0, length: 0 };
+                
+                // Search for matches in the sliding window
+                const searchStart = Math.max(0, pos - windowSize);
+                for (let i = searchStart; i < pos; i++) {
+                    let matchLength = 0;
+                    while (matchLength < lookaheadSize && 
+                           pos + matchLength < data.length &&
+                           data[i + matchLength] === data[pos + matchLength]) {
+                        matchLength++;
+                    }
+                    
+                    if (matchLength > bestMatch.length) {
+                        bestMatch = { distance: pos - i, length: matchLength };
+                    }
+                }
+                
+                if (bestMatch.length >= 3) {
+                    // Output distance/length pair
+                    result.push(0); // Marker for compressed data
+                    result.push((bestMatch.distance >> 8) & 0xFF);
+                    result.push(bestMatch.distance & 0xFF);
+                    result.push(bestMatch.length);
+                    pos += bestMatch.length;
+                } else {
+                    // Output literal
+                    result.push(1); // Marker for literal
+                    result.push(data[pos]);
+                    pos++;
+                }
+            }
+            
+            return new Uint8Array(result);
+        }
+        
+        function lzDecompress(compressed) {
+            const result = [];
+            let pos = 0;
+            
+            while (pos < compressed.length) {
+                const marker = compressed[pos++];
+                
+                if (marker === 0) {
+                    // Compressed data
+                    const distance = (compressed[pos++] << 8) | compressed[pos++];
+                    const length = compressed[pos++];
+                    
+                    for (let i = 0; i < length; i++) {
+                        result.push(result[result.length - distance]);
+                    }
+                } else {
+                    // Literal
+                    result.push(compressed[pos++]);
+                }
+            }
+            
+            return new Uint8Array(result);
+        }
+        
+        // Base64 encoding/decoding
+        function toBase64(uint8Array) {
+            return btoa(String.fromCharCode.apply(null, uint8Array));
+        }
+        
+        function fromBase64(base64) {
+            const binaryString = atob(base64);
+            const uint8Array = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                uint8Array[i] = binaryString.charCodeAt(i);
+            }
+            return uint8Array;
+        }
+        
+        // Upload functionality
+        window.startUpload = async function() {
+            if (!currentFile || !privateKey) return;
+            
+            const password = document.getElementById('passwordInput').value;
+            if (password.length < 8) {
+                showToast('パスワードは8文字以上である必要があります', 'error');
+                return;
+            }
+            
+            if (password !== document.getElementById('passwordConfirm').value) {
+                showToast('パスワードが一致しません', 'error');
+                return;
+            }
+            
+            currentPassword = password;
+            
+            try {
+                await initializeRPC();
+                
+                document.getElementById('uploadProgress').style.display = 'block';
+                document.getElementById('uploadButton').disabled = true;
+                
+                // Start workspace selection if not already selected
+                if (!workspaceHandle) {
+                    try {
+                        workspaceHandle = await window.showDirectoryPicker({
+                            mode: 'readwrite'
+                        });
+                        log('作業ディレクトリを選択しました', 'success');
+                    } catch (error) {
+                        if (error.name === 'AbortError') {
+                            log('ディレクトリ選択がキャンセルされました', 'warning');
+                        }
+                    }
+                }
+                
+                // Create metadata
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                const key = await deriveKey(password, salt);
+                
+                const fileData = await currentFile.arrayBuffer();
+                const fileBytes = new Uint8Array(fileData);
+                
+                // Compress file
+                const compressed = lzCompress(fileBytes);
+                const compressionRatio = (compressed.length / fileBytes.length);
+                const useCompression = compressionRatio < 0.9;
+                
+                const dataToChunk = useCompression ? compressed : fileBytes;
+                
+                // Create chunks
+                const chunkSize = 12 * 1024; // 12KB
+                const chunks = [];
+                processedChunks = [];
+                
+                for (let i = 0; i < dataToChunk.length; i += chunkSize) {
+                    const chunk = dataToChunk.slice(i, Math.min(i + chunkSize, dataToChunk.length));
+                    chunks.push(chunk);
+                }
+                
+                log(`ファイル分割完了: ${chunks.length}チャンク`, 'info');
+                
+                // Create metadata
+                kaspaMetadata = {
+                    version: '2.0',
+                    file: {
+                        name: currentFile.name,
+                        size: currentFile.size,
+                        type: currentFile.type,
+                        lastModified: currentFile.lastModified
+                    },
+                    encryption: {
+                        algorithm: 'AES-256-GCM',
+                        pbkdf2: {
+                            iterations: 100000,
+                            salt: toBase64(salt)
+                        }
+                    },
+                    compression: {
+                        enabled: useCompression,
+                        algorithm: useCompression ? 'LZ77' : 'none',
+                        originalSize: fileBytes.length,
+                        compressedSize: useCompression ? compressed.length : fileBytes.length
+                    },
+                    chunks: []
+                };
+                
+                // Start WebSocket monitoring
+                startWebSocketMonitoring();
+                
+                // Upload chunks
+                for (let i = 0; i < chunks.length; i++) {
+                    const encrypted = await encryptChunk(chunks[i], key, i);
+                    
+                    document.getElementById('uploadStatus').textContent = 
+                        `チャンク ${i + 1}/${chunks.length} をアップロード中...`;
+                    
+                    const progress = ((i + 1) / chunks.length * 100).toFixed(0);
+                    document.getElementById('uploadProgressBar').style.width = progress + '%';
+                    document.getElementById('uploadProgressBar').textContent = progress + '%';
+                    
+                    const txid = await uploadChunk(encrypted, i);
+                    
+                    processedChunks.push({
+                        index: i,
+                        txid: txid,
+                        size: encrypted.length
+                    });
+                    
+                    const chunkInfo = document.createElement('div');
+                    chunkInfo.className = 'chunk-info';
+                    chunkInfo.innerHTML = `チャンク ${i + 1}: TxID: <code>${txid}</code> (${encrypted.length} bytes)`;
+                    document.getElementById('chunkDetails').appendChild(chunkInfo);
+                }
+                
+                // Wait for all transactions to be included in blocks
+                document.getElementById('uploadStatus').textContent = 
+                    'すべてのトランザクションがブロックに含まれるのを待っています...';
+                
+                await waitForAllTransactions();
+                
+                // Create final metadata with block IDs
+                for (let i = 0; i < processedChunks.length; i++) {
+                    const chunk = processedChunks[i];
+                    const blockInfo = monitoredTransactions.get(chunk.txid);
+                    
+                    kaspaMetadata.chunks.push({
+                        index: i,
+                        txid: chunk.txid,
+                        blockId: blockInfo?.blockHash || 'pending',
+                        size: chunk.size
+                    });
+                }
+                
+                // Upload metadata
+                document.getElementById('uploadStatus').textContent = 'メタデータをアップロード中...';
+                const metadataJson = JSON.stringify(kaspaMetadata);
+                const metadataBytes = new TextEncoder().encode(metadataJson);
+                const metaTxId = await uploadChunk(metadataBytes, -1);
+                
+                // Wait for metadata transaction
+                uploadingMetaTx = true;
+                await waitForTransaction(metaTxId);
+                uploadingMetaTx = false;
+                
+                const metaBlockInfo = monitoredTransactions.get(metaTxId);
+                
+                // Save to history
+                const historyEntry = {
+                    txid: metaTxId,
+                    blockId: metaBlockInfo?.blockHash || 'pending',
+                    fileName: currentFile.name,
+                    fileSize: currentFile.size,
+                    chunks: chunks.length,
+                    timestamp: new Date().toISOString(),
+                    network: config.network,
+                    metadata: kaspaMetadata
+                };
+                
+                if (historyManager) {
+                    await historyManager.addEntry(historyEntry);
+                }
+                
+                // Show completion
+                document.getElementById('uploadStatus').textContent = 'アップロード完了！';
+                document.getElementById('uploadProgressBar').style.width = '100%';
+                document.getElementById('uploadProgressBar').textContent = '100%';
+                
+                // Create download info
+                const downloadInfo = `${metaTxId}:${metaBlockInfo?.blockHash || 'pending'}:${password}`;
+                
+                showToast('アップロード完了！ダウンロード情報をコピーしました', 'success');
+                await navigator.clipboard.writeText(downloadInfo);
+                
+                alert(`アップロード完了！\n\nダウンロード情報（クリップボードにコピー済み）:\n${downloadInfo}\n\nメタデータTxID: ${metaTxId}`);
+                
+                // Reset
+                stopWebSocketMonitoring();
+                currentFile = null;
+                document.getElementById('fileInput').value = '';
+                document.getElementById('fileInfo').style.display = 'none';
+                document.getElementById('passwordInput').value = '';
+                document.getElementById('passwordConfirm').value = '';
+                document.getElementById('uploadButton').disabled = false;
+                
+            } catch (error) {
+                log(`アップロードエラー: ${error.message}`, 'error');
+                showToast('アップロードに失敗しました', 'error');
+                document.getElementById('uploadButton').disabled = false;
+                stopWebSocketMonitoring();
+            }
+        };
+        
+        async function uploadChunk(data, chunkIndex) {
+            try {
+                // Create transaction
+                const privKey = new kaspa.PrivateKey(privateKey);
+                const pubKey = privKey.toPublicKey();
+                const addr = pubKey.toAddress(kaspa.NetworkType.Testnet);
+                
+                // Get UTXOs
+                const response = await rpcClient.getUtxosByAddresses({
+                    addresses: [addr.toString()]
+                });
+                
+                if (!response.entries || response.entries.length === 0) {
+                    throw new Error('利用可能なUTXOがありません');
+                }
+                
+                // Select UTXO
+                const utxo = response.entries[0];
+                const utxoAmount = Number(utxo.utxoEntry.amount);
+                
+                // Create transaction input
+                const input = new kaspa.TransactionInput({
+                    previousOutpoint: new kaspa.TransactionOutpoint({
+                        transactionId: utxo.outpoint.transactionId,
+                        index: utxo.outpoint.index
+                    }),
+                    signatureScript: new Uint8Array(0),
+                    sequence: 0xffffffff,
+                    sigOpCount: 1
+                });
+                
+                // Create outputs (send back to self minus fee)
+                const fee = 1000; // 0.00001 KAS
+                const changeAmount = utxoAmount - fee;
+                
+                const output = new kaspa.TransactionOutput({
+                    value: BigInt(changeAmount),
+                    scriptPublicKey: new kaspa.ScriptPublicKey({
+                        version: 0,
+                        scriptPublicKey: addr.toScriptPublicKey().script
+                    })
+                });
+                
+                // Create transaction with payload
+                const tx = new kaspa.Transaction({
+                    version: 0,
+                    inputs: [input],
+                    outputs: [output],
+                    lockTime: 0,
+                    subnetworkId: new Uint8Array(20),
+                    gas: 0,
+                    payload: data
+                });
+                
+                // Sign transaction
+                const signature = await kaspa.signTransaction(tx, [privKey], kaspa.SighashType.All);
+                tx.inputs[0].signatureScript = signature[0];
+                
+                // Submit transaction
+                const submitResponse = await rpcClient.submitTransaction({
+                    transaction: tx,
+                    allowOrphan: false
+                });
+                
+                const txid = submitResponse.transactionId;
+                log(`チャンク ${chunkIndex + 1} 送信完了: ${txid}`, 'success');
+                
+                return txid;
+            } catch (error) {
+                log(`チャンクアップロードエラー: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        // WebSocket monitoring
+        function startWebSocketMonitoring() {
+            if (wsMonitorActive) return;
+            
+            wsMonitorActive = true;
+            monitoredTransactions.clear();
+            uploadingChunksCount = 0;
+            
+            // Connect to WebSocket
+            connectWebSocket();
+            
+            log('WebSocketモニタリングを開始しました', 'info');
+        }
+        
+        function stopWebSocketMonitoring() {
+            wsMonitorActive = false;
+            if (wsConnection) {
+                wsConnection.close();
+                wsConnection = null;
+            }
+            if (wsReconnectInterval) {
+                clearInterval(wsReconnectInterval);
+                wsReconnectInterval = null;
+            }
+            if (wsMonitorTimeout) {
+                clearTimeout(wsMonitorTimeout);
+                wsMonitorTimeout = null;
+            }
+            log('WebSocketモニタリングを停止しました', 'info');
+        }
+        
+        async function connectWebSocket() {
+            if (!wsMonitorActive) return;
+            
+            try {
+                const wsUrl = config.network === 'mainnet' ? 
+                    'wss://kaspa-mainnet-public-ws.kaspa.stream' : 
+                    'wss://kaspa-testnet-10-public-ws.kaspa.stream';
+                
+                wsConnection = new WebSocket(wsUrl);
+                
+                wsConnection.onopen = () => {
+                    wsConnected = true;
+                    log('WebSocket接続成功', 'success');
+                    
+                    // Subscribe to blocks
+                    wsConnection.send(JSON.stringify({
+                        id: 1,
+                        command: 'notifyBlockAdded'
+                    }));
+                };
+                
+                wsConnection.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'blockAdded' && data.blockAdded) {
+                            handleNewBlock(data.blockAdded.block);
+                        }
+                    } catch (error) {
+                        log(`WebSocketメッセージ処理エラー: ${error.message}`, 'error');
+                    }
+                };
+                
+                wsConnection.onerror = (error) => {
+                    log('WebSocketエラー', 'error');
+                    wsConnected = false;
+                };
+                
+                wsConnection.onclose = () => {
+                    wsConnected = false;
+                    log('WebSocket接続が切断されました', 'warning');
+                    
+                    // Reconnect after 5 seconds
+                    if (wsMonitorActive && !wsReconnectInterval) {
+                        wsReconnectInterval = setTimeout(() => {
+                            wsReconnectInterval = null;
+                            connectWebSocket();
+                        }, 5000);
+                    }
+                };
+                
+            } catch (error) {
+                log(`WebSocket接続エラー: ${error.message}`, 'error');
+            }
+        }
+        
+        async function handleNewBlock(block) {
+            if (!block || !block.transactions) return;
+            
+            const blockHash = block.verboseData?.hash || block.header?.hash;
+            if (!blockHash) return;
+            
+            for (const tx of block.transactions) {
+                const txId = tx.verboseData?.transactionId || tx.id;
+                if (!txId) continue;
+                
+                // Check if this is one of our transactions
+                const isOurTx = processedChunks.some(chunk => chunk.txid === txId) || 
+                               (uploadingMetaTx && monitoredTransactions.size === processedChunks.length);
+                
+                if (isOurTx && !monitoredTransactions.has(txId)) {
+                    monitoredTransactions.set(txId, {
+                        txid: txId,
+                        blockHash: blockHash,
+                        timestamp: Date.now()
+                    });
+                    
+                    log(`トランザクション ${txId} がブロック ${blockHash} に含まれました`, 'success');
+                    
+                    // Update progress if needed
+                    if (progressManager) {
+                        progressManager.updateChunkStatus(txId, processedChunks.findIndex(c => c.txid === txId), 'completed');
+                    }
+                }
+            }
+        }
+        
+        async function waitForTransaction(txid, timeout = 300000) {
+            const startTime = Date.now();
+            
+            while (!monitoredTransactions.has(txid)) {
+                if (Date.now() - startTime > timeout) {
+                    throw new Error(`トランザクション ${txid} のタイムアウト`);
+                }
+                
+                // Try to get transaction info via RPC as backup
+                try {
+                    const response = await rpcClient.getTransaction({
+                        transactionId: txid,
+                        includeBlockInfo: true
+                    });
+                    
+                    if (response && response.block) {
+                        monitoredTransactions.set(txid, {
+                            txid: txid,
+                            blockHash: response.block.hash,
+                            timestamp: Date.now()
+                        });
+                        break;
+                    }
+                } catch (error) {
+                    // Transaction not found yet
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            return monitoredTransactions.get(txid);
+        }
+        
+        async function waitForAllTransactions() {
+            const total = processedChunks.length;
+            let completed = 0;
+            
+            for (const chunk of processedChunks) {
+                if (!monitoredTransactions.has(chunk.txid)) {
+                    await waitForTransaction(chunk.txid);
+                }
+                completed++;
+                
+                const progress = (completed / total * 100).toFixed(0);
+                document.getElementById('uploadProgressBar').style.width = progress + '%';
+                document.getElementById('uploadProgressBar').textContent = progress + '%';
+            }
+        }
+        
+        // Download functionality
+        window.startDownload = async function() {
+            const inputValue = document.getElementById('downloadTxId').value.trim();
+            const downloadPassword = document.getElementById('downloadPassword').value;
+            
+            if (!inputValue) {
+                showToast('Transaction IDを入力してください', 'error');
+                return;
+            }
+            
+            let txid, blockId;
+            
+            // Parse input (supports multiple formats)
+            const parts = inputValue.split(':');
+            if (parts.length >= 3) {
+                // Format: TxID:BlockID:Password
+                txid = parts[0];
+                blockId = parts[1];
+                if (!downloadPassword) {
+                    document.getElementById('downloadPassword').value = parts[2];
+                }
+            } else if (parts.length === 2) {
+                // Format: TxID:BlockID
+                txid = parts[0];
+                blockId = parts[1];
+            } else {
+                // Format: TxID only
+                txid = parts[0];
+                blockId = document.getElementById('downloadBlockId').value.trim();
+            }
+            
+            if (!downloadPassword && !document.getElementById('downloadPassword').value) {
+                showToast('パスワードを入力してください', 'error');
+                return;
+            }
+            
+            const password = downloadPassword || document.getElementById('downloadPassword').value;
+            
+            try {
+                await initializeKaspa();
+                await initializeRPC();
+                
+                document.getElementById('downloadProgress').style.display = 'block';
+                
+                // Get metadata
+                document.getElementById('downloadStatus').textContent = 'メタデータを取得中...';
+                
+                let metadataBlock;
+                if (blockId) {
+                    // Use provided block ID
+                    metadataBlock = await getBlockData(blockId);
+                } else {
+                    // Search for block containing the transaction
+                    document.getElementById('downloadStatus').textContent = 'ブロックを検索中...';
+                    metadataBlock = await findBlockContainingTx(txid);
+                }
+                
+                if (!metadataBlock) {
+                    throw new Error('メタデータブロックが見つかりません');
+                }
+                
+                // Extract metadata from transaction
+                const metadataPayload = await extractPayloadFromBlock(metadataBlock, txid);
+                if (!metadataPayload) {
+                    throw new Error('メタデータが見つかりません');
+                }
+                
+                const metadataJson = new TextDecoder().decode(metadataPayload);
+                kaspaMetadata = JSON.parse(metadataJson);
+                
+                log(`ファイル: ${kaspaMetadata.file.name} (${kaspaMetadata.chunks.length}チャンク)`, 'info');
+                
+                // Determine download mode based on settings and chunk count
+                const useParallel = settings.parallelDownloadEnabled && 
+                                   kaspaMetadata.chunks.length >= settings.parallelThreshold;
+                
+                if (useParallel) {
+                    log(`並列ダウンロードモードを使用します (${settings.parallelConcurrency}並列)`, 'info');
+                } else {
+                    log('シーケンシャルダウンロードモードを使用します', 'info');
+                }
+                
+                // Derive key
+                const salt = fromBase64(kaspaMetadata.encryption.pbkdf2.salt);
+                const key = await deriveKey(password, salt);
+                
+                // Create progress tracker
+                if (!progressManager) {
+                    progressManager = new ProgressManager();
+                }
+                const downloadProgress = progressManager.createDownload(txid, kaspaMetadata.chunks.length);
+                
+                let chunks;
+                
+                if (useParallel) {
+                    // Parallel download with fallback
+                    try {
+                        const downloader = new ParallelDownloader(rpcClient, settings.parallelConcurrency);
+                        
+                        chunks = await downloader.downloadChunks(
+                            kaspaMetadata.chunks,
+                            key,
+                            kaspaMetadata,
+                            (progress) => {
+                                const percent = ((progress.completed / progress.total) * 100).toFixed(0);
+                                document.getElementById('downloadProgressBar').style.width = percent + '%';
+                                document.getElementById('downloadProgressBar').textContent = percent + '%';
+                                document.getElementById('downloadStatus').textContent = 
+                                    `${progress.completed}/${progress.total} チャンク (${progress.speed.toFixed(1)} チャンク/秒, ${progress.throughput.toFixed(1)} MB/秒)`;
+                                
+                                progressManager.updateDownloadProgress(
+                                    downloadProgress.id, 
+                                    progress.completed,
+                                    progress.speed,
+                                    progress.throughput
+                                );
+                            }
+                        );
+                    } catch (parallelError) {
+                        log(`並列ダウンロードエラー: ${parallelError.message}`, 'error');
+                        log('シーケンシャルダウンロードにフォールバックします', 'warning');
+                        
+                        // Fallback to sequential download
+                        chunks = await sequentialDownload(kaspaMetadata, key, downloadProgress);
+                    }
+                } else {
+                    // Sequential download (v3.5.0 compatible)
+                    chunks = await sequentialDownload(kaspaMetadata, key, downloadProgress);
+                }
+                
+                // Combine chunks
+                document.getElementById('downloadStatus').textContent = 'ファイルを復元中...';
+                
+                const combined = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
+                let offset = 0;
+                for (const chunk of chunks) {
+                    combined.set(chunk, offset);
+                    offset += chunk.length;
+                }
+                
+                // Decompress if needed
+                const fileData = kaspaMetadata.compression.enabled ? 
+                    lzDecompress(combined) : combined;
+                
+                // Create download
+                const blob = new Blob([fileData], { type: kaspaMetadata.file.type });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = kaspaMetadata.file.name;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                document.getElementById('downloadStatus').textContent = 'ダウンロード完了！';
+                document.getElementById('downloadProgressBar').style.width = '100%';
+                document.getElementById('downloadProgressBar').textContent = '100%';
+                
+                showToast('ダウンロード完了！', 'success');
+                
+            } catch (error) {
+                log(`ダウンロードエラー: ${error.message}`, 'error');
+                showToast('ダウンロードに失敗しました', 'error');
+            }
+        };
+        
+        // Sequential download function (v3.5.0 compatible)
+        async function sequentialDownload(kaspaMetadata, key, downloadProgress) {
+            const chunks = [];
+            
+            for (let i = 0; i < kaspaMetadata.chunks.length; i++) {
+                const chunkMeta = kaspaMetadata.chunks[i];
+                
+                document.getElementById('downloadStatus').textContent = 
+                    `チャンク ${i + 1}/${kaspaMetadata.chunks.length} を取得中...`;
+                
+                let success = false;
+                let lastError = null;
+                
+                // Retry logic
+                for (let retry = 0; retry <= config.retryCount; retry++) {
+                    try {
+                        // Get block data
+                        const response = await rpcClient.getBlock({
+                            hash: chunkMeta.blockId,
+                            includeTransactions: true
+                        });
+                        
+                        const block = response?.block?.block || response?.block;
+                        if (!block) {
+                            throw new Error(`ブロックが見つかりません: ${chunkMeta.blockId}`);
+                        }
+                        
+                        // Find transaction and extract payload
+                        let payload = null;
+                        for (const tx of block.transactions || []) {
+                            const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
+                            if (txId === chunkMeta.txid) {
+                                if (tx.payload && tx.payload !== '') {
+                                    payload = safeHexDecode(tx.payload, 'chunk payload');
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!payload) {
+                            throw new Error(`チャンク ${i + 1} のペイロードが見つかりません`);
+                        }
+                        
+                        // Decrypt chunk
+                        const decrypted = await decryptChunk(payload, key, i);
+                        chunks.push(decrypted);
+                        
+                        const progress = ((i + 1) / kaspaMetadata.chunks.length * 100).toFixed(0);
+                        document.getElementById('downloadProgressBar').style.width = progress + '%';
+                        document.getElementById('downloadProgressBar').textContent = progress + '%';
+                        
+                        progressManager.updateDownloadProgress(downloadProgress.id, i + 1);
+                        
+                        success = true;
+                        break;
+                    } catch (error) {
+                        lastError = error;
+                        if (retry < config.retryCount) {
+                            log(`チャンク ${i + 1} の取得に失敗 (リトライ ${retry + 1}/${config.retryCount})`, 'warning');
+                            await new Promise(resolve => setTimeout(resolve, 1000 * (retry + 1)));
+                        }
+                    }
+                }
+                
+                if (!success) {
+                    throw lastError || new Error(`チャンク ${i + 1} の取得に失敗しました`);
+                }
+            }
+            
+            return chunks;
+        }
+        
+        async function getBlockData(blockId) {
+            try {
+                const response = await rpcClient.getBlock({
+                    hash: blockId,
+                    includeTransactions: true
+                });
+                
+                return response?.block?.block || response?.block;
+            } catch (error) {
+                log(`ブロック取得エラー: ${error.message}`, 'error');
+                return null;
+            }
+        }
+        
+        async function findBlockContainingTx(txid) {
+            try {
+                // First try WebSocket monitoring if active
+                if (monitoredTransactions.has(txid)) {
+                    const blockInfo = monitoredTransactions.get(txid);
+                    return await getBlockData(blockInfo.blockHash);
+                }
+                
+                // Try to get transaction info
+                const txResponse = await rpcClient.getTransaction({
+                    transactionId: txid,
+                    includeBlockInfo: true
+                });
+                
+                if (txResponse && txResponse.block) {
+                    return await getBlockData(txResponse.block.hash);
+                }
+                
+                // Fallback: search recent blocks
+                log('トランザクションのブロックを検索中...', 'info');
+                
+                const virtualSelectedParentBlueScoreResponse = await rpcClient.getVirtualSelectedParentBlueScore();
+                const currentBlueScore = virtualSelectedParentBlueScoreResponse.blueScore;
+                
+                // Search last 1000 blocks
+                for (let i = 0; i < 1000; i += 10) {
+                    const blocksResponse = await rpcClient.getBlocksByLowHash({
+                        lowHash: '0000000000000000000000000000000000000000000000000000000000000000',
+                        includeBlocks: true,
+                        includeTransactions: true
+                    });
+                    
+                    if (blocksResponse && blocksResponse.blocks) {
+                        for (const blockData of blocksResponse.blocks) {
+                            const block = blockData.block;
+                            if (block && block.transactions) {
+                                for (const tx of block.transactions) {
+                                    const foundTxId = tx.verboseData?.transactionId || tx.id;
+                                    if (foundTxId === txid) {
+                                        return block;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Wait before next batch
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                throw new Error('トランザクションを含むブロックが見つかりません');
+            } catch (error) {
+                log(`ブロック検索エラー: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        async function extractPayloadFromBlock(block, txid) {
+            if (!block || !block.transactions) return null;
+            
+            for (const tx of block.transactions) {
+                const foundTxId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
+                if (foundTxId === txid) {
+                    if (tx.payload && tx.payload !== '') {
+                        return safeHexDecode(tx.payload, 'metadata payload');
+                    }
+                }
+            }
+            
+            return null;
+        }
+        
+        // History display
+        function updateHistoryDisplay() {
+            const historyContent = document.getElementById('historyContent');
+            
+            if (uploadHistory.length === 0) {
+                historyContent.innerHTML = '<p style="color: #999;">アップロード履歴がありません</p>';
+                return;
+            }
+            
+            historyContent.innerHTML = '';
+            
+            uploadHistory.forEach((entry, index) => {
+                const uploadDiv = document.createElement('div');
+                uploadDiv.className = 'upload-item';
+                
+                const date = new Date(entry.timestamp);
+                const downloadInfo = `${entry.txid}:${entry.blockId}`;
+                
+                uploadDiv.innerHTML = `
+                    <div class="upload-title">${entry.fileName}</div>
+                    <div class="upload-meta">
+                        日時: ${date.toLocaleString()}<br>
+                        サイズ: ${formatFileSize(entry.fileSize)}<br>
+                        チャンク数: ${entry.chunks}<br>
+                        ネットワーク: ${entry.network}<br>
+                        TxID: <code>${entry.txid}</code>
+                    </div>
+                    <div class="history-tab-buttons">
+                        <button class="history-small-btn" onclick="downloadWithPassword('${entry.txid}', '${entry.blockId}', ${index})">🔐 .kaspa (パスワード付き)</button>
+                        <button class="history-small-btn" onclick="downloadWithoutPassword('${entry.txid}', '${entry.blockId}', ${index})">🔓 .kaspa (パスワードなし)</button>
+                        <button class="history-small-btn" onclick="copyDownloadInfo('${downloadInfo}', true)">📋 TxID (パスワード付き)</button>
+                        <button class="history-small-btn" onclick="copyDownloadInfo('${downloadInfo}', false)">📋 TxID (パスワードなし)</button>
+                        <button class="history-small-btn" onclick="copyPasswordOnly(${index})">🔑 パスワードのみ</button>
+                    </div>
+                `;
+                
+                historyContent.appendChild(uploadDiv);
+            });
+        }
+        
+        // History actions
+        window.downloadWithPassword = async function(txid, blockId, index) {
+            const password = prompt('このファイルのパスワードを入力してください:');
+            if (!password) return;
+            
+            const entry = uploadHistory[index];
+            const fileData = {
+                version: '1.0',
+                type: 'kaspa-encrypted-file',
+                txid: txid,
+                blockId: blockId,
+                metadata: entry.metadata,
+                requiresPassword: true
+            };
+            
+            const blob = new Blob([JSON.stringify(fileData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = entry.fileName + '.kaspa';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('.kaspaファイルをダウンロードしました（パスワード付き）', 'success');
+        };
+        
+        window.downloadWithoutPassword = async function(txid, blockId, index) {
+            const password = prompt('このファイルのパスワードを入力してください:');
+            if (!password) return;
+            
+            const entry = uploadHistory[index];
+            const fileData = {
+                version: '1.0',
+                type: 'kaspa-encrypted-file',
+                txid: txid,
+                blockId: blockId,
+                metadata: entry.metadata,
+                password: password,
+                requiresPassword: false
+            };
+            
+            const blob = new Blob([JSON.stringify(fileData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = entry.fileName + '.kaspa';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('.kaspaファイルをダウンロードしました（パスワード埋め込み）', 'success');
+        };
+        
+        window.copyDownloadInfo = async function(info, withPasswordPrompt) {
+            if (withPasswordPrompt) {
+                const password = prompt('このファイルのパスワードを入力してください:');
+                if (password) {
+                    await navigator.clipboard.writeText(`${info}:${password}`);
+                    showToast('ダウンロード情報をコピーしました（パスワード付き）', 'success');
+                }
+            } else {
+                await navigator.clipboard.writeText(info);
+                showToast('ダウンロード情報をコピーしました（パスワードなし）', 'success');
+            }
+        };
+        
+        window.copyPasswordOnly = async function(index) {
+            const password = prompt('このファイルのパスワードを入力してください:');
+            if (password) {
+                await navigator.clipboard.writeText(password);
+                showToast('パスワードをコピーしました', 'success');
+            }
+        };
+        
+        // Settings functions
+        window.exportLogs = function() {
+            const data = {
+                version: '1.0',
+                exported: new Date().toISOString(),
+                logs: systemLogs,
+                settings: {
+                    network: config.network,
+                    retryCount: config.retryCount,
+                    timeout: config.timeout
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `kaspa-logs-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('ログをエクスポートしました', 'success');
+        };
+        
+        window.clearLogs = function() {
+            if (confirm('すべてのログをクリアしますか？')) {
+                systemLogs = [];
+                document.getElementById('systemLog').innerHTML = '';
+                showToast('ログをクリアしました', 'success');
+            }
+        };
+        
+        window.copyLog = async function() {
+            const logText = systemLogs.map(log => 
+                `[${log.time}] [${log.type.toUpperCase()}] ${log.message}`
+            ).join('\n');
+            
+            await navigator.clipboard.writeText(logText);
+            showToast('ログをコピーしました', 'success');
+        };
+        
+        // Performance test
+        window.testParallelPerformance = async function() {
+            if (!rpcClient || !rpcClient.isConnected) {
+                await initializeRPC();
+            }
+            
+            document.getElementById('performanceResults').style.display = 'block';
+            const chartDiv = document.getElementById('performanceChart');
+            chartDiv.innerHTML = 'テスト実行中...\n\n';
+            
+            const testConfigs = [2, 4, 8, 12, 16];
+            const results = [];
+            
+            for (const concurrency of testConfigs) {
+                chartDiv.innerHTML += `並列度 ${concurrency} をテスト中...\n`;
+                
+                try {
+                    const startTime = Date.now();
+                    const testBlocks = 100;
+                    let completed = 0;
+                    
+                    // Create test workers
+                    const workers = [];
+                    const queue = [];
+                    
+                    // Get recent blocks for testing
+                    const response = await rpcClient.getVirtualChainFromBlock({
+                        startHash: '0000000000000000000000000000000000000000000000000000000000000000',
+                        includeAcceptedTransactionIds: false
+                    });
+                    
+                    if (response && response.removedChainBlockHashes) {
+                        for (let i = 0; i < Math.min(testBlocks, response.removedChainBlockHashes.length); i++) {
+                            queue.push(response.removedChainBlockHashes[i]);
+                        }
+                    }
+                    
+                    // Test parallel fetching
+                    const workerFunc = async () => {
+                        while (queue.length > 0) {
+                            const blockHash = queue.shift();
+                            if (!blockHash) continue;
+                            
+                            try {
+                                await rpcClient.getBlock({
+                                    hash: blockHash,
+                                    includeTransactions: false
+                                });
+                                completed++;
+                            } catch (error) {
+                                // Ignore errors in test
+                            }
+                        }
+                    };
+                    
+                    for (let i = 0; i < concurrency; i++) {
+                        workers.push(workerFunc());
+                    }
+                    
+                    await Promise.all(workers);
+                    
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    const speed = completed / elapsed;
+                    
+                    results.push({
+                        concurrency: concurrency,
+                        speed: speed,
+                        elapsed: elapsed
+                    });
+                    
+                    chartDiv.innerHTML += `完了: ${speed.toFixed(1)} ブロック/秒\n`;
+                    
+                } catch (error) {
+                    chartDiv.innerHTML += `エラー: ${error.message}\n`;
+                }
+                
+                chartDiv.innerHTML += '\n';
+            }
+            
+            // Show results
+            chartDiv.innerHTML += '=== テスト結果 ===\n\n';
+            results.forEach(result => {
+                const bar = '█'.repeat(Math.round(result.speed / 5));
+                chartDiv.innerHTML += `${result.concurrency}並列: ${bar} ${result.speed.toFixed(1)} blocks/s\n`;
+            });
+            
+            const best = results.reduce((a, b) => a.speed > b.speed ? a : b);
+            chartDiv.innerHTML += `\n最適な並列度: ${best.concurrency} (${best.speed.toFixed(1)} blocks/s)`;
+            
+            showToast('パフォーマンステスト完了', 'success');
+        };
+        
+        // Toast notification
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = 'success-toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', async () => {
+            log('Kaspa P2P File Storage v3.6.1 起動', 'info');
+            
+            // Load settings
+            loadSettings();
+            
+            // Try to load saved private key
+            const savedKey = localStorage.getItem('kaspaPrivateKey');
+            if (savedKey) {
+                document.getElementById('privateKeyInput').value = savedKey;
+                await importWallet();
+            }
+            
+            // Update network settings
+            document.getElementById('networkSelect').addEventListener('change', (e) => {
+                config.network = e.target.value;
+                if (rpcClient) {
+                    rpcClient.disconnect();
+                    rpcClient = null;
+                }
+            });
+            
+            document.getElementById('retryCount').addEventListener('change', (e) => {
+                config.retryCount = parseInt(e.target.value);
+            });
+            
+            document.getElementById('timeout').addEventListener('change', (e) => {
+                config.timeout = parseInt(e.target.value) * 1000;
+            });
+            
+            // Initialize progress manager
+            progressManager = new ProgressManager();
+        });
+    </script>
+</body>
+</html>
