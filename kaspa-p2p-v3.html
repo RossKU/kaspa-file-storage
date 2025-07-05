@@ -1357,15 +1357,6 @@
             logContainer.scrollTop = logContainer.scrollHeight;
         }
 
-        function monitorLog(message, type = 'info') {
-            const logContainer = document.getElementById('monitorLog');
-            const time = new Date().toLocaleTimeString();
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            entry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-${type}">${message}</span>`;
-            logContainer.appendChild(entry);
-            logContainer.scrollTop = logContainer.scrollHeight;
-        }
 
         // Network status
         function updateNetworkStatus(status, text) {
@@ -3579,12 +3570,12 @@
             }
             
             if (wsMonitorActive) {
-                monitorLog('すでに監視中です', 'warning');
+                log('すでに監視中です', 'warning');
                 return;
             }
             
             try {
-                monitorLog('WebSocket監視を開始...');
+                log('WebSocket監視を開始...', 'info');
                 wsMonitorActive = true;
                 
                 // Set 5 minute timeout
@@ -3597,28 +3588,25 @@
                 }, 5 * 60 * 1000);
                 
                 await rpcClient.subscribeBlockAdded();
-                monitorLog('Block Addedイベントを購読しました', 'success');
+                log('Block Addedイベントを購読しました', 'success');
                 
-                document.getElementById('monitorStartTime').textContent = new Date().toLocaleString();
-                
-                monitorLog('監視を開始しました', 'success');
+                log('WebSocket監視を開始しました', 'success');
                 
             } catch (error) {
-                monitorLog(`監視開始エラー: ${error.message}`, 'error');
+                log(`監視開始エラー: ${error.message}`, 'error');
                 wsMonitorActive = false;
             }
         };
 
         window.stopMonitoring = async function() {
             if (!wsMonitorActive) {
-                monitorLog('監視は開始されていません', 'warning');
+                log('監視は開始されていません', 'warning');
                 return;
             }
             
             try {
                 if (rpcClient) {
                     await rpcClient.unsubscribeBlockAdded();
-                    monitorLog('監視を停止しました', 'success');
                 }
                 wsMonitorActive = false;
                 
@@ -3635,7 +3623,7 @@
                 log('WebSocket監視を停止しました', 'info');
                 
             } catch (error) {
-                monitorLog(`監視停止エラー: ${error.message}`, 'error');
+                log(`監視停止エラー: ${error.message}`, 'error');
             }
         };
 
@@ -3900,20 +3888,17 @@
             }
             
             if (wsMonitorActive) {
-                monitorLog('すでに監視中です', 'warning');
+                log('すでに監視中です', 'warning');
                 return;
             }
             
             try {
-                monitorLog('WebSocket監視を開始...');
                 log('WebSocket監視を開始しました', 'info');
                 wsMonitorActive = true;
                 
                 await rpcClient.subscribeBlockAdded();
-                monitorLog('Block Addedイベントを購読しました', 'success');
+                log('Block Addedイベントを購読しました', 'success');
                 log('WebSocket経由でブロック追加イベントの監視を開始', 'info');
-                
-                document.getElementById('monitorStartTime').textContent = new Date().toLocaleString();
                 
                 rpcClient.addEventListener('block-added', (event) => {
                     const block = event.data.block;
@@ -3955,8 +3940,6 @@
                             }
                         }
                         
-                        document.getElementById('monitoringCount').textContent = monitoredTransactions.size;
-                        document.getElementById('detectedCount').textContent = monitoredTransactions.size;
                         
                         // Only log if we found our transaction or if it's a small block
                         if (myTransactionFound) {
@@ -3968,11 +3951,9 @@
                     }
                 });
                 
-                monitorLog('監視を開始しました', 'success');
                 // log(`現在監視中のトランザクション数: ${monitoredTransactions.size}`, 'info');
                 
             } catch (error) {
-                monitorLog(`監視開始エラー: ${error.message}`, 'error');
                 log(`WebSocket監視エラー: ${error.message}`, 'error');
                 wsMonitorActive = false;
                 
