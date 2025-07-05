@@ -331,3 +331,61 @@ const filename = generateSafeFilename(item.fileName, cid);
 - 実際のブロックチェーン時刻が表示される
 - .kaspaファイルが正しい形式でダウンロードされる
 - エラーハンドリングが改善され、システムの堅牢性が向上
+
+## 🆕 v3.4.0: 履歴タブのダウンロードオプション改善 (2025-01-05)
+
+### 背景と理念
+ユーザーからの提案：
+> .kaspaはアップロードするときにパスワードを入れるのと入れないのの選択肢があるけど、本質的には.kaspaをダウンロードするときにPassの埋め込みの有無を決定するからHistoryに鍵あり.kaspaと鍵なし.kaspaを選択できたほうが合理的な気がする
+
+### 実装内容
+履歴タブのダウンロードボタンを3つに分割：
+
+1. **🔐 鍵付き.kaspa** - パスワードを埋め込んだ.kaspaファイル
+   - 受信者がパスワード入力不要
+   - 信頼できる相手との共有用
+   - ファイル内に警告メッセージを含む
+
+2. **🔓 鍵なし.kaspa** - パスワードを含まない.kaspaファイル
+   - 受信者がパスワード入力必要
+   - より安全な共有方法
+   - 公開共有に適している
+
+3. **📋 MetaTxID** - メタトランザクションIDのコピー（既存）
+   - ブロックチェーン上の参照用
+   - 最も安全だが技術的知識が必要
+
+### 技術的変更
+```javascript
+// 新しいメソッドを追加
+async generateKaspaWithPassword(uploadId) {
+    await this.generateKaspa(uploadId, true);
+}
+
+async generateKaspaWithoutPassword(uploadId) {
+    await this.generateKaspa(uploadId, false);
+}
+
+// 既存のgenerateKaspaメソッドを修正
+async generateKaspa(uploadId, includePassword) {
+    // includePasswordパラメータに基づいて処理
+    if (includePassword && item.password) {
+        kaspaMetadata.password = item.password;
+        kaspaMetadata.auth = {
+            passwordIncluded: true,
+            warning: "パスワードは平文で保存されています。信頼できる相手とのみ共有してください。"
+        };
+    }
+}
+```
+
+### UIの改善
+- 各ボタンにツールチップを追加
+- アイコンで機能を視覚的に表現
+- レスポンシブデザインでモバイルでも使いやすく
+
+### 利点
+1. **柔軟性** - 同じアップロードから状況に応じて異なる形式を選択可能
+2. **セキュリティ** - ユーザーが共有相手に応じてセキュリティレベルを選択
+3. **ユーザー体験** - アップロード時の決定に縛られない自由度
+4. **後方互換性** - 既存のアップロードデータでも動作

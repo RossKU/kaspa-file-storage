@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.3.4 - Auto-Resume & History Edition</title>
+    <title>Kaspa P2P File Storage v3.4.0 - Auto-Resume & History Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -318,13 +318,37 @@
             margin: 20px 0;
             padding-top: 20px;
         }
+        .history-item {
+            background: #16213e;
+            border: 1px solid rgba(233, 69, 96, 0.3);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        .history-item:hover {
+            border-color: #e94560;
+            background: #1a2540;
+        }
+        .history-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .history-item-actions {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🚀 Kaspa P2P File Storage v3.2.0 - Auto-Resume & History Edition</h1>
+        <h1>🚀 Kaspa P2P File Storage v3.4.0 - Auto-Resume & History Edition</h1>
         <p>実ネットワーク接続による完全なP2Pファイル共有システム（レジューム＆履歴管理対応）</p>
-        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.2.0: WebSocket監視の自動停止機能追加</p>
+        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.4.0: 履歴タブで鍵付き/鍵なし.kaspaを選択可能に</p>
         <div id="networkStatus" style="margin-top: 10px;">
             <span class="status-indicator status-offline"></span>
             <span id="statusText">未接続</span>
@@ -823,9 +847,9 @@
                                 <span style="color: #666; font-size: 12px; margin-left: 10px;">${formatSize(item.fileSize)}</span>
                             </div>
                             <div class="history-item-actions">
-                                <button onclick="historyManager.generateKaspa('${item.id}')" class="small-button">📄 .kaspa</button>
-                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}')" class="small-button">📋 MetaTxID</button>` : ''}
-                                ${password !== 'なし' ? `<button onclick="copyToClipboard('${password}')" class="small-button">🔑 Pass</button>` : ''}
+                                <button onclick="historyManager.generateKaspaWithPassword('${item.id}')" class="small-button" title="パスワード付き.kaspaファイル">🔐 鍵付き.kaspa</button>
+                                <button onclick="historyManager.generateKaspaWithoutPassword('${item.id}')" class="small-button" title="パスワードなし.kaspaファイル">🔓 鍵なし.kaspa</button>
+                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}')" class="small-button" title="メタトランザクションIDをコピー">📋 MetaTxID</button>` : ''}
                             </div>
                         </div>
                         <div style="font-size: 12px; color: #999;">
@@ -837,8 +861,18 @@
                 `;
             }
             
-            async generateKaspa(uploadId) {
-                log(`[UploadHistoryManager] .kaspaファイルの生成を開始します (ID: ${uploadId})`, 'debug');
+            async generateKaspaWithPassword(uploadId) {
+                log(`[UploadHistoryManager] パスワード付き.kaspaファイルの生成を開始します (ID: ${uploadId})`, 'debug');
+                await this.generateKaspa(uploadId, true);
+            }
+            
+            async generateKaspaWithoutPassword(uploadId) {
+                log(`[UploadHistoryManager] パスワードなし.kaspaファイルの生成を開始します (ID: ${uploadId})`, 'debug');
+                await this.generateKaspa(uploadId, false);
+            }
+            
+            async generateKaspa(uploadId, includePassword) {
+                log(`[UploadHistoryManager] .kaspaファイルの生成を開始します (ID: ${uploadId}, パスワード含む: ${includePassword})`, 'debug');
                 const history = this.getHistory();
                 const item = history.find(h => h.id === uploadId);
                 if (!item) {
@@ -883,11 +917,16 @@
                     }
                 };
                 
-                // Check if password should be included
-                const includePassword = confirm('パスワードを.kaspaファイルに含めますか？\n\n含める場合：パスワード入力不要で復元可能\n含めない場合：復元時にパスワード入力が必要（より安全）');
-                
+                // Include password if requested and available
                 if (includePassword && item.password) {
                     kaspaMetadata.password = item.password;
+                    kaspaMetadata.auth = {
+                        passwordIncluded: true,
+                        warning: "パスワードは平文で保存されています。信頼できる相手とのみ共有してください。"
+                    };
+                    log('パスワードを.kaspaファイルに含めます', 'info');
+                } else {
+                    log('パスワードなしの.kaspaファイルを生成します', 'info');
                 }
                 
                 // Create and download .kaspa file with CID
@@ -901,7 +940,8 @@
                 a.click();
                 URL.revokeObjectURL(url);
                 
-                log(`.kaspaファイルを生成しました: ${filename}`, 'success');
+                const typeStr = includePassword ? 'パスワード付き' : 'パスワードなし';
+                log(`${typeStr}.kaspaファイルを生成しました: ${filename}`, 'success');
                 log(`[DEBUG] .kaspaファイル生成完了 - サイズ: ${blob.size} bytes`, 'debug');
             }
             
