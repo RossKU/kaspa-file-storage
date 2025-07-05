@@ -922,7 +922,8 @@
                 log(`[DEBUG] 履歴アイテム表示 - ファイル: ${item.fileName}, 日時: ${date} (blockTime: ${item.blockTime ? 'あり' : 'なし'})`, 'debug');
                 
                 const hasPassword = item.password && item.password !== 'なし';
-                const hasMetaTxId = item.metaTxId && item.metaTxBlockId;
+                // 後方互換性を保ちながら、新旧両方のデータ形式をサポート
+            const hasMetaTxId = (item.metaTxId && item.metaTxBlockId) || (item.metaTxReference && item.metaTxReference.includes(':'));
                 
                 // Generate buttons based on available data
                 const buttons = [];
@@ -1007,7 +1008,18 @@
                     return;
                 }
                 
-                if (!item.metaTxId || !item.metaTxBlockId) {
+                // 新旧両方のデータ形式をサポート
+                let txId, blockId;
+                if (item.metaTxId && item.metaTxBlockId) {
+                    // 新形式
+                    txId = item.metaTxId;
+                    blockId = item.metaTxBlockId;
+                } else if (item.metaTxReference && item.metaTxReference.includes(':')) {
+                    // 旧形式
+                    const parts = item.metaTxReference.split(':');
+                    txId = parts[0];
+                    blockId = parts[1];
+                } else {
                     log('メタトランザクションIDが存在しません', 'warning');
                     alert('メタトランザクションIDが存在しません');
                     return;
@@ -1019,7 +1031,7 @@
                     return;
                 }
                 
-                const textToCopy = `${item.metaTxId}:${item.metaTxBlockId}:${item.password}`;
+                const textToCopy = `${txId}:${blockId}:${item.password}`;
                 await window.copyToClipboard(textToCopy);
                 log('パスワード付きTxIDをコピーしました（パスワードが含まれています）', 'warning');
             }
@@ -1033,13 +1045,24 @@
                     return;
                 }
                 
-                if (!item.metaTxId || !item.metaTxBlockId) {
+                // 新旧両方のデータ形式をサポート
+                let txId, blockId;
+                if (item.metaTxId && item.metaTxBlockId) {
+                    // 新形式
+                    txId = item.metaTxId;
+                    blockId = item.metaTxBlockId;
+                } else if (item.metaTxReference && item.metaTxReference.includes(':')) {
+                    // 旧形式
+                    const parts = item.metaTxReference.split(':');
+                    txId = parts[0];
+                    blockId = parts[1];
+                } else {
                     log('メタトランザクションIDが存在しません', 'warning');
                     alert('メタトランザクションIDが存在しません');
                     return;
                 }
                 
-                const textToCopy = `${item.metaTxId}:${item.metaTxBlockId}`;
+                const textToCopy = `${txId}:${blockId}`;
                 await window.copyToClipboard(textToCopy);
                 log('TxID:BlockID形式でコピーしました', 'success');
             }
@@ -3472,11 +3495,14 @@
                     const history = window.historyManager.getHistory();
                     const latestUpload = history.find(h => h.cid === window.currentFileCID);
                     if (latestUpload) {
-                        latestUpload.metaTxId = metaTxReference;
+                        // 両方のプロパティを正しく設定
+                        latestUpload.metaTxId = metaTxId;
+                        latestUpload.metaTxBlockId = metaBlockId;
+                        latestUpload.metaTxReference = metaTxReference; // 後方互換性のため
                         // Save updated history
                         localStorage.setItem(window.historyManager.dbName, JSON.stringify(history));
                         await window.historyManager.saveToFile();
-                        log('[UploadHistoryManager] メタTxIDを履歴に追加しました', 'debug');
+                        log('[UploadHistoryManager] メタTxIDとBlockIDを履歴に追加しました', 'debug');
                     }
                 }
                 
