@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.3.2 - Auto-Resume & History Edition</title>
+    <title>Kaspa P2P File Storage v3.3.3 - Auto-Resume & History Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -892,7 +892,7 @@
                 
                 // Create and download .kaspa file
                 const filename = `${item.fileName}.kaspa`;
-                const blob = new Blob([JSON.stringify(kaspaMetadata, null, 2)], { type: 'application/json' });
+                const blob = new Blob([JSON.stringify(kaspaMetadata, null, 2)], { type: 'application/octet-stream' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
