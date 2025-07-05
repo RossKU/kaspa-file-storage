@@ -830,9 +830,9 @@
                                 <span style="color: #666; font-size: 12px; margin-left: 10px;">${formatSize(item.fileSize)}</span>
                             </div>
                             <div class="history-item-actions">
-                                <button onclick="historyManager.generateKaspa('${item.id}'); log('[DEBUG] .kaspaボタンクリック - ID: ' + '${item.id}', 'debug');" class="small-button">📄 .kaspa</button>
-                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}'); log('[DEBUG] MetaTxIDボタンクリック - TxID: ' + '${item.metaTxId}'.substring(0, 16) + '...', 'debug');" class="small-button">📋 MetaTxID</button>` : ''}
-                                ${password !== 'なし' ? `<button onclick="copyToClipboard('${password}'); log('[DEBUG] Passボタンクリック', 'debug');" class="small-button">🔑 Pass</button>` : ''}
+                                <button onclick="historyManager.generateKaspa('${item.id}')" class="small-button">📄 .kaspa</button>
+                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}')" class="small-button">📋 MetaTxID</button>` : ''}
+                                ${password !== 'なし' ? `<button onclick="copyToClipboard('${password}')" class="small-button">🔑 Pass</button>` : ''}
                             </div>
                         </div>
                         <div style="font-size: 12px; color: #999;">
@@ -1053,7 +1053,8 @@
         
         // Utility functions
         function copyToClipboard(text) {
-            log(`[DEBUG] copyToClipboard が呼び出されました: ${text.substring(0, 20)}...`, 'debug');
+            const preview = text && text.length > 20 ? text.substring(0, 20) + '...' : text;
+            log(`[DEBUG] copyToClipboard が呼び出されました: ${preview}`, 'debug');
             navigator.clipboard.writeText(text).then(() => {
                 log('クリップボードにコピーしました', 'success');
             }).catch(err => {
