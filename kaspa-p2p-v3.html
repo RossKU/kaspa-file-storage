@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.2.2 - Auto-Resume & History Edition</title>
+    <title>Kaspa P2P File Storage v3.2.3 - Auto-Resume & History Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -1052,16 +1052,6 @@
         }
         
         // Utility functions
-        function copyToClipboard(text) {
-            const preview = text && text.length > 20 ? text.substring(0, 20) + '...' : text;
-            log(`[DEBUG] copyToClipboard が呼び出されました: ${preview}`, 'debug');
-            navigator.clipboard.writeText(text).then(() => {
-                log('クリップボードにコピーしました', 'success');
-            }).catch(err => {
-                log(`クリップボードへのコピーに失敗しました: ${err.message}`, 'error');
-            });
-        }
-        
         function formatSize(bytes) {
             if (bytes === 0) return '0 B';
             const k = 1024;
@@ -1071,10 +1061,12 @@
         }
         
         function copyToClipboard(text) {
+            const preview = text && text.length > 20 ? text.substring(0, 20) + '...' : text;
+            log(`[DEBUG] copyToClipboard が呼び出されました: ${preview}`, 'debug');
             navigator.clipboard.writeText(text).then(() => {
-                showToast('クリップボードにコピーしました', 'success');
+                log('クリップボードにコピーしました', 'success');
             }).catch(err => {
-                log('コピーエラー: ' + err.message, 'error');
+                log(`コピーエラー: ${err.message}`, 'error');
             });
         }
         
