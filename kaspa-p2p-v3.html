@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.2.0 - Auto-Resume & History Edition</title>
+    <title>Kaspa P2P File Storage v3.2.1 - Auto-Resume & History Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -816,7 +816,10 @@
             }
             
             createHistoryItem(item) {
-                const date = new Date(item.uploadDate).toLocaleString('ja-JP');
+                // Use blockchain time if available, otherwise fall back to upload date
+                const dateToUse = item.blockTime || item.uploadDate;
+                const date = new Date(dateToUse).toLocaleString('ja-JP');
+                log(`[DEBUG] 履歴アイテム表示 - ファイル: ${item.fileName}, 日時: ${date} (blockTime: ${item.blockTime ? 'あり' : 'なし'})`, 'debug');
                 const password = item.password || 'なし';
                 
                 return `
@@ -827,9 +830,9 @@
                                 <span style="color: #666; font-size: 12px; margin-left: 10px;">${formatSize(item.fileSize)}</span>
                             </div>
                             <div class="history-item-actions">
-                                <button onclick="historyManager.generateKaspa('${item.id}')" class="small-button">📄 .kaspa</button>
-                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}')" class="small-button">📋 MetaTxID</button>` : ''}
-                                ${password !== 'なし' ? `<button onclick="copyToClipboard('${password}')" class="small-button">🔑 Pass</button>` : ''}
+                                <button onclick="historyManager.generateKaspa('${item.id}'); log('[DEBUG] .kaspaボタンクリック - ID: ${item.id}', 'debug');" class="small-button">📄 .kaspa</button>
+                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}'); log('[DEBUG] MetaTxIDボタンクリック - TxID: ${item.metaTxId.substring(0, 16)}...', 'debug');" class="small-button">📋 MetaTxID</button>` : ''}
+                                ${password !== 'なし' ? `<button onclick="copyToClipboard('${password}'); log('[DEBUG] Passボタンクリック', 'debug');" class="small-button">🔑 Pass</button>` : ''}
                             </div>
                         </div>
                         <div style="font-size: 12px; color: #999;">
@@ -851,8 +854,61 @@
                 }
                 
                 log(`[UploadHistoryManager] 履歴項目が見つかりました: ${item.fileName}`, 'debug');
-                // TODO: Generate .kaspa file from history item
-                log('.kaspaファイル生成機能は実装中です', 'info');
+                
+                // Create .kaspa metadata from history
+                const kaspaMetadata = {
+                    version: "2.0",
+                    created: item.uploadDate,
+                    network: item.network || 'testnet-10',
+                    metadata: {
+                        metaTxId: item.metaTxId,
+                        metaTxBlockId: item.metaTxBlockId,
+                        uploadDate: item.uploadDate,
+                        blockTime: item.blockTime || item.uploadDate // Use blockTime if available
+                    },
+                    file: {
+                        name: item.fileName,
+                        size: item.fileSize,
+                        encrypted: true,
+                        compression: item.compression || {
+                            algorithm: "none",
+                            originalSize: item.fileSize,
+                            compressedSize: item.fileSize
+                        },
+                        encryption: {
+                            algorithm: "AES-256-GCM",
+                            salt: item.salt || ""
+                        }
+                    },
+                    chunks: item.chunkTxIds || [],
+                    chunkBlockIds: item.chunkBlockIds || [],
+                    recovery: {
+                        totalChunks: item.chunks,
+                        chunkSize: item.chunkSize || 12288,
+                        checksum: item.checksum || "",
+                        uploadCost: item.totalCost
+                    }
+                };
+                
+                // Check if password should be included
+                const includePassword = confirm('パスワードを.kaspaファイルに含めますか？\n\n含める場合：パスワード入力不要で復元可能\n含めない場合：復元時にパスワード入力が必要（より安全）');
+                
+                if (includePassword && item.password) {
+                    kaspaMetadata.password = item.password;
+                }
+                
+                // Create and download .kaspa file
+                const filename = `${item.fileName}.kaspa`;
+                const blob = new Blob([JSON.stringify(kaspaMetadata, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                log(`.kaspaファイルを生成しました: ${filename}`, 'success');
+                log(`[DEBUG] .kaspaファイル生成完了 - サイズ: ${blob.size} bytes`, 'debug');
             }
             
             async exportKenv() {
@@ -996,6 +1052,15 @@
         }
         
         // Utility functions
+        function copyToClipboard(text) {
+            log(`[DEBUG] copyToClipboard が呼び出されました: ${text.substring(0, 20)}...`, 'debug');
+            navigator.clipboard.writeText(text).then(() => {
+                log('クリップボードにコピーしました', 'success');
+            }).catch(err => {
+                log(`クリップボードへのコピーに失敗しました: ${err.message}`, 'error');
+            });
+        }
+        
         function formatSize(bytes) {
             if (bytes === 0) return '0 B';
             const k = 1024;
@@ -2720,20 +2785,42 @@
                 
                 // Add to history
                 if (window.historyManager) {
+                    // Get block time from last chunk or meta-tx
+                    let blockTime = null;
+                    if (processedChunks.length > 0 && processedChunks[processedChunks.length - 1].blockId) {
+                        // Check monitored transactions for block time
+                        for (const [txid, txData] of monitoredTransactions.entries()) {
+                            if (txData.blockId === processedChunks[processedChunks.length - 1].blockId && txData.blockTime) {
+                                blockTime = txData.blockTime.toISOString();
+                                log(`[DEBUG] 最後のチャンクのブロック時刻を取得: ${blockTime}`, 'debug');
+                                break;
+                            }
+                        }
+                    }
+                    
                     const uploadData = {
                         id: `upload_${Date.now()}`,
                         fileName: currentFile.name,
                         fileSize: currentFile.size,
                         fileSha256: fileHash,
                         uploadDate: new Date().toISOString(),
+                        blockTime: blockTime, // Add blockchain time if available
                         chunks: totalChunks,
                         totalCost: totalCost,
                         metaTxId: null, // Will be set if meta-tx is used
+                        metaTxBlockId: null, // Will be set if meta-tx is used
                         firstChunkTxId: processedChunks[0]?.txid || '',
                         cid: window.currentFileCID || '',
                         password: currentPassword || null,
-                        metadata: kaspaMetadata
+                        metadata: kaspaMetadata,
+                        chunkTxIds: processedChunks.map(c => c.txid),
+                        chunkBlockIds: processedChunks.map(c => c.blockId),
+                        chunkSize: config.chunkSize,
+                        salt: kaspaMetadata.encryption?.pbkdf2?.salt || '',
+                        compression: kaspaMetadata.compression,
+                        network: config.network
                     };
+                    log(`[DEBUG] 履歴データ生成完了 - ID: ${uploadData.id}`, 'debug');
                     await window.historyManager.addUpload(uploadData);
                     
                     // Delete .kprogress file if exists
@@ -3929,6 +4016,7 @@
                                     existing.foundAt = new Date();
                                     
                                     log(`[DEBUG] WebSocket: 監視中のトランザクション検出！ TxID: ${txId.substring(0, 16)}... BlockID: ${blockId.substring(0, 16)}...`, 'debug');
+                                    log(`[DEBUG] WebSocket: ブロック時刻を保存 - Time: ${blockTime.toISOString()}`, 'debug');
                                     myTransactionFound = true;
                                     
                                     // Check if upload is complete after finding this transaction
