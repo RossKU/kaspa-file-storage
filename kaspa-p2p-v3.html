@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.5.0 - Auto-Resume & History Edition</title>
+    <title>Kaspa P2P File Storage v3.6.0 - Auto-Resume & History Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -346,9 +346,9 @@
 </head>
 <body>
     <div class="header">
-        <h1>🚀 Kaspa P2P File Storage v3.5.0 - Auto-Resume & History Edition</h1>
+        <h1>🚀 Kaspa P2P File Storage v3.6.0 - Auto-Resume & History Edition</h1>
         <p>実ネットワーク接続による完全なP2Pファイル共有システム（レジューム＆履歴管理対応）</p>
-        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.5.0: 履歴タブ5ボタン化＆TxID:BlockID:Password形式サポート</p>
+        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.6.0: 並列ダウンロード実装 (目標: 100ブロック/秒)</p>
         <div id="networkStatus" style="margin-top: 10px;">
             <span class="status-indicator status-offline"></span>
             <span id="statusText">未接続</span>
@@ -559,6 +559,18 @@
             <div class="metric-box">
                 <h3>アップロード履歴</h3>
                 <div id="uploadHistory"></div>
+            </div>
+            
+            <div class="metric-box">
+                <h3>パフォーマンステスト</h3>
+                <p style="font-size: 14px; color: #999; margin-bottom: 10px;">
+                    並列ダウンロードの最適な同時接続数をテストします（目標: 100ブロック/秒）
+                </p>
+                <button onclick="testParallelPerformance()">🚀 並列ダウンロードテスト実行</button>
+                <div id="performanceResults" style="margin-top: 15px; display: none;">
+                    <h4>テスト結果:</h4>
+                    <div id="performanceChart" style="background: #0a0a0a; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -1477,6 +1489,138 @@
             }
         }
         
+        // Parallel Downloader Class
+        class ParallelDownloader {
+            constructor(rpcClient, concurrency = 8) {
+                this.rpcClient = rpcClient;
+                this.concurrency = concurrency;
+                this.queue = [];
+                this.active = 0;
+                this.results = new Map();
+                this.errors = new Map();
+                this.startTime = null;
+                this.completedCount = 0;
+                this.totalBytes = 0;
+            }
+            
+            async downloadChunks(chunksMetadata, key, kaspaMetadata, progressCallback) {
+                this.startTime = Date.now();
+                this.queue = chunksMetadata.map((chunk, index) => ({ chunk, index }));
+                this.results = new Map();
+                this.errors = new Map();
+                this.completedCount = 0;
+                this.totalBytes = 0;
+                
+                log(`並列ダウンロード開始: ${chunksMetadata.length}チャンク, ${this.concurrency}並列`, 'info');
+                
+                // Start workers
+                const workers = [];
+                for (let i = 0; i < this.concurrency; i++) {
+                    workers.push(this.worker(key, kaspaMetadata, progressCallback));
+                }
+                
+                // Wait for all workers
+                await Promise.all(workers);
+                
+                // Check for errors
+                if (this.errors.size > 0) {
+                    const errorMsg = Array.from(this.errors.entries())
+                        .map(([idx, err]) => `チャンク${idx}: ${err}`)
+                        .join(', ');
+                    throw new Error(`ダウンロードエラー: ${errorMsg}`);
+                }
+                
+                // Sort results by index
+                const sortedChunks = [];
+                for (let i = 0; i < chunksMetadata.length; i++) {
+                    if (!this.results.has(i)) {
+                        throw new Error(`チャンク${i}が見つかりません`);
+                    }
+                    sortedChunks.push(this.results.get(i));
+                }
+                
+                const elapsed = (Date.now() - this.startTime) / 1000;
+                const throughput = (this.totalBytes / 1024 / 1024) / elapsed;
+                log(`並列ダウンロード完了: ${elapsed.toFixed(1)}秒, ${throughput.toFixed(1)} MB/秒`, 'success');
+                
+                return sortedChunks;
+            }
+            
+            async worker(key, kaspaMetadata, progressCallback) {
+                while (this.queue.length > 0 || this.active > 0) {
+                    if (this.queue.length === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        continue;
+                    }
+                    
+                    const work = this.queue.shift();
+                    if (!work) continue;
+                    
+                    this.active++;
+                    
+                    try {
+                        const { chunk: chunkMeta, index } = work;
+                        
+                        // Get block data
+                        const response = await this.rpcClient.getBlock({
+                            hash: chunkMeta.blockId,
+                            includeTransactions: true
+                        });
+                        
+                        const block = response?.block?.block || response?.block;
+                        if (!block) {
+                            throw new Error(`ブロックが見つかりません: ${chunkMeta.blockId}`);
+                        }
+                        
+                        // Find transaction
+                        let payload = null;
+                        for (const tx of block.transactions || []) {
+                            const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
+                            if (txId === chunkMeta.txid) {
+                                if (tx.payload && tx.payload !== '') {
+                                    payload = safeHexDecode(tx.payload, 'chunk payload');
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (!payload) {
+                            throw new Error(`ペイロードが見つかりません`);
+                        }
+                        
+                        // Decrypt and decompress
+                        const compressed = await decryptChunk(payload, key, index);
+                        const original = kaspaMetadata.compression.enabled ? 
+                            lzDecompress(compressed) : compressed;
+                        
+                        this.results.set(index, original);
+                        this.completedCount++;
+                        this.totalBytes += original.length;
+                        
+                        // Update progress
+                        const elapsed = (Date.now() - this.startTime) / 1000;
+                        const speed = this.completedCount / elapsed;
+                        const throughput = (this.totalBytes / 1024 / 1024) / elapsed;
+                        
+                        if (progressCallback) {
+                            progressCallback({
+                                completed: this.completedCount,
+                                total: this.queue.length + this.completedCount + this.active - 1,
+                                speed: speed,
+                                throughput: throughput
+                            });
+                        }
+                        
+                    } catch (error) {
+                        log(`ワーカーエラー (チャンク${work.index}): ${error.message}`, 'error');
+                        this.errors.set(work.index, error.message);
+                    } finally {
+                        this.active--;
+                    }
+                }
+            }
+        }
+        
         // Configuration
         const config = {
             network: 'testnet-10',
@@ -1629,6 +1773,188 @@
                     } else {
                         throw error;
                     }
+                }
+            }
+        }
+        
+        // Parallel downloader for high-speed chunk retrieval
+        class ParallelDownloader {
+            constructor(rpcClient, concurrency = 8) {
+                this.rpcClient = rpcClient;
+                this.concurrency = concurrency;
+                this.queue = [];
+                this.active = 0;
+                this.results = new Map();
+                this.errors = new Map();
+                this.stats = {
+                    startTime: Date.now(),
+                    completed: 0,
+                    failed: 0,
+                    totalBytes: 0,
+                    lastUpdate: Date.now()
+                };
+            }
+            
+            async downloadChunks(chunkMetadata, key, kaspaMetadata, onProgress) {
+                // Reset stats
+                this.stats = {
+                    startTime: Date.now(),
+                    completed: 0,
+                    failed: 0,
+                    totalBytes: 0,
+                    lastUpdate: Date.now()
+                };
+                this.results.clear();
+                this.errors.clear();
+                
+                // すべてのチャンクをキューに追加
+                this.queue = chunkMetadata.map((meta, index) => ({
+                    index,
+                    meta,
+                    retries: 0
+                }));
+                
+                log(`並列ダウンロード開始: ${chunkMetadata.length}チャンク, 並列度: ${this.concurrency}`, 'info');
+                
+                // ワーカーを起動
+                const workers = [];
+                for (let i = 0; i < this.concurrency; i++) {
+                    workers.push(this.worker(key, kaspaMetadata, onProgress));
+                }
+                
+                // すべてのワーカーが完了するまで待つ
+                await Promise.all(workers);
+                
+                // エラーチェック
+                if (this.errors.size > 0) {
+                    const errorRate = (this.errors.size / chunkMetadata.length) * 100;
+                    log(`ダウンロードエラー: ${this.errors.size}/${chunkMetadata.length} (${errorRate.toFixed(1)}%)`, 'error');
+                    
+                    if (errorRate > 50) {
+                        throw new Error(`ダウンロード失敗率が高すぎます: ${errorRate.toFixed(1)}%`);
+                    }
+                }
+                
+                // 結果を順序通りに並べる
+                const orderedResults = [];
+                for (let i = 0; i < chunkMetadata.length; i++) {
+                    if (this.results.has(i)) {
+                        orderedResults.push(this.results.get(i));
+                    } else {
+                        const error = this.errors.get(i);
+                        throw new Error(`チャンク ${i + 1} のダウンロードに失敗: ${error?.message || '不明なエラー'}`);
+                    }
+                }
+                
+                // 最終統計
+                const elapsed = (Date.now() - this.stats.startTime) / 1000;
+                const speed = this.stats.completed / elapsed;
+                const throughput = (this.stats.totalBytes / 1024 / 1024) / elapsed;
+                log(`ダウンロード完了: ${speed.toFixed(1)} チャンク/秒, ${throughput.toFixed(1)} MB/秒`, 'success');
+                
+                return orderedResults;
+            }
+            
+            async worker(key, kaspaMetadata, onProgress) {
+                while (this.queue.length > 0 || this.active > 0) {
+                    const task = this.queue.shift();
+                    if (!task) {
+                        // キューが空の場合は少し待つ
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        continue;
+                    }
+                    
+                    this.active++;
+                    
+                    try {
+                        const result = await this.downloadChunk(task, key, kaspaMetadata);
+                        this.results.set(task.index, result);
+                        this.stats.completed++;
+                        
+                        // 進捗更新（1秒に1回まで）
+                        if (onProgress && Date.now() - this.stats.lastUpdate > 1000) {
+                            this.stats.lastUpdate = Date.now();
+                            const elapsed = (Date.now() - this.stats.startTime) / 1000;
+                            const speed = this.stats.completed / elapsed;
+                            const total = this.stats.completed + this.queue.length + this.active;
+                            onProgress({
+                                completed: this.stats.completed,
+                                total: total,
+                                speed: speed,
+                                throughput: (this.stats.totalBytes / 1024 / 1024) / elapsed,
+                                estimatedTime: ((total - this.stats.completed) / speed)
+                            });
+                        }
+                    } catch (error) {
+                        task.retries++;
+                        if (task.retries < 3) {
+                            // リトライ
+                            log(`チャンク ${task.index + 1} リトライ ${task.retries}/3: ${error.message}`, 'warning');
+                            this.queue.push(task);
+                        } else {
+                            // 失敗
+                            log(`チャンク ${task.index + 1} 失敗: ${error.message}`, 'error');
+                            this.errors.set(task.index, error);
+                            this.stats.failed++;
+                        }
+                    } finally {
+                        this.active--;
+                    }
+                }
+            }
+            
+            async downloadChunk(task, key, kaspaMetadata) {
+                const { index, meta } = task;
+                const startTime = Date.now();
+                
+                try {
+                    // ブロック取得
+                    const response = await this.rpcClient.getBlock({
+                        hash: meta.blockId,
+                        includeTransactions: true
+                    });
+                    
+                    const block = response?.block?.block || response?.block;
+                    if (!block) {
+                        throw new Error(`ブロックが見つかりません: ${meta.blockId}`);
+                    }
+                    
+                    // トランザクション検索
+                    let payload = null;
+                    for (const tx of block.transactions || []) {
+                        const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
+                        if (txId === meta.txid) {
+                            if (tx.payload && tx.payload !== '') {
+                                payload = safeHexDecode(tx.payload, 'chunk payload');
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!payload) {
+                        throw new Error(`ペイロードが見つかりません: TxID ${meta.txid.substring(0, 16)}...`);
+                    }
+                    
+                    // 復号化
+                    const decrypted = await decryptChunk(payload, key, index);
+                    
+                    // 解凍（必要な場合）
+                    const decompressed = kaspaMetadata.compression?.enabled ? 
+                        lzDecompress(decrypted) : decrypted;
+                    
+                    this.stats.totalBytes += decompressed.length;
+                    
+                    const elapsed = Date.now() - startTime;
+                    if (elapsed > 5000) {
+                        log(`チャンク ${index + 1} 完了: ${elapsed}ms (遅い)`, 'warning');
+                    }
+                    
+                    return decompressed;
+                    
+                } catch (error) {
+                    const elapsed = Date.now() - startTime;
+                    log(`チャンク ${index + 1} エラー (${elapsed}ms): ${error.message}`, 'error');
+                    throw error;
                 }
             }
         }
@@ -2109,6 +2435,71 @@
                 log(`接続テストエラー: ${error.message}`, 'error');
             }
         };
+        
+        // Test parallel RPC performance
+        window.testParallelPerformance = async function() {
+            if (!rpcClient) {
+                log('先にシステムを初期化してください', 'error');
+                return;
+            }
+            
+            log('並列RPCパフォーマンステストを開始...', 'info');
+            
+            try {
+                // 最新のブロック情報を取得
+                const info = await rpcClient.getServerInfo();
+                log(`現在のDAA: ${info.daaScore}`, 'info');
+                
+                // テスト1: シーケンシャル
+                log('--- シーケンシャルテスト (10リクエスト) ---', 'info');
+                const seqStart = Date.now();
+                for (let i = 0; i < 10; i++) {
+                    await rpcClient.getServerInfo();
+                }
+                const seqTime = Date.now() - seqStart;
+                const seqRate = (10 / seqTime) * 1000;
+                log(`シーケンシャル: ${seqTime}ms (${seqRate.toFixed(1)} req/sec)`, 'success');
+                
+                // テスト2: 並列（5並列）
+                log('--- 並列テスト (5並列 x 10リクエスト) ---', 'info');
+                const par5Start = Date.now();
+                const promises5 = [];
+                for (let i = 0; i < 10; i++) {
+                    promises5.push(rpcClient.getServerInfo());
+                    if ((i + 1) % 5 === 0) {
+                        await Promise.all(promises5.splice(0, 5));
+                    }
+                }
+                const par5Time = Date.now() - par5Start;
+                const par5Rate = (10 / par5Time) * 1000;
+                log(`5並列: ${par5Time}ms (${par5Rate.toFixed(1)} req/sec)`, 'success');
+                
+                // テスト3: 並列（10並列）
+                log('--- 並列テスト (10並列) ---', 'info');
+                const par10Start = Date.now();
+                const promises10 = [];
+                for (let i = 0; i < 10; i++) {
+                    promises10.push(rpcClient.getServerInfo());
+                }
+                await Promise.all(promises10);
+                const par10Time = Date.now() - par10Start;
+                const par10Rate = (10 / par10Time) * 1000;
+                log(`10並列: ${par10Time}ms (${par10Rate.toFixed(1)} req/sec)`, 'success');
+                
+                // 結果サマリー
+                log('=== パフォーマンステスト結果 ===', 'info');
+                log(`シーケンシャル: ${seqRate.toFixed(1)} req/sec`, 'info');
+                log(`5並列: ${par5Rate.toFixed(1)} req/sec (${(par5Rate/seqRate).toFixed(1)}x高速)`, 'info');
+                log(`10並列: ${par10Rate.toFixed(1)} req/sec (${(par10Rate/seqRate).toFixed(1)}x高速)`, 'info');
+                
+                // 推奨並列数の計算
+                const optimalConcurrency = par10Rate > par5Rate * 1.5 ? 10 : 5;
+                log(`推奨並列数: ${optimalConcurrency}`, 'success');
+                
+            } catch (error) {
+                log(`パフォーマンステストエラー: ${error.message}`, 'error');
+            }
+        };
 
         // File handling
         window.handleFileSelect = async function(event) {
@@ -2362,6 +2753,27 @@
             return Array.from(new Uint8Array(hash))
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join('');
+        }
+
+        // Simple LZ compression/decompression using browser's built-in CompressionStream/DecompressionStream
+        // Note: In production, you might want to use a library like LZ-String
+        async function lzCompress(data) {
+            // For now, return data as-is since compression is optional
+            // In production, implement proper LZ compression
+            return data;
+        }
+
+        function lzDecompress(data) {
+            // For now, return data as-is since compression is optional
+            // In production, implement proper LZ decompression
+            return data;
+        }
+
+        // Check if file should be compressed based on type
+        function shouldCompress(filename) {
+            const ext = filename.toLowerCase().split('.').pop();
+            const compressedTypes = ['jpg', 'jpeg', 'png', 'gif', 'mp4', 'mp3', 'zip', 'rar', '7z', 'gz'];
+            return !compressedTypes.includes(ext);
         }
 
         // Calculate safe payload size based on storage mass limit
@@ -3604,7 +4016,7 @@
             }
         };
 
-        // Download file
+        // Download file with parallel chunk retrieval
         window.downloadFile = async function() {
             let password = document.getElementById('downloadPassword').value;
             
@@ -3629,116 +4041,89 @@
             
             document.getElementById('downloadProgress').style.display = 'block';
             
+            // 並列モードの選択
+            const useParallel = kaspaMetadata.chunks.length > 10; // 10チャンク以上なら並列モード
+            
             try {
-                log(`ダウンロード開始: ${kaspaMetadata.file.name}`);
+                log(`ダウンロード開始: ${kaspaMetadata.file.name} (${kaspaMetadata.chunks.length}チャンク)`);
                 
                 // Derive key
                 const salt = fromBase64(kaspaMetadata.encryption.pbkdf2.salt);
                 const key = await deriveKey(password, salt);
                 
-                const chunks = [];
+                let chunks;
                 
-                for (let i = 0; i < kaspaMetadata.chunks.length; i++) {
-                    const chunkMeta = kaspaMetadata.chunks[i];
+                if (useParallel) {
+                    // 並列ダウンロード
+                    log(`並列ダウンロードモードを使用します`, 'info');
+                    const downloader = new ParallelDownloader(rpcClient, 8); // 8並列
                     
-                    document.getElementById('downloadStatus').textContent = 
-                        `チャンク ${i + 1}/${kaspaMetadata.chunks.length} を取得中...`;
+                    chunks = await downloader.downloadChunks(
+                        kaspaMetadata.chunks,
+                        key,
+                        kaspaMetadata,
+                        (progress) => {
+                            const percent = ((progress.completed / progress.total) * 100).toFixed(0);
+                            document.getElementById('downloadProgressBar').style.width = percent + '%';
+                            document.getElementById('downloadProgressBar').textContent = percent + '%';
+                            document.getElementById('downloadStatus').textContent = 
+                                `${progress.completed}/${progress.total} チャンク (${progress.speed.toFixed(1)} チャンク/秒, ${progress.throughput.toFixed(1)} MB/秒)`;
+                        }
+                    );
+                } else {
+                    // シーケンシャルダウンロード（小さいファイル用）
+                    log(`シーケンシャルダウンロードモードを使用します`, 'info');
+                    chunks = [];
                     
-                    try {
-                        log(`チャンク ${i + 1}: BlockID ${chunkMeta.blockId.substring(0, 16)}...`, 'info');
+                    for (let i = 0; i < kaspaMetadata.chunks.length; i++) {
+                        const chunkMeta = kaspaMetadata.chunks[i];
                         
-                        // Get block data
-                        const request = { 
-                            hash: chunkMeta.blockId, 
-                            includeTransactions: true 
-                        };
-                        log(`RPC getBlock request: ${JSON.stringify(request)}`, 'info');
+                        document.getElementById('downloadStatus').textContent = 
+                            `チャンク ${i + 1}/${kaspaMetadata.chunks.length} を取得中...`;
                         
-                        let response;
                         try {
-                            response = await rpcClient.getBlock(request);
-                            log(`RPC getBlock response received`, 'info');
-                            log(`Response type: ${typeof response}`, 'info');
-                            log(`Response keys: ${Object.keys(response || {}).join(', ')}`, 'info');
-                        } catch (rpcError) {
-                            log(`RPC getBlock error: ${rpcError.message || rpcError}`, 'error');
-                            log(`Error type: ${rpcError.constructor.name}`, 'error');
-                            throw rpcError;
-                        }
-                        
-                        const block = response?.block?.block || response?.block;
-                        log(`Block extracted: ${!!block}`, 'info');
-                        
-                        if (!block) {
-                            log(`Block not found in response structure`, 'error');
-                            throw new Error(`ブロックが見つかりません: ${chunkMeta.blockId}`);
-                        }
-                        
-                        // Find transaction with matching TxID
-                        let payload = null;
-                        const txCount = block.transactions?.length || 0;
-                        log(`ブロック内のトランザクション数: ${txCount}`, 'info');
-                        
-                        if (txCount === 0) {
-                            log(`警告: トランザクションが含まれていません`, 'warning');
-                            // BigIntを含む可能性があるのでJSON.stringifyは避ける
-                            log(`Block has header.hash: ${block.header?.hash}`, 'warning');
-                        }
-                        
-                        for (const tx of block.transactions || []) {
-                            // BigIntを含む可能性があるのでJSON.stringifyは避ける
-                            log(`Checking transaction...`, 'info');
-                            const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
-                            log(`Transaction ID variants: verboseData.transactionId=${tx.verboseData?.transactionId}, tx.id=${tx.id}, tx.transactionId=${tx.transactionId}`, 'info');
+                            // Get block data
+                            const response = await rpcClient.getBlock({
+                                hash: chunkMeta.blockId,
+                                includeTransactions: true
+                            });
                             
-                            if (txId === chunkMeta.txid) {
-                                log(`TxID一致: ${txId.substring(0, 16)}...`, 'info');
-                                log(`tx.payload exists: ${!!tx.payload}, length: ${tx.payload?.length || 0}`, 'info');
-                                
-                                if (tx.payload && tx.payload !== '') {
-                                    // Get raw binary payload from hex (blockchain stores as hex)
-                                    const hexPayload = tx.payload;
-                                    log(`ペイロード長: ${hexPayload.length} 文字 (hex)`, 'info');
-                                    log(`最初の100文字: ${hexPayload.substring(0, 100)}...`, 'info');
-                                    
-                                    // Blockchain stores binary payloads as hex strings
-                                    try {
-                                        payload = safeHexDecode(hexPayload, 'chunk payload');
-                                        log(`Hex decode成功: ${payload.length} バイト (生バイナリ)`, 'info');
-                                    } catch (e) {
-                                        log(`Hex decode error details: ${e.stack || e}`, 'error');
-                                        throw new Error(`ペイロードのデコードに失敗: ${e.message}`);
-                                    }
-                                    break;
-                                } else {
-                                    log(`警告: ペイロードが空です (TxID: ${txId})`, 'warning');
-                                }
-                            } else {
-                                log(`TxID不一致: ${txId} !== ${chunkMeta.txid}`, 'info');
+                            const block = response?.block?.block || response?.block;
+                            if (!block) {
+                                throw new Error(`ブロックが見つかりません: ${chunkMeta.blockId}`);
                             }
+                            
+                            // Find transaction with matching TxID
+                            let payload = null;
+                            for (const tx of block.transactions || []) {
+                                const txId = tx.verboseData?.transactionId || tx.id || tx.transactionId;
+                                if (txId === chunkMeta.txid) {
+                                    if (tx.payload && tx.payload !== '') {
+                                        payload = safeHexDecode(tx.payload, 'chunk payload');
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (!payload) {
+                                throw new Error(`チャンク ${i + 1} のペイロードが見つかりません`);
+                            }
+                            
+                            // Decrypt and decompress
+                            const compressed = await decryptChunk(payload, key, i);
+                            const original = kaspaMetadata.compression.enabled ? lzDecompress(compressed) : compressed;
+                            
+                            chunks.push(original);
+                            
+                            // Update progress
+                            const progress = ((i + 1) / kaspaMetadata.chunks.length * 100).toFixed(0);
+                            document.getElementById('downloadProgressBar').style.width = progress + '%';
+                            document.getElementById('downloadProgressBar').textContent = progress + '%';
+                            
+                        } catch (error) {
+                            log(`チャンク ${i + 1} エラー: ${error.message}`, 'error');
+                            throw error;
                         }
-                        
-                        if (!payload) {
-                            throw new Error(`チャンク ${i + 1} のペイロードが見つかりません`);
-                        }
-                        
-                        // Decrypt and decompress
-                        const encrypted = payload; // Already binary Uint8Array
-                        const compressed = await decryptChunk(encrypted, key, i);
-                        const original = kaspaMetadata.compression.enabled ? lzDecompress(compressed) : compressed;
-                        
-                        chunks.push(original);
-                        
-                        // Update progress
-                        const progress = ((i + 1) / kaspaMetadata.chunks.length * 100).toFixed(0);
-                        document.getElementById('downloadProgressBar').style.width = progress + '%';
-                        document.getElementById('downloadProgressBar').textContent = progress + '%';
-                        
-                        log(`チャンク ${i + 1} 取得成功`);
-                        
-                    } catch (error) {
-                        log(`チャンク ${i + 1} エラー: ${error.message}`, 'error');
-                        throw error;
                     }
                 }
                 
@@ -3873,6 +4258,135 @@
                 document.getElementById('monitorLog').innerHTML = '';
                 log('ログをクリアしました', 'info');
             }
+        };
+
+        // Performance test for parallel downloads
+        window.testParallelPerformance = async function() {
+            if (!rpcClient) {
+                log('先にシステムを初期化してください', 'error');
+                return;
+            }
+            
+            // Check if we have any upload history to test with
+            const history = historyManager?.getHistory() || [];
+            const testableItems = history.filter(item => 
+                item.chunkBlockIds?.length > 0 && 
+                item.chunkTxIds?.length > 0
+            );
+            
+            if (testableItems.length === 0) {
+                log('テスト可能なアップロード履歴がありません。まずファイルをアップロードしてください。', 'error');
+                return;
+            }
+            
+            // Use the most recent upload with at least 10 chunks
+            const testItem = testableItems.find(item => item.chunks >= 10) || testableItems[0];
+            
+            if (testItem.chunks < 10) {
+                log(`テスト用のチャンク数が少なすぎます (${testItem.chunks}チャンク)。より大きなファイルでテストすることを推奨します。`, 'warning');
+            }
+            
+            log(`パフォーマンステスト開始: ${testItem.fileName} (${testItem.chunks}チャンク)`, 'info');
+            document.getElementById('performanceResults').style.display = 'block';
+            const chartDiv = document.getElementById('performanceChart');
+            chartDiv.innerHTML = '<p>テスト中...</p>';
+            
+            // Test different concurrency levels
+            const concurrencyLevels = [1, 2, 4, 8, 16, 32];
+            const results = [];
+            
+            for (const concurrency of concurrencyLevels) {
+                log(`${concurrency}並列でテスト中...`, 'info');
+                
+                try {
+                    const startTime = Date.now();
+                    let totalBlocks = 0;
+                    
+                    // Download first 10 chunks (or all if less)
+                    const testChunks = Math.min(10, testItem.chunks);
+                    const chunkPromises = [];
+                    
+                    // Create a simple parallel downloader for testing
+                    const downloadWorker = async (chunkIndex) => {
+                        const blockId = testItem.chunkBlockIds[chunkIndex];
+                        if (!blockId) return null;
+                        
+                        try {
+                            const response = await rpcClient.getBlock({
+                                hash: blockId,
+                                includeTransactions: true
+                            });
+                            return response?.block ? 1 : 0;
+                        } catch (error) {
+                            return 0;
+                        }
+                    };
+                    
+                    // Run downloads in parallel batches
+                    for (let i = 0; i < testChunks; i += concurrency) {
+                        const batch = [];
+                        for (let j = 0; j < concurrency && (i + j) < testChunks; j++) {
+                            batch.push(downloadWorker(i + j));
+                        }
+                        const batchResults = await Promise.all(batch);
+                        totalBlocks += batchResults.reduce((sum, val) => sum + val, 0);
+                    }
+                    
+                    const elapsed = (Date.now() - startTime) / 1000;
+                    const blocksPerSecond = totalBlocks / elapsed;
+                    
+                    results.push({
+                        concurrency: concurrency,
+                        time: elapsed,
+                        blocks: totalBlocks,
+                        speed: blocksPerSecond
+                    });
+                    
+                    log(`${concurrency}並列: ${blocksPerSecond.toFixed(1)} ブロック/秒`, 'info');
+                    
+                } catch (error) {
+                    log(`${concurrency}並列テストエラー: ${error.message}`, 'error');
+                    results.push({
+                        concurrency: concurrency,
+                        time: 0,
+                        blocks: 0,
+                        speed: 0
+                    });
+                }
+            }
+            
+            // Display results
+            const maxSpeed = Math.max(...results.map(r => r.speed));
+            const optimal = results.find(r => r.speed === maxSpeed);
+            
+            let chartHtml = '<h4>テスト結果:</h4>';
+            chartHtml += '<table style="width: 100%; font-size: 12px;">';
+            chartHtml += '<tr><th>並列数</th><th>時間(秒)</th><th>ブロック数</th><th>速度(ブロック/秒)</th><th>グラフ</th></tr>';
+            
+            results.forEach(result => {
+                const barWidth = result.speed > 0 ? (result.speed / maxSpeed * 100) : 0;
+                const isOptimal = result.concurrency === optimal.concurrency;
+                chartHtml += `<tr style="${isOptimal ? 'background: rgba(76, 175, 80, 0.2);' : ''}">`;
+                chartHtml += `<td>${result.concurrency}</td>`;
+                chartHtml += `<td>${result.time.toFixed(2)}</td>`;
+                chartHtml += `<td>${result.blocks}</td>`;
+                chartHtml += `<td>${result.speed.toFixed(1)}</td>`;
+                chartHtml += `<td><div style="background: ${isOptimal ? '#4CAF50' : '#e94560'}; width: ${barWidth}%; height: 15px;"></div></td>`;
+                chartHtml += '</tr>';
+            });
+            
+            chartHtml += '</table>';
+            chartHtml += `<p style="margin-top: 15px; color: #4CAF50;">最適な並列数: <strong>${optimal.concurrency}</strong> (${optimal.speed.toFixed(1)} ブロック/秒)</p>`;
+            
+            if (optimal.speed >= 100) {
+                chartHtml += '<p style="color: #4CAF50;">✅ 目標の100ブロック/秒を達成しました！</p>';
+            } else {
+                chartHtml += `<p style="color: #ffc107;">⚠️ 目標の100ブロック/秒には達していません (現在: ${optimal.speed.toFixed(1)} ブロック/秒)</p>`;
+            }
+            
+            chartDiv.innerHTML = chartHtml;
+            
+            log(`パフォーマンステスト完了。最適な並列数: ${optimal.concurrency}`, 'success');
         };
 
         window.copyLog = function() {
