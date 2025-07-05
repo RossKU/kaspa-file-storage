@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.2.1 - Auto-Resume & History Edition</title>
+    <title>Kaspa P2P File Storage v3.2.2 - Auto-Resume & History Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -830,8 +830,8 @@
                                 <span style="color: #666; font-size: 12px; margin-left: 10px;">${formatSize(item.fileSize)}</span>
                             </div>
                             <div class="history-item-actions">
-                                <button onclick="historyManager.generateKaspa('${item.id}'); log('[DEBUG] .kaspaボタンクリック - ID: ${item.id}', 'debug');" class="small-button">📄 .kaspa</button>
-                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}'); log('[DEBUG] MetaTxIDボタンクリック - TxID: ${item.metaTxId.substring(0, 16)}...', 'debug');" class="small-button">📋 MetaTxID</button>` : ''}
+                                <button onclick="historyManager.generateKaspa('${item.id}'); log('[DEBUG] .kaspaボタンクリック - ID: ' + '${item.id}', 'debug');" class="small-button">📄 .kaspa</button>
+                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}'); log('[DEBUG] MetaTxIDボタンクリック - TxID: ' + '${item.metaTxId}'.substring(0, 16) + '...', 'debug');" class="small-button">📋 MetaTxID</button>` : ''}
                                 ${password !== 'なし' ? `<button onclick="copyToClipboard('${password}'); log('[DEBUG] Passボタンクリック', 'debug');" class="small-button">🔑 Pass</button>` : ''}
                             </div>
                         </div>
