@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v3.4.0 - Auto-Resume & History Edition</title>
+    <title>Kaspa P2P File Storage v3.5.0 - Auto-Resume & History Edition</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -346,9 +346,9 @@
 </head>
 <body>
     <div class="header">
-        <h1>🚀 Kaspa P2P File Storage v3.4.0 - Auto-Resume & History Edition</h1>
+        <h1>🚀 Kaspa P2P File Storage v3.5.0 - Auto-Resume & History Edition</h1>
         <p>実ネットワーク接続による完全なP2Pファイル共有システム（レジューム＆履歴管理対応）</p>
-        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.4.0: 履歴タブで鍵付き/鍵なし.kaspaを選択可能に</p>
+        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.5.0: 履歴タブ5ボタン化＆TxID:BlockID:Password形式サポート</p>
         <div id="networkStatus" style="margin-top: 10px;">
             <span class="status-indicator status-offline"></span>
             <span id="statusText">未接続</span>
@@ -462,6 +462,7 @@
                 <div class="info" style="margin-top: 10px; font-size: 12px;">
                     <p>📌 対応フォーマット:</p>
                     <ul style="margin: 5px 0; padding-left: 20px;">
+                        <li>TxID:BlockID:Password形式（パスワード自動入力）</li>
                         <li>TxID:BlockID形式（推奨、REST API不要）</li>
                         <li>TxIDのみ（REST API必要）</li>
                     </ul>
@@ -837,7 +838,40 @@
                 const dateToUse = item.blockTime || item.uploadDate;
                 const date = new Date(dateToUse).toLocaleString('ja-JP');
                 log(`[DEBUG] 履歴アイテム表示 - ファイル: ${item.fileName}, 日時: ${date} (blockTime: ${item.blockTime ? 'あり' : 'なし'})`, 'debug');
-                const password = item.password || 'なし';
+                
+                const hasPassword = item.password && item.password !== 'なし';
+                const hasMetaTxId = item.metaTxId && item.metaTxBlockId;
+                
+                // Generate buttons based on available data
+                const buttons = [];
+                
+                // .kaspa buttons
+                if (hasPassword) {
+                    buttons.push(`<button onclick="historyManager.generateKaspaWithPassword('${item.id}')" class="small-button" title="パスワード付き.kaspaファイル">🔐.kaspa</button>`);
+                } else {
+                    buttons.push(`<button class="small-button disabled" title="パスワードが保存されていません" style="opacity: 0.5; cursor: not-allowed;">🔐.kaspa</button>`);
+                }
+                buttons.push(`<button onclick="historyManager.generateKaspaWithoutPassword('${item.id}')" class="small-button" title="パスワードなし.kaspaファイル">🔓.kaspa</button>`);
+                
+                // TxID buttons
+                if (hasMetaTxId) {
+                    if (hasPassword) {
+                        buttons.push(`<button onclick="historyManager.copyMetaTxIdWithPassword('${item.id}')" class="small-button" title="TxID:BlockID:Password形式でコピー">🔐TxID</button>`);
+                    } else {
+                        buttons.push(`<button class="small-button disabled" title="パスワードが保存されていません" style="opacity: 0.5; cursor: not-allowed;">🔐TxID</button>`);
+                    }
+                    buttons.push(`<button onclick="historyManager.copyMetaTxIdWithoutPassword('${item.id}')" class="small-button" title="TxID:BlockID形式でコピー">🔓TxID</button>`);
+                } else {
+                    buttons.push(`<button class="small-button disabled" title="メタトランザクションIDが存在しません" style="opacity: 0.5; cursor: not-allowed;">🔐TxID</button>`);
+                    buttons.push(`<button class="small-button disabled" title="メタトランザクションIDが存在しません" style="opacity: 0.5; cursor: not-allowed;">🔓TxID</button>`);
+                }
+                
+                // Password button
+                if (hasPassword) {
+                    buttons.push(`<button onclick="copyToClipboard('${item.password}')" class="small-button" title="パスワードをコピー">🔑Pass</button>`);
+                } else {
+                    buttons.push(`<button class="small-button disabled" title="パスワードが保存されていません" style="opacity: 0.5; cursor: not-allowed;">🔑Pass</button>`);
+                }
                 
                 return `
                     <div class="history-item">
@@ -847,9 +881,7 @@
                                 <span style="color: #666; font-size: 12px; margin-left: 10px;">${formatSize(item.fileSize)}</span>
                             </div>
                             <div class="history-item-actions">
-                                <button onclick="historyManager.generateKaspaWithPassword('${item.id}')" class="small-button" title="パスワード付き.kaspaファイル">🔐 鍵付き.kaspa</button>
-                                <button onclick="historyManager.generateKaspaWithoutPassword('${item.id}')" class="small-button" title="パスワードなし.kaspaファイル">🔓 鍵なし.kaspa</button>
-                                ${item.metaTxId ? `<button onclick="copyToClipboard('${item.metaTxId}')" class="small-button" title="メタトランザクションIDをコピー">📋 MetaTxID</button>` : ''}
+                                ${buttons.join('\n                                ')}
                             </div>
                         </div>
                         <div style="font-size: 12px; color: #999;">
@@ -863,12 +895,71 @@
             
             async generateKaspaWithPassword(uploadId) {
                 log(`[UploadHistoryManager] パスワード付き.kaspaファイルの生成を開始します (ID: ${uploadId})`, 'debug');
+                const history = this.getHistory();
+                const item = history.find(h => h.id === uploadId);
+                if (!item) {
+                    log(`[UploadHistoryManager] 指定されたIDの履歴が見つかりません: ${uploadId}`, 'error');
+                    return;
+                }
+                
+                if (!item.password) {
+                    log('パスワードが保存されていません', 'warning');
+                    alert('パスワードが保存されていません。鍵なし.kaspaをご利用ください。');
+                    return;
+                }
+                
                 await this.generateKaspa(uploadId, true);
             }
             
             async generateKaspaWithoutPassword(uploadId) {
                 log(`[UploadHistoryManager] パスワードなし.kaspaファイルの生成を開始します (ID: ${uploadId})`, 'debug');
                 await this.generateKaspa(uploadId, false);
+            }
+            
+            async copyMetaTxIdWithPassword(uploadId) {
+                log(`[UploadHistoryManager] パスワード付きTxIDのコピーを開始します (ID: ${uploadId})`, 'debug');
+                const history = this.getHistory();
+                const item = history.find(h => h.id === uploadId);
+                if (!item) {
+                    log(`[UploadHistoryManager] 指定されたIDの履歴が見つかりません: ${uploadId}`, 'error');
+                    return;
+                }
+                
+                if (!item.metaTxId || !item.metaTxBlockId) {
+                    log('メタトランザクションIDが存在しません', 'warning');
+                    alert('メタトランザクションIDが存在しません');
+                    return;
+                }
+                
+                if (!item.password) {
+                    log('パスワードが保存されていません', 'warning');
+                    alert('パスワードが保存されていません。鍵なしTxIDをご利用ください。');
+                    return;
+                }
+                
+                const textToCopy = `${item.metaTxId}:${item.metaTxBlockId}:${item.password}`;
+                await window.copyToClipboard(textToCopy);
+                log('パスワード付きTxIDをコピーしました（パスワードが含まれています）', 'warning');
+            }
+            
+            async copyMetaTxIdWithoutPassword(uploadId) {
+                log(`[UploadHistoryManager] パスワードなしTxIDのコピーを開始します (ID: ${uploadId})`, 'debug');
+                const history = this.getHistory();
+                const item = history.find(h => h.id === uploadId);
+                if (!item) {
+                    log(`[UploadHistoryManager] 指定されたIDの履歴が見つかりません: ${uploadId}`, 'error');
+                    return;
+                }
+                
+                if (!item.metaTxId || !item.metaTxBlockId) {
+                    log('メタトランザクションIDが存在しません', 'warning');
+                    alert('メタトランザクションIDが存在しません');
+                    return;
+                }
+                
+                const textToCopy = `${item.metaTxId}:${item.metaTxBlockId}`;
+                await window.copyToClipboard(textToCopy);
+                log('TxID:BlockID形式でコピーしました', 'success');
             }
             
             async generateKaspa(uploadId, includePassword) {
@@ -3210,18 +3301,32 @@
         // Load from Meta-TxID
         window.loadFromMetaTxId = async function() {
             const metaTxIdInput = document.getElementById('metaTxIdInput').value.trim();
-            const password = document.getElementById('metaTxPassword').value;
+            let passwordFromField = document.getElementById('metaTxPassword').value;
             
-            // Check if input contains BlockID (format: txid:blockid)
-            let metaTxId, blockId;
-            if (metaTxIdInput.includes(':')) {
-                const parts = metaTxIdInput.split(':');
+            // Check input format (supports 3 patterns)
+            let metaTxId, blockId, password;
+            const parts = metaTxIdInput.split(':');
+            
+            if (parts.length === 3) {
+                // Format: TxID:BlockID:Password
                 metaTxId = parts[0];
                 blockId = parts[1];
+                password = parts[2];
+                log(`TxID:BlockID:Password形式で復元: ${metaTxId.substring(0, 16)}...:${blockId.substring(0, 16)}...:****`, 'info');
+                
+                // Auto-fill password field for user visibility
+                document.getElementById('metaTxPassword').value = password;
+            } else if (parts.length === 2) {
+                // Format: TxID:BlockID
+                metaTxId = parts[0];
+                blockId = parts[1];
+                password = passwordFromField;
                 log(`TxID:BlockID形式で復元: ${metaTxId.substring(0, 16)}...:${blockId.substring(0, 16)}...`, 'info');
             } else {
-                metaTxId = metaTxIdInput;
+                // Format: TxID only
+                metaTxId = parts[0];
                 blockId = null;
+                password = passwordFromField;
                 log(`メタTxIDのみで復元（REST API使用）: ${metaTxId.substring(0, 16)}...`, 'info');
             }
             
@@ -3878,8 +3983,8 @@
                 log('警告: kaspaFileInput要素が見つかりません', 'error');
             }
             
-            log('🚀 Kaspa P2P v3.2.0 準備完了！', 'info');
-            log('📋 v3.2.0: WebSocket監視の自動停止機能追加', 'info');
+            log('🚀 Kaspa P2P v3.5.0 準備完了！', 'info');
+            log('📋 v3.5.0: 履歴タブ5ボタン化＆TxID:BlockID:Password形式サポート', 'info');
             log('システムを初期化してください', 'info');
             
             // Initialize workspace prompt

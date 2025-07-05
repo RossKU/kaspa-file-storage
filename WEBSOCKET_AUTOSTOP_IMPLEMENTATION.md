@@ -389,3 +389,64 @@ async generateKaspa(uploadId, includePassword) {
 2. **セキュリティ** - ユーザーが共有相手に応じてセキュリティレベルを選択
 3. **ユーザー体験** - アップロード時の決定に縛られない自由度
 4. **後方互換性** - 既存のアップロードデータでも動作
+
+## 🆕 v3.5.0: 履歴タブ5ボタン化とTxID形式の拡張 (2025-01-05)
+
+### 実装内容
+
+#### 1. Download タブの入力形式拡張
+3つの形式をサポート：
+1. `TxID:BlockID:Password` - パスワード自動入力（新規）
+2. `TxID:BlockID` - 従来形式
+3. `TxID` のみ - REST API使用
+
+```javascript
+// 入力解析ロジック
+const parts = metaTxIdInput.split(':');
+if (parts.length === 3) {
+    // TxID:BlockID:Password
+    metaTxId = parts[0];
+    blockId = parts[1];
+    password = parts[2];
+    // パスワード欄に自動入力
+    document.getElementById('metaTxPassword').value = password;
+}
+```
+
+#### 2. 履歴タブの5ボタン化
+各履歴アイテムに5つのボタンを配置：
+
+1. **🔐.kaspa** - パスワード付き.kaspaファイル
+   - パスワードがない場合は無効化
+   - クリック時に警告表示
+
+2. **🔓.kaspa** - パスワードなし.kaspaファイル
+   - 常に利用可能
+
+3. **🔐TxID** - `TxID:BlockID:Password`形式でコピー
+   - MetaTxIDまたはパスワードがない場合は無効化
+
+4. **🔓TxID** - `TxID:BlockID`形式でコピー
+   - MetaTxIDがない場合は無効化
+
+5. **🔑Pass** - パスワードのみコピー
+   - パスワードがない場合は無効化
+
+#### 3. 無効化ボタンの処理
+```javascript
+// パスワードがない場合
+buttons.push(`<button class="small-button disabled" 
+    title="パスワードが保存されていません" 
+    style="opacity: 0.5; cursor: not-allowed;">🔐.kaspa</button>`);
+```
+
+### UI/UXの改善
+- ボタンテキストを短縮してコンパクトに
+- ツールチップで機能を説明
+- 無効化されたボタンは視覚的に区別
+- レスポンシブデザインで自動折り返し
+
+### セキュリティ考慮
+- パスワード付きTxIDコピー時に警告ログ表示
+- パスワードを含む形式は明確に識別可能
+- ユーザーが意図的に選択した場合のみパスワードを含める
