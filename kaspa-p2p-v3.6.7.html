@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v4.2.6 - Terminology Fix</title>
+    <title>Kaspa P2P File Storage v3.6.7 - Version Display Update</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -398,9 +398,9 @@
 </head>
 <body>
     <div class="header">
-        <h1>🚀 Kaspa P2P File Storage v4.2.6 - Terminology Fix</h1>
-        <p>実ネットワーク接続による完全なP2Pファイル共有システム（用語修正）</p>
-        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v4.2.6: メタトランザクションIDの文言修正</p>
+        <h1>🚀 Kaspa P2P File Storage v3.5.0 - Auto-Resume & History Edition</h1>
+        <p>実ネットワーク接続による完全なP2Pファイル共有システム（レジューム＆履歴管理対応）</p>
+        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v3.5.0: 履歴タブ5ボタン化＆TxID:BlockID:Password形式サポート</p>
         <div id="networkStatus" style="margin-top: 10px;">
             <span class="status-indicator status-offline"></span>
             <span id="statusText">未接続</span>
@@ -411,7 +411,6 @@
     <div class="tab-buttons">
         <button class="tab-btn active" onclick="switchTab('upload')">📤 Upload</button>
         <button class="tab-btn" onclick="switchTab('download')">📥 Download</button>
-        <button class="tab-btn" onclick="switchTab('directory')">📁 Directory</button>
         <button class="tab-btn" onclick="switchTab('history')">📜 History</button>
         <button class="tab-btn" onclick="switchTab('settings')">⚙️ Settings</button>
     </div>
@@ -438,13 +437,6 @@
                 <small>またはドラッグ&ドロップ</small>
             </label>
             <input type="file" id="fileInput" onchange="handleFileSelect(event)">
-            
-            <!-- Directory Upload Button -->
-            <label for="directoryInput" class="file-input-label" style="margin-top: 10px; background: #16213e; border: 2px solid #49EACB;">
-                📂 ディレクトリを選択<br>
-                <small>フォルダ全体をアップロード</small>
-            </label>
-            <input type="file" id="directoryInput" webkitdirectory directory multiple onchange="handleDirectorySelect(event)" style="display: none;">
             
             <!-- Resume Section -->
             <div class="section-divider" style="margin: 20px 0;">
@@ -490,11 +482,6 @@
             <div class="checkbox-label">
                 <input type="checkbox" id="useRandomCid">
                 <label for="useRandomCid">ランダムCIDを使用（検閲回避）</label>
-            </div>
-            
-            <div class="checkbox-label" id="uploadDirMetadataOption" style="display: none;">
-                <input type="checkbox" id="uploadDirMetadata">
-                <label for="uploadDirMetadata">ディレクトリメタデータをブロックチェーンに保存</label>
             </div>
             
             <button onclick="processAndUpload()" id="uploadBtn" disabled>
@@ -563,73 +550,6 @@
                         <div class="progress-fill" id="downloadProgressBar">0%</div>
                     </div>
                     <div id="downloadStatus"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Directory Tab -->
-    <div id="directory-tab" class="tab-content">
-        <div class="container">
-            <h2>📁 ディレクトリ管理</h2>
-            
-            <div class="metric-box">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3>📤 履歴からディレクトリ作成</h3>
-                </div>
-                
-                <input type="text" id="directoryName" placeholder="ディレクトリ名を入力" style="width: 100%; padding: 10px; margin-bottom: 10px; background: #16213e; color: #eee; border: 1px solid #49EACB; border-radius: 5px;">
-                
-                <button onclick="showHistoryForDirectory()" style="width: 100%; margin-bottom: 15px; background: #16213e; color: #49EACB; border: 2px solid #49EACB;">
-                    📄 履歴からファイルを選択
-                </button>
-                
-                <div id="historyFileSelector" style="display: none; margin-bottom: 15px;">
-                    <h4>ファイルを選択:</h4>
-                    <div id="historyFileList" style="max-height: 300px; overflow-y: auto; border: 1px solid #49EACB; border-radius: 5px; padding: 10px; background: #16213e;">
-                        <!-- 履歴ファイルリストがここに表示されます -->
-                    </div>
-                </div>
-                
-                <div id="selectedFilesInfo" style="margin-bottom: 10px; padding: 10px; background: #16213e; border-radius: 5px; display: none;">
-                    <strong>選択されたファイル:</strong> <span id="selectedCount">0</span>個
-                </div>
-                
-                <div class="checkbox-label" style="margin-bottom: 10px;">
-                    <input type="checkbox" id="includePasswordInDir">
-                    <label for="includePasswordInDir">パスワードを.kaspaファイルに含める</label>
-                </div>
-                
-                <button onclick="createDirectoryFromHistory()" style="width: 100%;" disabled id="createDirBtn">
-                    📁 ディレクトリ.kaspaを生成
-                </button>
-            </div>
-            
-            <div class="metric-box" style="display: none;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3>新規ディレクトリ作成（旧機能）</h3>
-                </div>
-                
-                <div style="margin-bottom: 10px;">
-                    <label>親ディレクトリ（オプション）:</label>
-                    <select id="parentDirectory" style="width: 100%; padding: 10px; background: #16213e; color: #eee; border: 1px solid #49EACB; border-radius: 5px;">
-                        <option value="">ルートディレクトリ</option>
-                    </select>
-                </div>
-                
-                <div id="fileSelector" style="margin-bottom: 15px;">
-                    <h4>ファイルとディレクトリを選択:</h4>
-                    <div id="fileList" style="max-height: 300px; overflow-y: auto; border: 1px solid #49EACB; border-radius: 5px; padding: 10px;">
-                    </div>
-                </div>
-                
-                <button onclick="createDirectory()" style="width: 100%;">📁 ディレクトリを作成</button>
-            </div>
-            
-            <div class="metric-box">
-                <h3>📂 既存のディレクトリ</h3>
-                <div id="directoryList" style="margin-top: 15px;">
-                    <!-- ディレクトリリストがここに表示されます -->
                 </div>
             </div>
         </div>
@@ -999,21 +919,11 @@
                 // Use blockchain time if available, otherwise fall back to upload date
                 const dateToUse = item.blockTime || item.uploadDate;
                 const date = new Date(dateToUse).toLocaleString('ja-JP');
-                
-                // Check if this is a directory
-                const isDirectory = item.type === 'directory';
-                const displayName = isDirectory ? item.name : item.fileName;
-                const displaySize = isDirectory 
-                    ? `${item.fileCount} ファイル (${formatSize(item.totalSize)})`
-                    : formatSize(item.fileSize);
-                const icon = isDirectory ? '📂' : '📄';
-                
-                log(`[DEBUG] 履歴アイテム表示 - ${isDirectory ? 'ディレクトリ' : 'ファイル'}: ${displayName}, 日時: ${date} (blockTime: ${item.blockTime ? 'あり' : 'なし'})`, 'debug');
+                log(`[DEBUG] 履歴アイテム表示 - ファイル: ${item.fileName}, 日時: ${date} (blockTime: ${item.blockTime ? 'あり' : 'なし'})`, 'debug');
                 
                 const hasPassword = item.password && item.password !== 'なし';
                 // 後方互換性を保ちながら、新旧両方のデータ形式をサポート
-            // TxIDがあればボタンを有効化（BlockIDはオプション）
-            const hasMetaTxId = item.metaTxId || item.firstChunkTxId || (item.metaTxReference && item.metaTxReference.includes(':'));
+            const hasMetaTxId = (item.metaTxId && item.metaTxBlockId) || (item.metaTxReference && item.metaTxReference.includes(':'));
                 
                 // Generate buttons based on available data
                 const buttons = [];
@@ -1050,8 +960,8 @@
                     <div class="history-item">
                         <div class="history-item-header">
                             <div>
-                                <strong>${icon} ${displayName}</strong>
-                                <span style="color: #666; font-size: 12px; margin-left: 10px;">${displaySize}</span>
+                                <strong>${item.fileName}</strong>
+                                <span style="color: #666; font-size: 12px; margin-left: 10px;">${formatSize(item.fileSize)}</span>
                             </div>
                             <div class="history-item-actions">
                                 ${buttons.join('\n                                ')}
@@ -1059,9 +969,8 @@
                         </div>
                         <div style="font-size: 12px; color: #999;">
                             <div>日時: ${date}</div>
-                            <div>${isDirectory ? `ファイル数: ${item.fileCount}` : `チャンク: ${item.chunks}`} | コスト: ${item.totalCost?.toFixed(5) || 0} KAS</div>
+                            <div>チャンク: ${item.chunks} | コスト: ${item.totalCost?.toFixed(5) || 0} KAS</div>
                             ${item.metaTxId ? `<div>MetaTxID: ${item.metaTxId.substring(0, 16)}...</div>` : ''}
-                            ${isDirectory && item.failedCount > 0 ? `<div style="color: #e94560;">エラー: ${item.failedCount} ファイル</div>` : ''}
                         </div>
                     </div>
                 `;
@@ -1101,19 +1010,15 @@
                 
                 // 新旧両方のデータ形式をサポート
                 let txId, blockId;
-                if (item.metaTxId) {
+                if (item.metaTxId && item.metaTxBlockId) {
                     // 新形式
                     txId = item.metaTxId;
-                    blockId = item.metaTxBlockId || item.chunkBlockIds?.[0] || '';
+                    blockId = item.metaTxBlockId;
                 } else if (item.metaTxReference && item.metaTxReference.includes(':')) {
                     // 旧形式
                     const parts = item.metaTxReference.split(':');
                     txId = parts[0];
                     blockId = parts[1];
-                } else if (item.firstChunkTxId) {
-                    // メタTxがない場合は最初のチャンクTxIDを使用
-                    txId = item.firstChunkTxId;
-                    blockId = item.chunkBlockIds?.[0] || '';
                 } else {
                     log('メタトランザクションIDが存在しません', 'warning');
                     alert('メタトランザクションIDが存在しません');
@@ -1126,7 +1031,7 @@
                     return;
                 }
                 
-                const textToCopy = blockId ? `${txId}:${blockId}:${item.password}` : `${txId}::${item.password}`;
+                const textToCopy = `${txId}:${blockId}:${item.password}`;
                 await window.copyToClipboard(textToCopy);
                 log('パスワード付きTxIDをコピーしました（パスワードが含まれています）', 'warning');
             }
@@ -1142,28 +1047,24 @@
                 
                 // 新旧両方のデータ形式をサポート
                 let txId, blockId;
-                if (item.metaTxId) {
+                if (item.metaTxId && item.metaTxBlockId) {
                     // 新形式
                     txId = item.metaTxId;
-                    blockId = item.metaTxBlockId || item.chunkBlockIds?.[0] || '';
+                    blockId = item.metaTxBlockId;
                 } else if (item.metaTxReference && item.metaTxReference.includes(':')) {
                     // 旧形式
                     const parts = item.metaTxReference.split(':');
                     txId = parts[0];
                     blockId = parts[1];
-                } else if (item.firstChunkTxId) {
-                    // メタTxがない場合は最初のチャンクTxIDを使用
-                    txId = item.firstChunkTxId;
-                    blockId = item.chunkBlockIds?.[0] || '';
                 } else {
                     log('メタトランザクションIDが存在しません', 'warning');
                     alert('メタトランザクションIDが存在しません');
                     return;
                 }
                 
-                const textToCopy = blockId ? `${txId}:${blockId}` : txId;
+                const textToCopy = `${txId}:${blockId}`;
                 await window.copyToClipboard(textToCopy);
-                log(blockId ? 'TxID:BlockID形式でコピーしました' : 'TxIDをコピーしました', 'success');
+                log('TxID:BlockID形式でコピーしました', 'success');
             }
             
             async generateKaspa(uploadId, includePassword) {
@@ -1175,55 +1076,9 @@
                     return;
                 }
                 
-                // Check if this is a directory
-                const isDirectory = item.type === 'directory';
-                const displayName = isDirectory ? item.name : item.fileName;
+                log(`[UploadHistoryManager] 履歴項目が見つかりました: ${item.fileName}`, 'debug');
                 
-                log(`[UploadHistoryManager] 履歴項目が見つかりました: ${displayName} (タイプ: ${isDirectory ? 'ディレクトリ' : 'ファイル'})`, 'debug');
-                
-                if (isDirectory) {
-                    // Generate directory .kaspa file
-                    const dirMetadata = item.metadata || await createDirectoryMetadata(item.name, item.entries, item.password);
-                    
-                    // Update auth section based on password inclusion
-                    if (includePassword && item.password) {
-                        dirMetadata.auth = {
-                            passwordIncluded: true,
-                            password: item.password,
-                            warning: "パスワードは平文で保存されています。信頼できる相手とのみ共有してください。"
-                        };
-                    } else {
-                        dirMetadata.auth = {
-                            passwordIncluded: false,
-                            password: null,
-                            warning: null
-                        };
-                    }
-                    
-                    // Update metadata section with blockchain info if available
-                    if (item.metaTxId) {
-                        dirMetadata.metadata.metaTxId = item.metaTxId;
-                        dirMetadata.metadata.metaTxBlockId = item.metaTxBlockId;
-                        dirMetadata.metadata.blockTime = item.blockTime;
-                    }
-                    
-                    // Create and download .kaspa file
-                    const cid = item.cid || generateRandomCID();
-                    const filename = `${item.name}.${cid}.kaspa`;
-                    const blob = new Blob([JSON.stringify(dirMetadata, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = filename;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    
-                    const typeStr = includePassword ? 'パスワード付き' : 'パスワードなし';
-                    log(`${typeStr}ディレクトリ.kaspaファイルを生成しました: ${filename}`, 'success');
-                    return;
-                }
-                
-                // Create .kaspa metadata from history for files
+                // Create .kaspa metadata from history
                 const kaspaMetadata = {
                     version: "2.0",
                     created: item.uploadDate,
@@ -1423,598 +1278,6 @@
             updateHistoryUI() {
                 log('[UploadHistoryManager] updateHistoryUI が呼び出されました', 'debug');
                 this.updateUI();
-            }
-        }
-        
-        // DirectoryManager class for Phase 2: Merkle DAG implementation
-        class DirectoryManager {
-            constructor() {
-                this.dbName = 'kaspaDirectories';
-                this.dagDbName = 'kaspaDAG';  // DAG node storage
-                this.directories = this.loadDirectories();
-                this.dagNodes = this.loadDAGNodes();
-                this.version = '2.0';
-                log('[DirectoryManager] v2.0 Merkle DAG対応版を初期化しました', 'debug');
-            }
-            
-            loadDAGNodes() {
-                try {
-                    const stored = localStorage.getItem(this.dagDbName);
-                    return stored ? JSON.parse(stored) : {};
-                } catch (error) {
-                    log('[DirectoryManager] DAGノードの読み込みエラー: ' + error.message, 'error');
-                    return {};
-                }
-            }
-            
-            saveDAGNodes() {
-                try {
-                    localStorage.setItem(this.dagDbName, JSON.stringify(this.dagNodes));
-                } catch (error) {
-                    log('[DirectoryManager] DAGノードの保存エラー: ' + error.message, 'error');
-                }
-            }
-            
-            loadDirectories() {
-                try {
-                    const stored = localStorage.getItem(this.dbName);
-                    return stored ? JSON.parse(stored) : [];
-                } catch (error) {
-                    log('[DirectoryManager] ディレクトリの読み込みエラー: ' + error.message, 'error');
-                    return [];
-                }
-            }
-            
-            saveDirectories() {
-                try {
-                    localStorage.setItem(this.dbName, JSON.stringify(this.directories));
-                } catch (error) {
-                    log('[DirectoryManager] ディレクトリの保存エラー: ' + error.message, 'error');
-                }
-            }
-            
-            // Generate CID for any object (like IPFS)
-            generateCID(data) {
-                const str = JSON.stringify(data);
-                const encoder = new TextEncoder();
-                const bytes = encoder.encode(str);
-                const hashArray = Array.from(crypto.getRandomValues(new Uint8Array(16)));
-                // In real implementation, this would be SHA-256 hash
-                return 'cid_' + hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            }
-            
-            // Create a DAG node
-            createDAGNode(type, data, links = []) {
-                const node = {
-                    type: type,
-                    data: data,
-                    links: links.map(link => ({
-                        name: link.name,
-                        cid: link.cid,
-                        size: link.size || 0,
-                        type: link.type || 'unknown'
-                    })),
-                    created: new Date().toISOString()
-                };
-                
-                const cid = this.generateCID(node);
-                node.cid = cid;
-                
-                // Calculate total size including linked nodes
-                node.size = JSON.stringify(data).length + 
-                    links.reduce((sum, link) => sum + (link.size || 0), 0);
-                
-                this.dagNodes[cid] = node;
-                this.saveDAGNodes();
-                
-                return node;
-            }
-            
-            // Get a DAG node by CID
-            getDAGNode(cid) {
-                return this.dagNodes[cid] || null;
-            }
-            
-            // Traverse DAG and collect all nodes
-            traverseDAG(cid, visited = new Set()) {
-                if (visited.has(cid)) return [];
-                visited.add(cid);
-                
-                const node = this.getDAGNode(cid);
-                if (!node) return [];
-                
-                const nodes = [node];
-                
-                // Recursively traverse linked nodes
-                for (const link of node.links) {
-                    nodes.push(...this.traverseDAG(link.cid, visited));
-                }
-                
-                return nodes;
-            }
-            
-            // Get directory tree structure
-            getDirectoryTree(parentCID = null, level = 0) {
-                const dirs = this.directories.filter(d => d.parentCID === parentCID);
-                const tree = [];
-                
-                for (const dir of dirs) {
-                    tree.push({
-                        ...dir,
-                        level: level,
-                        children: this.getDirectoryTree(dir.cid, level + 1)
-                    });
-                }
-                
-                return tree;
-            }
-            
-            // Get all subdirectories of a directory
-            getSubdirectories(dirCID) {
-                const subdirs = [];
-                const queue = [dirCID];
-                
-                while (queue.length > 0) {
-                    const current = queue.shift();
-                    const children = this.directories.filter(d => d.parentCID === current);
-                    subdirs.push(...children);
-                    queue.push(...children.map(c => c.cid));
-                }
-                
-                return subdirs;
-            }
-            
-            // Get path from root to directory
-            getDirectoryPath(dirCID) {
-                const path = [];
-                let current = this.directories.find(d => d.cid === dirCID);
-                
-                while (current) {
-                    path.unshift(current);
-                    if (current.parentCID) {
-                        current = this.directories.find(d => d.cid === current.parentCID);
-                    } else {
-                        break;
-                    }
-                }
-                
-                return path;
-            }
-            
-            async createDirectory(name, fileIds, parentCID = null) {
-                if (!name || !name.trim()) {
-                    throw new Error('ディレクトリ名を入力してください');
-                }
-                
-                if (fileIds.length === 0) {
-                    throw new Error('少なくとも1つのファイルを選択してください');
-                }
-                
-                // Get file details from history
-                const history = window.historyManager?.getHistory() || [];
-                const files = fileIds.map(id => {
-                    const item = history.find(h => h.id === id);
-                    if (!item) return null;
-                    
-                    return {
-                        id: item.id,
-                        name: item.fileName,
-                        cid: item.cid,
-                        metaTxId: item.metaTxId,
-                        metaTxBlockId: item.metaTxBlockId,
-                        size: item.fileSize,
-                        uploadTime: item.uploadTime
-                    };
-                }).filter(f => f !== null);
-                
-                if (files.length === 0 && fileIds.length > 0) {
-                    throw new Error('選択されたファイルが見つかりません');
-                }
-                
-                // Create DAG nodes for each file
-                const fileLinks = files.map(file => {
-                    // Create a file DAG node
-                    const fileNode = this.createDAGNode('file', {
-                        name: file.name,
-                        metaTxId: file.metaTxId,
-                        metaTxBlockId: file.metaTxBlockId,
-                        uploadTime: file.uploadTime
-                    });
-                    
-                    return {
-                        name: file.name,
-                        cid: fileNode.cid,
-                        size: file.size,
-                        type: 'file'
-                    };
-                });
-                
-                // Create directory DAG node with links to files
-                const dirNode = this.createDAGNode('directory', {
-                    name: name.trim(),
-                    created: new Date().toISOString(),
-                    parentCID: parentCID
-                }, fileLinks);
-                
-                const directory = {
-                    id: 'dir_' + Date.now(),
-                    type: 'kaspa-directory',
-                    version: this.version,
-                    name: name.trim(),
-                    cid: dirNode.cid,  // DAG CID
-                    parentCID: parentCID,
-                    created: dirNode.created,
-                    files: files,
-                    totalSize: dirNode.size
-                };
-                
-                // Create and upload directory metadata
-                const dirMetadata = await this.uploadDirectoryMetadata(directory);
-                directory.metaTxId = dirMetadata.metaTxId;
-                directory.metaTxBlockId = dirMetadata.metaTxBlockId;
-                
-                this.directories.push(directory);
-                this.saveDirectories();
-                
-                log(`ディレクトリ「${name}」を作成しました（${files.length}ファイル, CID: ${dirNode.cid.substring(0, 8)}...）`, 'success');
-                return directory;
-            }
-            
-            async uploadDirectoryMetadata(directory) {
-                // Create directory metadata for blockchain storage
-                const metadata = {
-                    type: directory.type,
-                    version: directory.version,
-                    name: directory.name,
-                    created: directory.created,
-                    files: directory.files.map(f => ({
-                        name: f.name,
-                        cid: f.cid,
-                        metaTxId: f.metaTxId,
-                        metaTxBlockId: f.metaTxBlockId,
-                        size: f.size
-                    }))
-                };
-                
-                const metadataJson = JSON.stringify(metadata);
-                const encoder = new TextEncoder();
-                const metadataBytes = encoder.encode(metadataJson);
-                
-                // Simulate upload (in real implementation, this would use createMetaTransaction)
-                const simulatedTxId = 'dir_' + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-                    .map(b => b.toString(16).padStart(2, '0')).join('');
-                const simulatedBlockId = 'blk_' + Array.from(crypto.getRandomValues(new Uint8Array(32)))
-                    .map(b => b.toString(16).padStart(2, '0')).join('');
-                
-                log(`[DirectoryManager] ディレクトリメタデータをアップロード（シミュレーション）: ${simulatedTxId.substring(0, 16)}...`, 'info');
-                
-                return {
-                    metaTxId: simulatedTxId,
-                    metaTxBlockId: simulatedBlockId
-                };
-            }
-            
-            getDirectory(id) {
-                return this.directories.find(d => d.id === id);
-            }
-            
-            deleteDirectory(id) {
-                const index = this.directories.findIndex(d => d.id === id);
-                if (index !== -1) {
-                    const dir = this.directories[index];
-                    this.directories.splice(index, 1);
-                    this.saveDirectories();
-                    log(`ディレクトリ「${dir.name}」を削除しました`, 'success');
-                    return true;
-                }
-                return false;
-            }
-            
-            async downloadDirectory(id) {
-                const directory = this.getDirectory(id);
-                if (!directory) {
-                    throw new Error('ディレクトリが見つかりません');
-                }
-                
-                log(`ディレクトリ「${directory.name}」のダウンロードを開始します（${directory.files.length}ファイル）`, 'info');
-                
-                // Create a folder in the browser's download
-                const dirHandle = await this.createDownloadFolder(directory.name);
-                
-                // Collect all files including subdirectories
-                const allFiles = [];
-                const processDirectory = (dir, path = '') => {
-                    if (dir.cid) {
-                        const nodes = this.traverseDAG(dir.cid);
-                        const fileNodes = nodes.filter(n => n.type === 'file');
-                        fileNodes.forEach(fileNode => {
-                            allFiles.push({
-                                ...fileNode.data,
-                                path: path
-                            });
-                        });
-                        
-                        // Process subdirectories
-                        const subdirs = this.directories.filter(d => d.parentCID === dir.cid);
-                        subdirs.forEach(subdir => {
-                            processDirectory(subdir, path + subdir.name + '/');
-                        });
-                    } else {
-                        // Fallback for v1.0 directories
-                        dir.files.forEach(file => {
-                            allFiles.push({
-                                ...file,
-                                path: path
-                            });
-                        });
-                    }
-                };
-                
-                processDirectory(directory);
-                
-                // Parallel download with concurrency limit
-                const CONCURRENT_DOWNLOADS = 3;
-                const downloadQueue = [...allFiles];
-                const activeDownloads = [];
-                
-                while (downloadQueue.length > 0 || activeDownloads.length > 0) {
-                    // Start new downloads up to the limit
-                    while (activeDownloads.length < CONCURRENT_DOWNLOADS && downloadQueue.length > 0) {
-                        const file = downloadQueue.shift();
-                        const downloadPromise = (async () => {
-                            log(`📥 ダウンロード中: ${file.path}${file.name}`, 'info');
-                            
-                            const kaspaData = {
-                                type: 'kaspa-file',
-                                version: '2.0',
-                                file: {
-                                    name: file.name,
-                                    metaTxId: file.metaTxId,
-                                    metaTxBlockId: file.metaTxBlockId
-                                }
-                            };
-                            
-                            // Create subdirectory if needed
-                            let targetHandle = dirHandle;
-                            if (dirHandle && file.path) {
-                                const pathParts = file.path.split('/').filter(p => p);
-                                for (const part of pathParts) {
-                                    try {
-                                        targetHandle = await targetHandle.getDirectoryHandle(part, { create: true });
-                                    } catch (e) {
-                                        log(`サブディレクトリ作成エラー: ${part}`, 'warning');
-                                    }
-                                }
-                            }
-                            
-                            await this.downloadFile(kaspaData, targetHandle);
-                            log(`✅ 完了: ${file.path}${file.name}`, 'success');
-                        })();
-                        
-                        activeDownloads.push(downloadPromise);
-                    }
-                    
-                    // Wait for at least one download to complete
-                    if (activeDownloads.length > 0) {
-                        const completed = await Promise.race(activeDownloads);
-                        activeDownloads.splice(activeDownloads.indexOf(completed), 1);
-                    }
-                }
-                
-                log(`ディレクトリ「${directory.name}」のダウンロードが完了しました`, 'success');
-            }
-            
-            async createDownloadFolder(folderName) {
-                // Try to use File System Access API
-                if ('showDirectoryPicker' in window) {
-                    try {
-                        const dirHandle = await window.showDirectoryPicker({
-                            suggestedName: folderName,
-                            mode: 'readwrite'
-                        });
-                        return dirHandle;
-                    } catch (error) {
-                        log('フォルダ選択がキャンセルされたか、エラーが発生しました', 'warning');
-                    }
-                }
-                
-                // Fallback: download files individually
-                return null;
-            }
-            
-            async downloadFile(kaspaData, dirHandle) {
-                // Generate .kaspa file content
-                const kaspaContent = JSON.stringify(kaspaData, null, 2);
-                const blob = new Blob([kaspaContent], { type: 'application/json' });
-                
-                if (dirHandle) {
-                    // Save to selected directory
-                    try {
-                        const fileName = `${kaspaData.file.name}.kaspa`;
-                        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-                        const writable = await fileHandle.createWritable();
-                        await writable.write(blob);
-                        await writable.close();
-                        log(`${fileName}を保存しました`, 'success');
-                    } catch (error) {
-                        log(`ファイル保存エラー: ${error.message}`, 'error');
-                    }
-                } else {
-                    // Fallback: trigger browser download
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${kaspaData.file.name}.kaspa`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }
-                
-                // Small delay between downloads
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
-            
-            exportDirectory(id) {
-                const directory = this.getDirectory(id);
-                if (!directory) {
-                    throw new Error('ディレクトリが見つかりません');
-                }
-                
-                // Include DAG nodes if available
-                const dagData = {};
-                if (directory.cid) {
-                    const nodes = this.traverseDAG(directory.cid);
-                    nodes.forEach(node => {
-                        dagData[node.cid] = node;
-                    });
-                }
-                
-                const exportData = {
-                    type: 'kaspa-directory-export',
-                    version: '2.0',
-                    exported: new Date().toISOString(),
-                    directory: directory,
-                    dag: dagData  // Include complete DAG structure
-                };
-                
-                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${directory.name}.kaspa-dir`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                log(`ディレクトリ「${directory.name}」をエクスポートしました`, 'success');
-            }
-            
-            updateUI() {
-                const directoryList = document.getElementById('directoryList');
-                if (!directoryList) return;
-                
-                if (this.directories.length === 0) {
-                    directoryList.innerHTML = '<p style="color: #999; text-align: center;">ディレクトリがありません</p>';
-                    return;
-                }
-                
-                // Build directory tree
-                const tree = this.getDirectoryTree();
-                
-                const renderTree = (dirs, indent = 0) => {
-                    return dirs.map(dir => `
-                    <div class="history-item" style="margin-bottom: 15px; margin-left: ${indent * 20}px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <strong>${indent > 0 ? '└ ' : ''}📁 ${dir.name}</strong>
-                                <div style="font-size: 12px; color: #999; margin-top: 5px;">
-                                    ${dir.files.length}ファイル | ${formatSize(dir.totalSize)} | 
-                                    作成: ${new Date(dir.created).toLocaleString()}
-                                    ${dir.cid ? `<br>CID: ${dir.cid.substring(0, 12)}...` : ''}
-                                </div>
-                            </div>
-                            <div>
-                                <button onclick="window.directoryManager.downloadDirectory('${dir.id}')" class="small-button" title="ディレクトリをダウンロード">
-                                    📥
-                                </button>
-                                <button onclick="window.directoryManager.exportDirectory('${dir.id}')" class="small-button" title="ディレクトリをエクスポート">
-                                    💾
-                                </button>
-                                <button onclick="if(confirm('このディレクトリを削除しますか？')) window.directoryManager.deleteDirectory('${dir.id}'); window.directoryManager.updateUI();" class="small-button" title="削除" style="background: #c13651;">
-                                    🗑️
-                                </button>
-                            </div>
-                        </div>
-                        <details style="margin-top: 10px;">
-                            <summary style="cursor: pointer; color: #49EACB;">ファイル一覧を表示</summary>
-                            <div style="margin-top: 10px; padding-left: 20px;">
-                                ${dir.files.map(f => `
-                                    <div style="margin-bottom: 5px;">
-                                        📄 ${f.name} (${formatSize(f.size)})
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </details>
-                        ${dir.children && dir.children.length > 0 ? renderTree(dir.children, indent + 1) : ''}
-                    </div>
-                    `).join('');
-                };
-                
-                directoryList.innerHTML = renderTree(tree);
-                
-                // Update parent directory selector
-                this.updateParentDirectorySelector();
-            }
-            
-            updateParentDirectorySelector() {
-                const selector = document.getElementById('parentDirectory');
-                if (!selector) return;
-                
-                selector.innerHTML = '<option value="">ルートディレクトリ</option>';
-                
-                // Add all directories as options with indentation
-                const addOptions = (dirs, indent = 0) => {
-                    dirs.forEach(dir => {
-                        const prefix = '　'.repeat(indent) + (indent > 0 ? '└ ' : '');
-                        selector.innerHTML += `<option value="${dir.cid}">${prefix}${dir.name}</option>`;
-                        if (dir.children && dir.children.length > 0) {
-                            addOptions(dir.children, indent + 1);
-                        }
-                    });
-                };
-                
-                const tree = this.getDirectoryTree();
-                addOptions(tree);
-            }
-            
-            updateFileSelector() {
-                const fileList = document.getElementById('fileList');
-                if (!fileList) return;
-                
-                const history = window.historyManager?.getHistory() || [];
-                const existingDirs = this.directories;
-                
-                if (history.length === 0 && existingDirs.length === 0) {
-                    fileList.innerHTML = '<p style="color: #999; text-align: center;">アップロード済みファイルがありません</p>';
-                    return;
-                }
-                
-                let html = '';
-                
-                // Add files
-                if (history.length > 0) {
-                    html += '<h5>📄 ファイル:</h5>';
-                    html += history.map(item => `
-                        <label style="display: block; margin-bottom: 10px; cursor: pointer;">
-                            <input type="checkbox" value="file:${item.id}" name="directoryFiles" style="margin-right: 10px;">
-                            📄 ${item.fileName} (${formatSize(item.fileSize)})
-                            <span style="font-size: 12px; color: #999; margin-left: 10px;">
-                                ${new Date(item.uploadTime).toLocaleDateString()}
-                            </span>
-                        </label>
-                    `).join('');
-                }
-                
-                // Add directories
-                if (existingDirs.length > 0) {
-                    html += '<h5 style="margin-top: 15px;">📁 ディレクトリ:</h5>';
-                    const renderDirs = (dirs, indent = 0) => {
-                        return dirs.map(dir => `
-                            <label style="display: block; margin-bottom: 10px; cursor: pointer; margin-left: ${indent * 20}px;">
-                                <input type="checkbox" value="dir:${dir.cid}" name="directoryFiles" style="margin-right: 10px;">
-                                ${indent > 0 ? '└ ' : ''}📁 ${dir.name} (${dir.files.length}ファイル)
-                            </label>
-                            ${dir.children ? renderDirs(dir.children, indent + 1) : ''}
-                        `).join('');
-                    };
-                    
-                    const tree = this.getDirectoryTree();
-                    html += renderDirs(tree);
-                }
-                
-                fileList.innerHTML = html;
             }
         }
         
@@ -2317,10 +1580,6 @@
                     estimatedTime: this.progress.metadata.estimatedCompletion ? 
                         new Date(this.progress.metadata.estimatedCompletion).toLocaleTimeString() : 'N/A'
                 };
-            }
-            
-            isChunkCompleted(index) {
-                return this.progress.chunks.some(c => c.index === index);
             }
         }
         
@@ -2675,77 +1934,13 @@
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
             
-            const tabIndex = ['upload', 'download', 'directory', 'history', 'settings'].indexOf(tab);
+            const tabIndex = ['upload', 'download', 'history', 'settings'].indexOf(tab);
             document.querySelectorAll('.tab-btn')[tabIndex].classList.add('active');
             document.getElementById(`${tab}-tab`).classList.add('active');
             
             // Update history tab when switching to it
             if (tab === 'history' && window.historyManager) {
                 window.historyManager.updateHistoryUI();
-            }
-            
-            // Update directory tab when switching to it
-            if (tab === 'directory' && window.directoryManager) {
-                window.directoryManager.updateFileSelector();
-                window.directoryManager.updateUI();
-            }
-        };
-        
-        // Create directory function
-        window.createDirectory = async function() {
-            try {
-                const nameInput = document.getElementById('directoryName');
-                const name = nameInput.value.trim();
-                
-                if (!name) {
-                    alert('ディレクトリ名を入力してください');
-                    return;
-                }
-                
-                const parentSelector = document.getElementById('parentDirectory');
-                const parentCID = parentSelector.value || null;
-                
-                const checkboxes = document.querySelectorAll('input[name="directoryFiles"]:checked');
-                const selections = Array.from(checkboxes).map(cb => cb.value);
-                
-                if (selections.length === 0) {
-                    alert('少なくとも1つのファイルまたはディレクトリを選択してください');
-                    return;
-                }
-                
-                // Separate files and directories
-                const fileIds = selections
-                    .filter(s => s.startsWith('file:'))
-                    .map(s => s.substring(5));
-                
-                const dirCIDs = selections
-                    .filter(s => s.startsWith('dir:'))
-                    .map(s => s.substring(4));
-                
-                // Process subdirectories
-                if (dirCIDs.length > 0) {
-                    // Move directories under the new parent
-                    dirCIDs.forEach(dirCID => {
-                        const dir = window.directoryManager.directories.find(d => d.cid === dirCID);
-                        if (dir) {
-                            dir.parentCID = parentCID;
-                        }
-                    });
-                    window.directoryManager.saveDirectories();
-                }
-                
-                await window.directoryManager.createDirectory(name, fileIds, parentCID);
-                
-                // Clear form
-                nameInput.value = '';
-                checkboxes.forEach(cb => cb.checked = false);
-                
-                // Update UI
-                window.directoryManager.updateUI();
-                
-            } catch (error) {
-                log(`ディレクトリ作成エラー: ${error.message}`, 'error');
-                alert(`エラー: ${error.message}`);
             }
         };
 
@@ -3213,9 +2408,6 @@
 
         // File handling
         window.handleFileSelect = async function(event) {
-            // Clear directory mode
-            window.isDirectoryMode = false;
-            document.getElementById('uploadDirMetadataOption').style.display = 'none';
             const file = event.target.files[0];
             if (!file) return;
             
@@ -3313,606 +2505,8 @@
                     <strong>${file.name}</strong><br>
                     ${(file.size/1024/1024).toFixed(2)}MB
                 `;
-                
-                // Show normal file upload UI
-                document.getElementById('uploadDirMetadataOption').style.display = 'none';
             }
         };
-        
-        // Directory handling
-        window.handleDirectorySelect = async function(event) {
-            const files = Array.from(event.target.files);
-            if (files.length === 0) return;
-            
-            // Set directory mode
-            window.isDirectoryMode = true;
-            window.selectedDirectory = {
-                files: files,
-                name: files[0].webkitRelativePath.split('/')[0] || 'directory'
-            };
-            
-            // Calculate directory stats
-            const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-            const fileCount = files.filter(f => f.type || f.size > 0).length;
-            const dirCount = new Set(files.map(f => f.webkitRelativePath.split('/').slice(0, -1).join('/'))).size;
-            
-            log(`ディレクトリ選択: ${window.selectedDirectory.name}`);
-            log(`ファイル数: ${fileCount}, ディレクトリ数: ${dirCount}, 合計サイズ: ${(totalSize/1024/1024).toFixed(2)}MB`);
-            
-            // Update UI
-            const label = document.querySelectorAll('.file-input-label')[1]; // Directory label
-            label.innerHTML = `
-                <strong>📂 ${window.selectedDirectory.name}</strong><br>
-                ファイル: ${fileCount} | サイズ: ${(totalSize/1024/1024).toFixed(2)}MB
-            `;
-            
-            // Show directory upload options
-            document.getElementById('uploadDirMetadataOption').style.display = 'block';
-            
-            // Create directory tree preview
-            const treeHtml = createDirectoryTreeHTML(files);
-            if (document.getElementById('directoryTree')) {
-                document.getElementById('directoryTree').innerHTML = treeHtml;
-            }
-        };
-        
-        // Create directory tree HTML for preview
-        function createDirectoryTreeHTML(files) {
-            const tree = {};
-            
-            // Build tree structure
-            files.forEach(file => {
-                const parts = file.webkitRelativePath.split('/');
-                let current = tree;
-                
-                parts.forEach((part, index) => {
-                    if (index === parts.length - 1) {
-                        // File
-                        current[part] = {
-                            type: 'file',
-                            size: file.size
-                        };
-                    } else {
-                        // Directory
-                        if (!current[part]) {
-                            current[part] = {
-                                type: 'directory',
-                                children: {}
-                            };
-                        }
-                        current = current[part].children;
-                    }
-                });
-            });
-            
-            // Convert to HTML
-            function renderTree(node, level = 0) {
-                let html = '';
-                const indent = '  '.repeat(level);
-                
-                Object.entries(node).forEach(([name, item]) => {
-                    if (item.type === 'directory') {
-                        html += `${indent}📁 ${name}/\n`;
-                        html += renderTree(item.children, level + 1);
-                    } else {
-                        html += `${indent}📄 ${name} (${(item.size/1024).toFixed(1)}KB)\n`;
-                    }
-                });
-                
-                return html;
-            }
-            
-            return renderTree(tree);
-        };
-        
-        // Process and upload directory
-        window.processAndUploadDirectory = async function() {
-            if (!window.selectedDirectory) {
-                log('ディレクトリが選択されていません', 'error');
-                return;
-            }
-            
-            const password = document.getElementById('uploadPassword').value;
-            if (password.length < 8) {
-                log('パスワードは8文字以上必要です', 'error');
-                return;
-            }
-            
-            if (!rpcClient) {
-                log('先にシステムを初期化してください', 'error');
-                return;
-            }
-            
-            document.getElementById('uploadBtn').disabled = true;
-            document.getElementById('uploadProgress').style.display = 'block';
-            
-            try {
-                const files = window.selectedDirectory.files;
-                const dirName = window.selectedDirectory.name;
-                
-                log(`ディレクトリアップロード開始: ${dirName}`);
-                log(`総ファイル数: ${files.length}`);
-                
-                // Upload all files
-                const uploadedFiles = [];
-                const failedFiles = [];
-                let totalCost = 0;
-                
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-                    const relativePath = file.webkitRelativePath;
-                    
-                    // Skip empty files and directories
-                    if (file.size === 0) {
-                        log(`スキップ (空ファイル): ${relativePath}`, 'warning');
-                        continue;
-                    }
-                    
-                    log(`\nファイル ${i + 1}/${files.length}: ${relativePath}`);
-                    
-                    try {
-                        // Upload individual file
-                        currentFile = file;
-                        currentPassword = password;
-                        processedChunks = [];
-                        
-                        // Generate file CID
-                        const useRandomCid = document.getElementById('useRandomCid').checked;
-                        const chunkSize = parseInt(document.getElementById('chunkSize').value) * 1024;
-                        let fileCID = '';
-                        
-                        if (useRandomCid) {
-                            fileCID = generateRandomCID();
-                        } else {
-                            const actualChunkSize = calculateSafePayloadSize(chunkSize);
-                            const firstChunkEnd = Math.min(actualChunkSize, file.size);
-                            const firstChunkBlob = file.slice(0, firstChunkEnd);
-                            const firstChunkArrayBuffer = await firstChunkBlob.arrayBuffer();
-                            const firstChunkData = new Uint8Array(firstChunkArrayBuffer);
-                            const firstChunkHash = await sha256(firstChunkData);
-                            fileCID = firstChunkHash.substring(0, 8);
-                        }
-                        
-                        // Create progress manager for this file
-                        const fileProgressManager = new ProgressManager(file, chunkSize, fileCID, 'upload');
-                        await fileProgressManager.initialize();
-                        
-                        // Upload file chunks (reuse existing upload logic)
-                        const fileResult = await uploadFileChunks(file, password, fileProgressManager);
-                        
-                        if (fileResult.success) {
-                            uploadedFiles.push({
-                                name: relativePath.split('/').pop(),
-                                path: relativePath,
-                                type: 'file',
-                                metaTxId: fileResult.metaTxId || fileResult.chunks[0].txid,
-                                blockId: fileResult.metaTxBlockId || fileResult.chunks[0].blockId,
-                                size: file.size,
-                                chunks: fileResult.chunks.length,
-                                cost: fileResult.cost
-                            });
-                            totalCost += fileResult.cost;
-                            log(`✅ アップロード完了: ${relativePath}`, 'success');
-                        } else {
-                            throw new Error(fileResult.error || 'アップロード失敗');
-                        }
-                        
-                    } catch (error) {
-                        log(`❌ エラー: ${relativePath} - ${error.message}`, 'error');
-                        failedFiles.push({
-                            path: relativePath,
-                            error: error.message
-                        });
-                    }
-                    
-                    // Update progress
-                    const progressPercent = Math.round(((i + 1) / files.length) * 100);
-                    document.getElementById('uploadProgressBar').style.width = progressPercent + '%';
-                    document.getElementById('uploadProgressBar').textContent = `${progressPercent}% - ${i + 1}/${files.length} ファイル`;
-                }
-                
-                // Create directory metadata
-                const dirMetadata = await createDirectoryMetadata(dirName, uploadedFiles, password);
-                
-                // Optionally upload directory metadata to blockchain
-                let dirMetaTxId = null;
-                let dirMetaBlockId = null;
-                
-                if (document.getElementById('uploadDirMetadata').checked) {
-                    log('\nディレクトリメタデータをブロックチェーンにアップロード中...');
-                    const metaResult = await uploadDirectoryMetadata(dirMetadata, password);
-                    if (metaResult.success) {
-                        dirMetaTxId = metaResult.txid;
-                        dirMetaBlockId = metaResult.blockId;
-                        totalCost += metaResult.cost;
-                        log(`✅ ディレクトリメタデータアップロード完了: ${dirMetaTxId}`, 'success');
-                    }
-                }
-                
-                // Add to history
-                const uploadData = {
-                    id: `dir_${Date.now()}`,
-                    type: 'directory',
-                    name: dirName,
-                    uploadDate: new Date().toISOString(),
-                    fileCount: uploadedFiles.length,
-                    failedCount: failedFiles.length,
-                    totalSize: uploadedFiles.reduce((sum, f) => sum + f.size, 0),
-                    totalCost: totalCost,
-                    metaTxId: dirMetaTxId,
-                    metaTxBlockId: dirMetaBlockId,
-                    password: password,
-                    metadata: dirMetadata,
-                    entries: uploadedFiles,
-                    failedFiles: failedFiles,
-                    network: config.network
-                };
-                
-                await window.historyManager.addUpload(uploadData);
-                
-                // Show completion summary
-                log(`\n🎉 ディレクトリアップロード完了!`, 'success');
-                log(`成功: ${uploadedFiles.length} ファイル`);
-                if (failedFiles.length > 0) {
-                    log(`失敗: ${failedFiles.length} ファイル`, 'error');
-                }
-                log(`総コスト: ${totalCost.toFixed(8)} KAS`);
-                
-                // Update history UI
-                window.historyManager.updateHistoryUI();
-                
-            } catch (error) {
-                log(`ディレクトリアップロードエラー: ${error.message}`, 'error');
-            } finally {
-                document.getElementById('uploadBtn').disabled = false;
-                document.getElementById('uploadProgress').style.display = 'none';
-            }
-        };
-        
-        // Create directory metadata in .kaspa format
-        async function createDirectoryMetadata(dirName, uploadedFiles, password) {
-            // Calculate merkle root of entries
-            const entriesData = JSON.stringify(uploadedFiles.map(f => ({
-                name: f.name,
-                metaTxId: f.metaTxId,
-                blockId: f.blockId,
-                size: f.size
-            })));
-            const merkleRoot = await sha256(new TextEncoder().encode(entriesData));
-            
-            // Generate salt from directory name + timestamp
-            const saltData = new TextEncoder().encode(dirName + Date.now());
-            const saltHash = await sha256(saltData);
-            const salt = new Uint8Array(saltHash.match(/.{2}/g).map(byte => parseInt(byte, 16))).slice(0, 16);
-            
-            const metadata = {
-                type: 'kaspa-directory',
-                version: '3.0',
-                created: Date.now(),
-                network: config.network,
-                
-                kaspa: {
-                    network: config.network,
-                    sdkVersion: '1.0.0'
-                },
-                
-                directory: {
-                    name: dirName,
-                    totalSize: uploadedFiles.reduce((sum, f) => sum + f.size, 0),
-                    fileCount: uploadedFiles.length,
-                    dirCount: new Set(uploadedFiles.map(f => f.path.split('/').slice(0, -1).join('/'))).size,
-                    merkleRoot: merkleRoot
-                },
-                
-                encryption: {
-                    algorithm: 'AES-GCM',
-                    pbkdf2: {
-                        salt: toBase64(salt),
-                        iterations: 100000
-                    }
-                },
-                
-                compression: {
-                    algorithm: 'none',
-                    originalSize: 0,
-                    compressedSize: 0
-                },
-                
-                entries: uploadedFiles,
-                
-                metadata: {
-                    metaTxId: null, // Will be set if uploaded
-                    metaTxBlockId: null,
-                    uploadDate: new Date().toISOString(),
-                    blockTime: null,
-                    createdAt: Date.now(),
-                    parentTxId: null
-                },
-                
-                auth: {
-                    passwordIncluded: false,
-                    password: null,
-                    warning: null
-                }
-            };
-            
-            return metadata;
-        }
-        
-        // Upload directory metadata to blockchain
-        async function uploadDirectoryMetadata(metadata, password) {
-            try {
-                // Serialize metadata
-                const metadataJson = JSON.stringify(metadata);
-                const metadataBytes = new TextEncoder().encode(metadataJson);
-                
-                // Derive encryption key
-                const salt = fromBase64(metadata.encryption.pbkdf2.salt);
-                const key = await deriveKey(password, salt);
-                
-                // Encrypt metadata
-                const encryptedData = await encryptChunk(metadataBytes, key, -1); // Use -1 for directory metadata
-                
-                // Compress if beneficial
-                let finalData = encryptedData;
-                const compressed = lzCompress(encryptedData);
-                if (compressed.length < encryptedData.length) {
-                    finalData = compressed;
-                    metadata.compression.algorithm = 'lz';
-                    metadata.compression.originalSize = encryptedData.length;
-                    metadata.compression.compressedSize = compressed.length;
-                }
-                
-                // Create transaction
-                const payload = toBase64(finalData);
-                const transaction = await createTransaction(payload);
-                
-                // Send transaction
-                const txid = await sendTransaction(transaction);
-                
-                // Wait for confirmation
-                const blockId = await waitForConfirmation(txid);
-                
-                return {
-                    success: true,
-                    txid: txid,
-                    blockId: blockId,
-                    cost: 0.00021 // Base transaction cost
-                };
-                
-            } catch (error) {
-                log(`ディレクトリメタデータアップロードエラー: ${error.message}`, 'error');
-                return {
-                    success: false,
-                    error: error.message
-                };
-            }
-        }
-        
-        // Reuse existing file upload logic for directory files
-        async function uploadFileChunks(file, password, progressManager) {
-            // This function extracts the core upload logic from processAndUpload
-            // Returns: { success, chunks, metaTxId, metaTxBlockId, cost, error }
-            try {
-                const chunks = [];
-                const totalChunks = progressManager.progress.metadata.totalChunks;
-                const chunkSize = progressManager.chunkSize;
-                
-                // Get file hash
-                let fileHash;
-                if (file.size < 10 * 1024 * 1024) {
-                    const data = new Uint8Array(await file.arrayBuffer());
-                    fileHash = await sha256(data);
-                } else {
-                    const firstChunk = await file.slice(0, 1024 * 1024).arrayBuffer();
-                    const lastChunk = await file.slice(-1024 * 1024).arrayBuffer();
-                    const combined = new Uint8Array(firstChunk.byteLength + lastChunk.byteLength);
-                    combined.set(new Uint8Array(firstChunk), 0);
-                    combined.set(new Uint8Array(lastChunk), firstChunk.byteLength);
-                    fileHash = await sha256(combined);
-                }
-                
-                // Derive encryption key
-                const salt = new Uint8Array(fileHash.match(/.{2}/g).map(byte => parseInt(byte, 16))).slice(0, 16);
-                const key = await deriveKey(password, salt);
-                
-                // Upload chunks
-                let totalCost = 0;
-                for (let i = 0; i < totalChunks; i++) {
-                    if (progressManager.isChunkCompleted(i)) {
-                        // Find the chunk with matching index
-                        const existingChunk = progressManager.progress.chunks.find(c => c.index === i);
-                        if (existingChunk) {
-                            chunks.push(existingChunk);
-                            continue;
-                        }
-                    }
-                    
-                    const start = i * chunkSize;
-                    const end = Math.min(start + chunkSize, file.size);
-                    const chunkBlob = file.slice(start, end);
-                    const chunkData = new Uint8Array(await chunkBlob.arrayBuffer());
-                    
-                    // Compress if needed
-                    let processedData = chunkData;
-                    if (shouldCompress(file.name)) {
-                        processedData = lzCompress(chunkData);
-                    }
-                    
-                    // Encrypt
-                    const encryptedData = await encryptChunk(processedData, key, i);
-                    
-                    // Create and send transaction
-                    const payload = toBase64(encryptedData);
-                    const transaction = await createTransaction(payload);
-                    const txid = await sendTransaction(transaction);
-                    const blockId = await waitForConfirmation(txid);
-                    
-                    const chunkInfo = {
-                        index: i,
-                        txid: txid,
-                        blockId: blockId,
-                        size: chunkData.length,
-                        compressedSize: processedData.length
-                    };
-                    
-                    chunks.push(chunkInfo);
-                    await progressManager.markChunkComplete(i, txid, blockId, chunkData.length);
-                    totalCost += 0.00021;
-                }
-                
-                // Check if meta-tx is needed
-                let metaTxId = null;
-                let metaTxBlockId = null;
-                
-                if (document.getElementById('useMetaTx').checked && chunks.length > 1) {
-                    // Create and upload meta-tx
-                    const metaTxData = {
-                        version: '2.1',
-                        type: 'meta-tx',
-                        created: Date.now(),
-                        fileName: file.name,
-                        fileSize: file.size,
-                        fileSha256: fileHash,
-                        chunks: chunks.map(c => ({ t: c.txid, b: c.blockId }))
-                    };
-                    
-                    const metaTxJson = JSON.stringify(metaTxData);
-                    const metaTxBytes = new TextEncoder().encode(metaTxJson);
-                    const encryptedMetaTx = await encryptChunk(metaTxBytes, key, -1);
-                    
-                    const metaTxPayload = toBase64(encryptedMetaTx);
-                    const metaTxTransaction = await createTransaction(metaTxPayload);
-                    metaTxId = await sendTransaction(metaTxTransaction);
-                    metaTxBlockId = await waitForConfirmation(metaTxId);
-                    totalCost += 0.00021;
-                }
-                
-                return {
-                    success: true,
-                    chunks: chunks,
-                    metaTxId: metaTxId,
-                    metaTxBlockId: metaTxBlockId,
-                    cost: totalCost
-                };
-                
-            } catch (error) {
-                return {
-                    success: false,
-                    error: error.message
-                };
-            }
-        };
-        
-        // Transaction helper functions for directory upload
-        async function createTransaction(payloadBase64) {
-            // Get UTXOs
-            const { entries } = await rpcClient.getUtxosByAddresses([address.toString()]);
-            if (!entries || entries.length === 0) {
-                throw new Error('利用可能なUTXOがありません');
-            }
-            
-            // Format UTXOs
-            const formattedUtxos = entries.map(utxo => ({
-                address: address.toString(),
-                outpoint: {
-                    transactionId: utxo.outpoint.transactionId,
-                    index: utxo.outpoint.index
-                },
-                scriptPublicKey: utxo.scriptPublicKey,
-                amount: BigInt(utxo.amount),
-                isCoinbase: utxo.isCoinbase || false,
-                blockDaaScore: BigInt(utxo.blockDaaScore)
-            }));
-            
-            // Decode payload to bytes
-            const payloadBytes = fromBase64(payloadBase64);
-            
-            // Create transaction
-            const result = await kaspa.createTransactions({
-                entries: formattedUtxos,
-                outputs: [{
-                    address: address.toString(),
-                    amount: 100000000n // 1 KAS
-                }],
-                changeAddress: address.toString(),
-                priorityFee: 10000n,
-                networkId: config.network,
-                payload: payloadBytes
-            });
-            
-            if (!result.transactions || result.transactions.length === 0) {
-                throw new Error('トランザクションの作成に失敗しました');
-            }
-            
-            return result.transactions[0];
-        }
-        
-        async function sendTransaction(transaction) {
-            // Sign transaction
-            await transaction.sign([privateKey]);
-            
-            // Submit transaction
-            const txid = await transaction.submit(rpcClient);
-            
-            if (!txid) {
-                throw new Error('トランザクションの送信に失敗しました');
-            }
-            
-            return txid;
-        }
-        
-        async function waitForConfirmation(txid) {
-            // Try WebSocket monitoring first
-            if (window.monitorClient && window.monitorClient.isConnected) {
-                return new Promise((resolve) => {
-                    const timeout = setTimeout(() => {
-                        // Fallback to Explorer API
-                        fetchBlockIdFromExplorer(txid).then(resolve);
-                    }, 60000); // 60 second timeout
-                    
-                    // Store callback for WebSocket response
-                    if (!window.pendingBlockIds) {
-                        window.pendingBlockIds = new Map();
-                    }
-                    window.pendingBlockIds.set(txid, (blockId) => {
-                        clearTimeout(timeout);
-                        resolve(blockId);
-                    });
-                });
-            }
-            
-            // Fallback to Explorer API
-            return await fetchBlockIdFromExplorer(txid);
-        }
-        
-        async function fetchBlockIdFromExplorer(txid) {
-            const maxRetries = 10;
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const response = await fetchWithTimeout(
-                        `https://api-tn10.kaspa.org/transactions/${txid}`,
-                        {},
-                        10000,
-                        2
-                    );
-                    
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.block_id) {
-                            return data.block_id;
-                        }
-                    }
-                } catch (error) {
-                    // Continue retrying
-                }
-                
-                // Wait before retry
-                await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-            
-            throw new Error(`BlockIDの取得に失敗: ${txid}`);
-        }
 
         // Compression logic
         const COMPRESS_SKIP = new Set(['jpg','jpeg','png','gif','webp','mp4','avi','mov','mp3','wav','zip','rar','pdf']);
@@ -4175,12 +2769,6 @@
         
         // Process and upload file
         window.processAndUpload = async function() {
-            // Check if directory mode
-            if (window.isDirectoryMode) {
-                await processAndUploadDirectory();
-                return;
-            }
-            
             if (!currentFile) {
                 log('ファイルが選択されていません', 'error');
                 return;
@@ -5842,8 +4430,8 @@
                 log('警告: kaspaFileInput要素が見つかりません', 'error');
             }
             
-            log('🚀 Kaspa P2P v4.2.0 準備完了！', 'info');
-            log('📋 v4.2.0: サブディレクトリ + 並列ダウンロード + ツリー表示', 'info');
+            log('🚀 Kaspa P2P v3.6.7 準備完了！', 'info');
+            log('📋 v3.6.7: WebSocket監視修正 + 並列ダウンロード + Historyタブ修正', 'info');
             log('✨ 並列ダウンロード: ' + (parallelDownloadEnabled ? '有効' : '無効'), 'info');
             log('システムを初期化してください', 'info');
             
@@ -6074,167 +4662,14 @@
             }
         }
         
-        // Directory from History functions
-        window.selectedHistoryFiles = new Set();
-        
-        window.showHistoryForDirectory = function() {
-            const historyFileSelector = document.getElementById('historyFileSelector');
-            const historyFileList = document.getElementById('historyFileList');
-            
-            // Get history from localStorage
-            const history = window.historyManager.getHistory();
-            
-            // Filter only file uploads (not directories)
-            const fileHistory = history.filter(item => item.type !== 'directory');
-            
-            if (fileHistory.length === 0) {
-                historyFileList.innerHTML = '<p style="text-align: center; color: #999;">アップロード済みファイルがありません</p>';
-            } else {
-                historyFileList.innerHTML = fileHistory.map(item => `
-                    <div style="padding: 8px; margin-bottom: 5px; background: #0f3460; border-radius: 5px; cursor: pointer;">
-                        <label style="display: flex; align-items: center; cursor: pointer;">
-                            <input type="checkbox" value="${item.id}" onchange="toggleFileSelection('${item.id}')" style="margin-right: 10px;">
-                            <span>
-                                📄 ${item.fileName || item.name}<br>
-                                <small style="color: #999;">
-                                    ${formatSize(item.fileSize || item.totalSize)} | 
-                                    ${new Date(item.uploadDate).toLocaleDateString('ja-JP')}
-                                </small>
-                            </span>
-                        </label>
-                    </div>
-                `).join('');
-            }
-            
-            historyFileSelector.style.display = 'block';
-            window.selectedHistoryFiles.clear();
-            updateSelectedFilesInfo();
-        };
-        
-        window.toggleFileSelection = function(fileId) {
-            if (window.selectedHistoryFiles.has(fileId)) {
-                window.selectedHistoryFiles.delete(fileId);
-            } else {
-                window.selectedHistoryFiles.add(fileId);
-            }
-            updateSelectedFilesInfo();
-        };
-        
-        function updateSelectedFilesInfo() {
-            const count = window.selectedHistoryFiles.size;
-            document.getElementById('selectedCount').textContent = count;
-            document.getElementById('selectedFilesInfo').style.display = count > 0 ? 'block' : 'none';
-            document.getElementById('createDirBtn').disabled = count === 0 || !document.getElementById('directoryName').value;
-        }
-        
-        window.createDirectoryFromHistory = async function() {
-            const dirName = document.getElementById('directoryName').value.trim();
-            if (!dirName) {
-                alert('ディレクトリ名を入力してください');
-                return;
-            }
-            
-            if (window.selectedHistoryFiles.size === 0) {
-                alert('ファイルを選択してください');
-                return;
-            }
-            
-            const history = window.historyManager.getHistory();
-            const selectedFiles = [];
-            
-            // Collect selected files
-            for (const fileId of window.selectedHistoryFiles) {
-                const item = history.find(h => h.id === fileId);
-                if (item) {
-                    // Extract metaTxId properly if it's in old format
-                    let metaTxId = item.metaTxId;
-                    let blockId = item.metaTxBlockId;
-                    
-                    // Check if metaTxId contains old format (TxID:BlockID)
-                    if (metaTxId && metaTxId.includes(':')) {
-                        const parts = metaTxId.split(':');
-                        metaTxId = parts[0];
-                        blockId = parts[1] || blockId;
-                    }
-                    
-                    // If no metaTxId, use first chunk TxID
-                    if (!metaTxId) {
-                        metaTxId = item.firstChunkTxId || (item.chunkTxIds && item.chunkTxIds[0]);
-                    }
-                    
-                    selectedFiles.push({
-                        name: item.fileName || item.name,
-                        path: item.fileName || item.name,
-                        type: 'file',
-                        metaTxId: metaTxId || '',
-                        blockId: blockId || (item.chunkBlockIds && item.chunkBlockIds[0]) || '',
-                        size: item.fileSize || item.totalSize || 0
-                    });
-                }
-            }
-            
-            // Get the first file's password if available
-            const firstFileWithPassword = history.find(h => 
-                window.selectedHistoryFiles.has(h.id) && h.password
-            );
-            const password = firstFileWithPassword ? firstFileWithPassword.password : generateRandomCID();
-            
-            // Create directory metadata
-            const dirMetadata = await createDirectoryMetadata(dirName, selectedFiles, password);
-            
-            // Check if password should be included
-            const includePassword = document.getElementById('includePasswordInDir').checked;
-            if (includePassword && firstFileWithPassword) {
-                dirMetadata.auth = {
-                    passwordIncluded: true,
-                    password: firstFileWithPassword.password,
-                    warning: "パスワードは平文で保存されています。信頼できる相手とのみ共有してください。"
-                };
-            } else {
-                dirMetadata.auth = {
-                    passwordIncluded: false,
-                    password: null,
-                    warning: null
-                };
-            }
-            
-            // Generate .kaspa file
-            const cid = generateRandomCID();
-            const filename = `${dirName}.${cid}.kaspa`;
-            const blob = new Blob([JSON.stringify(dirMetadata, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
-            
-            log(`ディレクトリ.kaspaファイルを生成しました: ${filename}`, 'success');
-            
-            // Reset UI
-            document.getElementById('directoryName').value = '';
-            document.getElementById('historyFileSelector').style.display = 'none';
-            window.selectedHistoryFiles.clear();
-            updateSelectedFilesInfo();
-        };
-        
         // Initialize history manager on load
         window.historyManager = new UploadHistoryManager();
-        window.directoryManager = new DirectoryManager();
         
         // Auto-initialize WASM on page load
         window.addEventListener('DOMContentLoaded', async function() {
             log('ページ読み込み完了 - システムを自動初期化します', 'info');
             loadParallelSetting(); // Load parallel download setting
             await initializeSystem();
-            
-            // Add event listener for directory name input
-            const dirNameInput = document.getElementById('directoryName');
-            if (dirNameInput) {
-                dirNameInput.addEventListener('input', function() {
-                    updateSelectedFilesInfo();
-                });
-            }
         });
     </script>
 </body>
