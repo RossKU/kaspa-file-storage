@@ -2564,7 +2564,7 @@
                         }
                         
                         const decrypted = await decryptChunk(payload, key, index);
-                        const original = kaspaMetadata.compression.enabled ? 
+                        const original = kaspaMetadata.compression?.enabled ? 
                             lzDecompress(decrypted) : decrypted;
                         
                         this.results.set(index, original);
@@ -5449,7 +5449,7 @@
                             `サイズ: ${(kaspaMetadata.file.size / 1024).toFixed(1)} KB\n` +
                             `チャンク数: ${kaspaMetadata.chunks.length}\n` +
                             `暗号化: ${kaspaMetadata.encryption.algorithm}\n` +
-                            `圧縮: ${kaspaMetadata.compression.enabled ? kaspaMetadata.compression.algorithm : 'なし'}\n` +
+                            `圧縮: ${kaspaMetadata.compression?.enabled ? kaspaMetadata.compression.algorithm : 'なし'}\n` +
                             `作成日時: ${new Date(kaspaMetadata.metadata.createdAt).toLocaleString()}\n` +
                             `メタTxID: ${metaTxId.substring(0, 16)}...`;
                         
@@ -5630,7 +5630,7 @@
                         // Decrypt and decompress
                         const encrypted = payload; // Already binary Uint8Array
                         const compressed = await decryptChunk(encrypted, key, i);
-                        const original = kaspaMetadata.compression.enabled ? lzDecompress(compressed) : compressed;
+                        const original = kaspaMetadata.compression?.enabled ? lzDecompress(compressed) : compressed;
                         
                         chunks.push(original);
                         
@@ -5724,7 +5724,7 @@
                             // Decrypt and decompress
                             const encrypted = payload; // Already binary Uint8Array
                             const compressed = await decryptChunk(encrypted, key, i);
-                            const original = kaspaMetadata.compression.enabled ? lzDecompress(compressed) : compressed;
+                            const original = kaspaMetadata.compression?.enabled ? lzDecompress(compressed) : compressed;
                             
                             chunks.push(original);
                             

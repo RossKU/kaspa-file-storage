@@ -2,6 +2,17 @@
 
 ## 📅 バージョン履歴（Git履歴に基づく時系列）
 
+### v4.3.2 - Compressionフィールド修正 (2025-07-06)
+#### 修正内容
+- **メタトランザクション復号化エラーの修正**
+  - `compression.enabled`参照時のエラーを修正
+  - オプショナルチェイニング（`?.`）を使用して安全にアクセス
+  - メタトランザクションに`compression`フィールドがない場合も対応
+
+#### 技術詳細
+- すべての`kaspaMetadata.compression.enabled`を`kaspaMetadata.compression?.enabled`に変更
+- これによりv3.0構造で`compression`フィールドが欠落している場合もエラーを回避
+
 ### v4.3.1 - WebSocket再接続機能修正 (2025-07-06)
 #### 主要修正
 - **WebSocket切断問題の解決**
