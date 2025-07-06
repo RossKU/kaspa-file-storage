@@ -1,5 +1,6 @@
 # Old and test files
 Old/
+archive/
 *.log
 *.tmp
 .DS_Store
