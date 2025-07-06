@@ -2,6 +2,18 @@
 
 ## 📅 バージョン履歴（Git履歴に基づく時系列）
 
+### v4.4.4 - ダウンロードスクリプト修正 (2025-07-06)
+#### 修正内容
+- **チャンクダウンロードエラーの修正**
+  - `Cannot read properties of undefined (reading 'substring')`エラーを修正
+  - RPC応答の構造変更に対応
+  - scriptHexがundefinedの場合のエラーハンドリング追加
+
+#### 技術詳細
+- `script_public_key`フィールドの存在チェック追加
+- 代替フィールド（`scriptPublicKey.scriptPublicKey`）のサポート
+- nullチェックとデバッグログの追加
+
 ### v4.3.2 - Compressionフィールド修正 (2025-07-06)
 #### 修正内容
 - **メタトランザクション復号化エラーの修正**
