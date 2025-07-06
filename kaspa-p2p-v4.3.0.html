@@ -398,9 +398,9 @@
 </head>
 <body>
     <div class="header">
-        <h1>🚀 Kaspa P2P File Storage v4.2.6 - Terminology Fix</h1>
+        <h1 id="appTitle">🚀 Kaspa P2P File Storage - Loading...</h1>
         <p>実ネットワーク接続による完全なP2Pファイル共有システム（用語修正）</p>
-        <p style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 v4.2.6: メタトランザクションIDの文言修正</p>
+        <p id="appSubtitle" style="font-size: 12px; color: #49EACB; margin-top: 5px;">📋 Loading version...</p>
         <div id="networkStatus" style="margin-top: 10px;">
             <span class="status-indicator status-offline"></span>
             <span id="statusText">未接続</span>
@@ -5972,6 +5972,23 @@
             log(`📋 v${getAppVersion()}: 統一構造 + 並列ダウンロード + ツリー表示`, 'info');
             log('✨ 並列ダウンロード: ' + (parallelDownloadEnabled ? '有効' : '無効'), 'info');
             log('システムを初期化してください', 'info');
+            
+            // Update title and subtitle with dynamic version
+            const version = getAppVersion();
+            const titleElement = document.getElementById('appTitle');
+            const subtitleElement = document.getElementById('appSubtitle');
+            
+            if (titleElement) {
+                // Extract the subtitle from the document title
+                const fullTitle = document.title;
+                const titleParts = fullTitle.match(/v[\d.]+\s*-\s*(.+)$/);
+                const subtitle = titleParts ? titleParts[1] : 'No LocalStorage Cache';
+                titleElement.textContent = `🚀 Kaspa P2P File Storage v${version} - ${subtitle}`;
+            }
+            
+            if (subtitleElement) {
+                subtitleElement.textContent = `📋 v${version}: No LocalStorage Cache`;
+            }
             
             // Initialize workspace prompt
             setTimeout(async () => {
