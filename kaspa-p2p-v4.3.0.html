@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaspa P2P File Storage v4.3.0 - No LocalStorage Cache</title>
+    <title>Kaspa P2P File Storage v4.3.1 - WebSocket Reconnection Fix</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -3950,14 +3950,42 @@
             // Sign transaction
             await transaction.sign([privateKey]);
             
-            // Submit transaction
-            const txid = await transaction.submit(rpcClient);
-            
-            if (!txid) {
-                throw new Error('トランザクションの送信に失敗しました');
+            // Submit transaction with error handling
+            try {
+                const txid = await transaction.submit(rpcClient);
+                
+                if (!txid) {
+                    throw new Error('トランザクションの送信に失敗しました');
+                }
+                
+                return txid;
+            } catch (error) {
+                // Handle connection errors
+                if (error.message && error.message.includes('not connected')) {
+                    log('WebSocket接続が切断されました。再接続を試みます...', 'warning');
+                    
+                    // Reconnect
+                    await rpcClient.connect();
+                    log('RPC再接続成功', 'success');
+                    
+                    // Restart monitoring
+                    if (wsMonitorActive) {
+                        await startMonitoring();
+                    }
+                    
+                    // Retry transaction submission
+                    const txid = await transaction.submit(rpcClient);
+                    
+                    if (!txid) {
+                        throw new Error('トランザクションの送信に失敗しました（再試行後）');
+                    }
+                    
+                    return txid;
+                }
+                
+                // Re-throw other errors
+                throw error;
             }
-            
-            return txid;
         }
         
         async function waitForConfirmation(txid) {
@@ -5754,41 +5782,7 @@
             }
         }
         
-        // WebSocket monitoring
-        window.startMonitoring = async function() {
-            if (!rpcClient) {
-                log('先にシステムを初期化してください', 'error');
-                return;
-            }
-            
-            if (wsMonitorActive) {
-                log('すでに監視中です', 'warning');
-                return;
-            }
-            
-            try {
-                log('WebSocket監視を開始...', 'info');
-                wsMonitorActive = true;
-                
-                // Set 5 minute timeout
-                if (wsMonitorTimeout) {
-                    clearTimeout(wsMonitorTimeout);
-                }
-                wsMonitorTimeout = setTimeout(async () => {
-                    log('WebSocket監視: 5分タイムアウト - 自動停止', 'warning');
-                    await stopMonitoring();
-                }, 5 * 60 * 1000);
-                
-                await rpcClient.subscribeBlockAdded();
-                log('Block Addedイベントを購読しました', 'success');
-                
-                log('WebSocket監視を開始しました', 'success');
-                
-            } catch (error) {
-                log(`監視開始エラー: ${error.message}`, 'error');
-                wsMonitorActive = false;
-            }
-        };
+        // Removed duplicate startMonitoring function - see line 6106 for the unified version
 
         window.stopMonitoring = async function() {
             if (!wsMonitorActive) {
@@ -6102,11 +6096,23 @@
             window.showWorkspaceStatus = showWorkspaceStatus;
         });
         
-        // WebSocket monitoring (from complete.html with network recovery enhancements)
+        // WebSocket monitoring (unified version with reconnection support)
         window.startMonitoring = async function() {
             if (!rpcClient) {
                 log('先にシステムを初期化してください', 'error');
                 return;
+            }
+            
+            // Check connection status and reconnect if needed
+            if (!rpcClient.isConnected()) {
+                try {
+                    log('RPC再接続中...', 'info');
+                    await rpcClient.connect();
+                    log('RPC再接続成功', 'success');
+                } catch (error) {
+                    log(`RPC再接続エラー: ${error.message}`, 'error');
+                    return;
+                }
             }
             
             if (wsMonitorActive) {
@@ -6115,8 +6121,17 @@
             }
             
             try {
-                log('WebSocket監視を開始しました', 'info');
+                log('WebSocket監視を開始...', 'info');
                 wsMonitorActive = true;
+                
+                // Set 5 minute timeout
+                if (wsMonitorTimeout) {
+                    clearTimeout(wsMonitorTimeout);
+                }
+                wsMonitorTimeout = setTimeout(async () => {
+                    log('WebSocket監視: 5分タイムアウト - 自動停止', 'warning');
+                    await stopMonitoring();
+                }, 5 * 60 * 1000);
                 
                 await rpcClient.subscribeBlockAdded();
                 log('Block Addedイベントを購読しました', 'success');
