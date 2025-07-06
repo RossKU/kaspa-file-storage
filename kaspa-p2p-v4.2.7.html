@@ -1281,7 +1281,10 @@
                         },
                         encryption: {
                             algorithm: "AES-256-GCM",
-                            salt: item.salt || ""
+                            pbkdf2: {
+                                salt: item.salt || "",
+                                iterations: 100000
+                            }
                         }
                     },
                     chunks: item.chunkTxIds || [],
