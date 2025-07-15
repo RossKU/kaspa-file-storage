@@ -727,9 +727,12 @@
                 
                 let client;
                 let connected = false;
-                // Always use Resolver
+                const connectionMode = 'resolver'; // Always use resolver mode
+                
+                // Method 1: Try with Resolver (if enabled)
+                if (connectionMode === 'resolver' || connectionMode === 'mixed') {
                 try {
-                    log('Creating RPC client with Resolver...', 'info');
+                    log('Method 1: Creating RPC client with Resolver...', 'info');
                     client = new kaspa.RpcClient({
                         resolver: new kaspa.Resolver(),
                         networkId: 'mainnet'
@@ -756,11 +759,63 @@
                     }
                 } catch (e1) {
                     log(`Resolver connection failed: ${e1.message}`, 'warning');
-                    connected = false;
+                }
+                }
+                
+                // Method 2: Try direct URLs (if enabled and not connected)
+                if (!connected && (connectionMode === 'direct' || connectionMode === 'mixed')) {
+                    try {
+                    log('Method 2: Using direct URLs...', 'info');
+                    const directUrls = [
+                        // Kaspa.red (where archives were found before)
+                        'wss://john.kaspa.red/kaspa/mainnet/wrpc/borsh',
+                        'wss://alex.kaspa.red/kaspa/mainnet/wrpc/borsh',
+                        'wss://mike.kaspa.red/kaspa/mainnet/wrpc/borsh',
+                        'wss://paul.kaspa.red/kaspa/mainnet/wrpc/borsh',
+                        // Kaspa.stream
+                        'wss://eric.kaspa.stream/kaspa/mainnet/wrpc/borsh',
+                        'wss://maxim.kaspa.stream/kaspa/mainnet/wrpc/borsh',
+                        'wss://sean.kaspa.stream/kaspa/mainnet/wrpc/borsh',
+                        'wss://troy.kaspa.stream/kaspa/mainnet/wrpc/borsh',
+                        // Kaspa.green
+                        'wss://jake.kaspa.green/kaspa/mainnet/wrpc/borsh',
+                        'wss://mark.kaspa.green/kaspa/mainnet/wrpc/borsh',
+                        'wss://adam.kaspa.green/kaspa/mainnet/wrpc/borsh',
+                        'wss://liam.kaspa.green/kaspa/mainnet/wrpc/borsh',
+                        // Kaspa.blue
+                        'wss://noah.kaspa.blue/kaspa/mainnet/wrpc/borsh',
+                        'wss://ryan.kaspa.blue/kaspa/mainnet/wrpc/borsh',
+                        'wss://jack.kaspa.blue/kaspa/mainnet/wrpc/borsh',
+                        'wss://luke.kaspa.blue/kaspa/mainnet/wrpc/borsh'
+                    ];
+                    
+                    // Use round-robin with worker offset to avoid collisions
+                    if (!window.directUrlIndex) window.directUrlIndex = 0;
+                    const urlIndex = (window.directUrlIndex + workerId) % directUrls.length;
+                    const url = directUrls[urlIndex];
+                    window.directUrlIndex++;
+                    
+                    log(`Method 2: Trying direct URL: ${url}`, 'info');
+                    
+                    client = new kaspa.RpcClient({
+                        url: url,
+                        networkId: 'mainnet'
+                    });
+                    
+                    const connectTimeout2 = new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Timeout')), 10000)
+                    );
+                    
+                    await Promise.race([client.connect(), connectTimeout2]);
+                    connected = true;
+                    log(`Connected via direct URL!`, 'success');
+                    } catch (e2) {
+                        log(`Direct URL connection failed: ${e2.message}`, 'error');
+                    }
                 }
                 
                 if (!connected) {
-                    throw new Error('Resolver connection failed');
+                    throw new Error('All connection methods failed');
                 }
                 
                 const connectionTime = Date.now() - startTime;
